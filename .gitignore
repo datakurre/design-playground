@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.log
+.devenv/
+.devenv.flake.nix
+.direnv/
+.pre-commit-config.yaml
+coverage/
+playwright-browsers/
+*.tsbuildinfo

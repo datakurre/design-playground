@@ -1,0 +1,31 @@
+{
+  "name": "design-playground",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "End-to-end demo: design tokens -> SQLite rule store -> MCP design server -> agent planner -> validated UI AST -> React renderer -> audit logs",
+  "scripts": {
+    "build:tokens": "tsx packages/tokens-build/src/build.ts",
+    "db:seed": "tsx db/seed.ts",
+    "scenarios": "tsx scripts/run-scenarios.ts",
+    "governance": "tsx scripts/generate-governance.ts",
+    "pipeline": "pnpm build:tokens && pnpm db:seed && pnpm scenarios && pnpm governance",
+    "screenshots": "tsx scripts/take-screenshots.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -b"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.15.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.1.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "ajv": "^8.17.0",
+    "ajv-formats": "^3.0.0",
+    "better-sqlite3": "^11.10.0",
+    "zod": "^3.24.0"
+  }
+}
