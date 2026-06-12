@@ -1,0 +1,42 @@
+{
+  "$schema": "./component.schema.json",
+  "id": "form",
+  "purpose": "Collects and submits user input as a single named unit with declarative validation and a single primary submit action.",
+  "variants": [
+    { "name": "default", "usage": "Standard vertical form.", "tokens": ["space.4", "space.6"] },
+    { "name": "stepped", "usage": "One step of a multi-step flow; shows progress and offers a way back.", "tokens": ["space.4", "space.6"] }
+  ],
+  "props": [
+    { "name": "id", "type": "string", "required": true, "description": "Submit target id referenced by submit actions." },
+    { "name": "title", "type": "string", "required": true, "description": "Form heading describing the task." },
+    { "name": "variant", "type": "string", "required": false, "enum": ["default", "stepped"], "default": "default" },
+    { "name": "step", "type": "{ index: number, total: number }", "required": false, "description": "Progress for the stepped variant." },
+    { "name": "children", "type": "Node[]", "required": true, "description": "Fields and content; must contain at least one Field." },
+    { "name": "submitLabel", "type": "string", "required": true, "description": "Label of the generated primary submit button; must state the action (not 'Submit')." },
+    { "name": "error", "type": "string", "required": false, "description": "Form-level error summary, announced via role=alert." }
+  ],
+  "accessibility": [
+    { "id": "a11y-form-heading", "requirement": "The form is introduced by a heading describing the task.", "wcag": "2.4.6" },
+    { "id": "a11y-form-errors", "requirement": "On failed submit, an error summary receives focus and links to offending fields.", "wcag": "3.3.1" },
+    { "id": "a11y-form-progress", "requirement": "Stepped forms announce 'Step X of Y' as text, not just visually.", "wcag": "1.3.1" }
+  ],
+  "constraints": [
+    { "id": "c-form-fields", "rule": "A form contains at least one Field.", "machineCheck": "form-has-fields" },
+    { "id": "c-form-submit-label", "rule": "submitLabel states the action ('Create account'), never a generic 'Submit'.", "machineCheck": "label-states-action" },
+    { "id": "c-form-one-submit", "rule": "Exactly one primary submit action per form.", "machineCheck": "single-primary-action" }
+  ],
+  "examples": [
+    {
+      "title": "Password reset request form",
+      "ast": {
+        "type": "Form",
+        "id": "password-reset-request",
+        "title": "Reset your password",
+        "submitLabel": "Send reset link",
+        "children": [
+          { "type": "Field", "name": "email", "label": "Email address", "variant": "email", "required": true, "autocomplete": "email" }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-playground.example/components/component.schema.json",
+  "title": "Component Metadata",
+  "description": "Machine-readable definition of a reusable UI primitive: what it is for, how it varies, what props it takes, and which accessibility requirements and design constraints bind it.",
+  "type": "object",
+  "required": ["id", "purpose", "variants", "props", "accessibility", "constraints", "examples"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "purpose": { "type": "string", "minLength": 10 },
+    "variants": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "usage"],
+        "properties": {
+          "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+          "usage": { "type": "string" },
+          "tokens": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Design token paths this variant is bound to."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "props": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "type", "required"],
+        "properties": {
+          "name": { "type": "string" },
+          "type": { "type": "string" },
+          "required": { "type": "boolean" },
+          "description": { "type": "string" },
+          "enum": { "type": "array", "items": { "type": "string" } },
+          "default": {}
+        },
+        "additionalProperties": false
+      }
+    },
+    "accessibility": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "requirement"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^a11y-[a-z0-9-]+$" },
+          "requirement": { "type": "string" },
+          "wcag": { "type": "string", "description": "WCAG success criterion, e.g. 1.3.1" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "constraints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "rule"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^c-[a-z0-9-]+$" },
+          "rule": { "type": "string" },
+          "machineCheck": {
+            "type": "string",
+            "description": "Identifier of the semantic lint that enforces this constraint, if automated."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "examples": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["title", "ast"],
+        "properties": {
+          "title": { "type": "string" },
+          "ast": { "type": "object", "description": "UI AST fragment using this component." }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

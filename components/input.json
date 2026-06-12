@@ -1,0 +1,43 @@
+{
+  "$schema": "./component.schema.json",
+  "id": "input",
+  "purpose": "Single-value form control for free text, email, passwords, numbers, and selections rendered as a labeled field.",
+  "variants": [
+    { "name": "text", "usage": "Free-form short text.", "tokens": ["color.border.default", "font.size.md", "radius.sm"] },
+    { "name": "email", "usage": "Email addresses; enables appropriate keyboard and autocomplete.", "tokens": ["color.border.default", "font.size.md", "radius.sm"] },
+    { "name": "password", "usage": "Secrets; masked, with autocomplete hints for password managers.", "tokens": ["color.border.default", "font.size.md", "radius.sm"] },
+    { "name": "select", "usage": "Choice among a small closed set of options.", "tokens": ["color.border.default", "font.size.md", "radius.sm"] },
+    { "name": "checkbox", "usage": "Boolean opt-in. Never pre-checked for consent.", "tokens": ["color.brand.primary", "radius.sm"] }
+  ],
+  "props": [
+    { "name": "name", "type": "string", "required": true, "description": "Field name within the enclosing form." },
+    { "name": "label", "type": "string", "required": true, "description": "Visible label; programmatically associated with the control." },
+    { "name": "variant", "type": "string", "required": true, "enum": ["text", "email", "password", "select", "checkbox"] },
+    { "name": "required", "type": "boolean", "required": false, "default": false },
+    { "name": "options", "type": "string[]", "required": false, "description": "Options for the select variant." },
+    { "name": "help", "type": "string", "required": false, "description": "Hint text linked via aria-describedby." },
+    { "name": "error", "type": "string", "required": false, "description": "Inline validation message; announced via role=alert." },
+    { "name": "autocomplete", "type": "string", "required": false, "description": "HTML autocomplete token (WCAG 1.3.5)." }
+  ],
+  "accessibility": [
+    { "id": "a11y-input-label", "requirement": "Every input has a visible, programmatically associated label. Placeholder is never the label.", "wcag": "3.3.2" },
+    { "id": "a11y-input-error", "requirement": "Validation errors are textual, adjacent to the field, and announced to assistive technology.", "wcag": "3.3.1" },
+    { "id": "a11y-input-autocomplete", "requirement": "Fields collecting personal data declare an autocomplete purpose.", "wcag": "1.3.5" },
+    { "id": "a11y-input-font", "requirement": "Input text is at least font.size.md to avoid mobile zoom traps." }
+  ],
+  "constraints": [
+    { "id": "c-input-label", "rule": "label is mandatory and non-empty.", "machineCheck": "field-has-label" },
+    { "id": "c-input-select-options", "rule": "select variant requires at least 2 options.", "machineCheck": "select-has-options" },
+    { "id": "c-input-consent", "rule": "Consent checkboxes must not default to checked." }
+  ],
+  "examples": [
+    {
+      "title": "Email field with autocomplete",
+      "ast": { "type": "Field", "name": "email", "label": "Email address", "variant": "email", "required": true, "autocomplete": "email" }
+    },
+    {
+      "title": "Field in error state",
+      "ast": { "type": "Field", "name": "email", "label": "Email address", "variant": "email", "required": true, "error": "Enter a valid email address, like name@example.com." }
+    }
+  ]
+}

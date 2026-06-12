@@ -1,0 +1,48 @@
+{
+  "$schema": "./component.schema.json",
+  "id": "button",
+  "purpose": "Triggers an action or event. The single mechanism for users to commit, cancel, or navigate via explicit action.",
+  "variants": [
+    {
+      "name": "primary",
+      "usage": "The single most important action on a screen. At most one per screen.",
+      "tokens": ["color.brand.primary", "color.brand.primary-contrast", "radius.md"]
+    },
+    {
+      "name": "secondary",
+      "usage": "Supporting actions such as Back or Cancel.",
+      "tokens": ["color.border.default", "color.text.primary", "radius.md"]
+    },
+    {
+      "name": "danger",
+      "usage": "Destructive, hard-to-reverse actions (delete, cancel subscription). Requires a confirmation dialog.",
+      "tokens": ["color.semantic.danger", "color.semantic.danger-contrast", "radius.md"]
+    }
+  ],
+  "props": [
+    { "name": "label", "type": "string", "required": true, "description": "Visible text; also the accessible name." },
+    { "name": "variant", "type": "string", "required": true, "enum": ["primary", "secondary", "danger"] },
+    { "name": "action", "type": "ActionRef", "required": true, "description": "Declarative action reference (no inline code)." },
+    { "name": "disabled", "type": "boolean", "required": false, "default": false }
+  ],
+  "accessibility": [
+    { "id": "a11y-button-name", "requirement": "Must have a non-empty visible label that doubles as the accessible name.", "wcag": "4.1.2" },
+    { "id": "a11y-button-focus", "requirement": "Focus ring uses color.border.focus and is never suppressed.", "wcag": "2.4.7" },
+    { "id": "a11y-button-target", "requirement": "Minimum touch target 44x44 CSS px.", "wcag": "2.5.8" }
+  ],
+  "constraints": [
+    { "id": "c-one-primary", "rule": "At most one primary button per screen.", "machineCheck": "single-primary-action" },
+    { "id": "c-danger-confirm", "rule": "Danger buttons must be guarded by a confirmation dialog.", "machineCheck": "destructive-needs-confirmation" },
+    { "id": "c-no-color-only", "rule": "Variant meaning may not be conveyed by color alone; labels must state the action.", "machineCheck": "label-states-action" }
+  ],
+  "examples": [
+    {
+      "title": "Primary submit",
+      "ast": { "type": "Button", "label": "Create account", "variant": "primary", "action": { "kind": "submit", "target": "signup-form" } }
+    },
+    {
+      "title": "Guarded destructive action",
+      "ast": { "type": "Button", "label": "Cancel subscription", "variant": "danger", "action": { "kind": "open-dialog", "target": "confirm-cancel" } }
+    }
+  ]
+}

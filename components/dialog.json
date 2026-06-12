@@ -1,0 +1,43 @@
+{
+  "$schema": "./component.schema.json",
+  "id": "dialog",
+  "purpose": "Modal surface that interrupts the flow for a focused decision - above all, confirmation of destructive or costly actions.",
+  "variants": [
+    { "name": "confirm", "usage": "Yes/no decision with an explicit consequence statement.", "tokens": ["color.surface.card", "color.surface.overlay", "shadow.overlay", "radius.lg"] },
+    { "name": "destructive-confirm", "usage": "Confirmation for destructive actions; confirm button uses the danger variant and the safe action is the default focus.", "tokens": ["color.semantic.danger", "color.surface.overlay", "shadow.overlay", "radius.lg"] }
+  ],
+  "props": [
+    { "name": "id", "type": "string", "required": true, "description": "Target id referenced by open-dialog actions." },
+    { "name": "title", "type": "string", "required": true, "description": "Dialog heading; labels the dialog for AT." },
+    { "name": "variant", "type": "string", "required": true, "enum": ["confirm", "destructive-confirm"] },
+    { "name": "children", "type": "Node[]", "required": true, "description": "Body: consequence statement, optional summary." },
+    { "name": "confirmButton", "type": "Button", "required": true },
+    { "name": "cancelButton", "type": "Button", "required": true }
+  ],
+  "accessibility": [
+    { "id": "a11y-dialog-label", "requirement": "Dialog is labelled by its title (aria-labelledby) and uses role=dialog with aria-modal.", "wcag": "4.1.2" },
+    { "id": "a11y-dialog-focus", "requirement": "Focus moves into the dialog on open, is trapped while open, and returns to the trigger on close.", "wcag": "2.4.3" },
+    { "id": "a11y-dialog-escape", "requirement": "Escape closes the dialog without committing the action.", "wcag": "2.1.2" }
+  ],
+  "constraints": [
+    { "id": "c-dialog-cancel", "rule": "Every dialog offers a non-destructive exit (cancel button).", "machineCheck": "dialog-has-cancel" },
+    { "id": "c-dialog-destructive", "rule": "destructive-confirm dialogs state the consequence in body text and use a danger confirm button.", "machineCheck": "destructive-dialog-shape" },
+    { "id": "c-dialog-single", "rule": "Dialogs never open other dialogs." }
+  ],
+  "examples": [
+    {
+      "title": "Destructive confirmation",
+      "ast": {
+        "type": "Dialog",
+        "id": "confirm-cancel",
+        "title": "Cancel subscription?",
+        "variant": "destructive-confirm",
+        "children": [
+          { "type": "Text", "role": "body", "content": "You will lose access to Pro features at the end of the billing period. This cannot be undone." }
+        ],
+        "confirmButton": { "type": "Button", "label": "Cancel subscription", "variant": "danger", "action": { "kind": "submit", "target": "cancel-subscription" } },
+        "cancelButton": { "type": "Button", "label": "Keep subscription", "variant": "secondary", "action": { "kind": "close-dialog", "target": "confirm-cancel" } }
+      }
+    }
+  ]
+}
