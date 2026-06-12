@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-playground.example/tokens/design-tokens.schema.json",
+  "title": "W3C-style Design Tokens (DTCG subset)",
+  "description": "Schema for tokens/design-tokens.json. A token is an object with $value and an explicit or group-inherited $type. Groups nest arbitrarily.",
+  "$ref": "#/$defs/group",
+  "$defs": {
+    "tokenType": {
+      "enum": [
+        "color",
+        "dimension",
+        "fontFamily",
+        "fontWeight",
+        "number",
+        "duration",
+        "cubicBezier",
+        "shadow"
+      ]
+    },
+    "token": {
+      "type": "object",
+      "required": ["$value"],
+      "properties": {
+        "$value": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "number" },
+            { "type": "array" },
+            { "type": "object" }
+          ]
+        },
+        "$type": { "$ref": "#/$defs/tokenType" },
+        "$description": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "group": {
+      "type": "object",
+      "properties": {
+        "$type": { "$ref": "#/$defs/tokenType" },
+        "$description": { "type": "string" },
+        "$schema": { "type": "string" }
+      },
+      "patternProperties": {
+        "^[^$]": {
+          "oneOf": [{ "$ref": "#/$defs/token" }, { "$ref": "#/$defs/group" }]
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

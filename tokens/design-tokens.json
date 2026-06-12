@@ -1,0 +1,114 @@
+{
+  "$schema": "./design-tokens.schema.json",
+  "color": {
+    "$type": "color",
+    "brand": {
+      "primary": { "$value": "#4f46e5", "$description": "Primary brand color; the only color allowed for primary actions." },
+      "primary-hover": { "$value": "#4338ca" },
+      "primary-contrast": { "$value": "#ffffff", "$description": "Text/icon color on primary surfaces; meets WCAG AA against brand.primary." }
+    },
+    "semantic": {
+      "danger": { "$value": "#dc2626", "$description": "Destructive actions and error states only." },
+      "danger-hover": { "$value": "#b91c1c" },
+      "danger-contrast": { "$value": "#ffffff" },
+      "success": { "$value": "#16a34a" },
+      "warning": { "$value": "#d97706" },
+      "info": { "$value": "#0284c7" }
+    },
+    "surface": {
+      "background": { "$value": "#f8fafc" },
+      "card": { "$value": "#ffffff" },
+      "overlay": { "$value": "#0f172a99", "$description": "Dialog backdrop overlay." }
+    },
+    "text": {
+      "primary": { "$value": "#0f172a" },
+      "secondary": { "$value": "#475569" },
+      "disabled": { "$value": "#94a3b8" },
+      "error": { "$value": "#b91c1c", "$description": "Inline error message text; meets WCAG AA on surface.card." }
+    },
+    "border": {
+      "default": { "$value": "#cbd5e1" },
+      "focus": { "$value": "#4f46e5", "$description": "Focus ring color; must remain visible on all surfaces (WCAG 2.4.7)." },
+      "error": { "$value": "#dc2626" }
+    }
+  },
+  "font": {
+    "family": {
+      "$type": "fontFamily",
+      "base": { "$value": ["Inter", "system-ui", "sans-serif"] },
+      "mono": { "$value": ["JetBrains Mono", "ui-monospace", "monospace"] }
+    },
+    "size": {
+      "$type": "dimension",
+      "xs": { "$value": "0.75rem" },
+      "sm": { "$value": "0.875rem" },
+      "md": { "$value": "1rem", "$description": "Body text; minimum size for form inputs (a11y)." },
+      "lg": { "$value": "1.125rem" },
+      "xl": { "$value": "1.5rem" },
+      "2xl": { "$value": "2rem" }
+    },
+    "weight": {
+      "$type": "fontWeight",
+      "regular": { "$value": 400 },
+      "medium": { "$value": 500 },
+      "semibold": { "$value": 600 }
+    },
+    "line-height": {
+      "$type": "number",
+      "tight": { "$value": 1.25 },
+      "normal": { "$value": 1.5, "$description": "WCAG 1.4.12 requires body line-height >= 1.5." }
+    }
+  },
+  "space": {
+    "$type": "dimension",
+    "0": { "$value": "0rem" },
+    "1": { "$value": "0.25rem" },
+    "2": { "$value": "0.5rem" },
+    "3": { "$value": "0.75rem" },
+    "4": { "$value": "1rem" },
+    "6": { "$value": "1.5rem" },
+    "8": { "$value": "2rem" },
+    "12": { "$value": "3rem" }
+  },
+  "radius": {
+    "$type": "dimension",
+    "sm": { "$value": "0.25rem" },
+    "md": { "$value": "0.5rem" },
+    "lg": { "$value": "0.75rem" },
+    "full": { "$value": "9999px" }
+  },
+  "shadow": {
+    "$type": "shadow",
+    "sm": {
+      "$value": { "color": "#0f172a14", "offsetX": "0px", "offsetY": "1px", "blur": "2px", "spread": "0px" }
+    },
+    "md": {
+      "$value": { "color": "#0f172a1f", "offsetX": "0px", "offsetY": "4px", "blur": "12px", "spread": "-2px" }
+    },
+    "overlay": {
+      "$value": { "color": "#0f172a33", "offsetX": "0px", "offsetY": "16px", "blur": "48px", "spread": "-8px" },
+      "$description": "Dialogs and popovers."
+    }
+  },
+  "motion": {
+    "duration": {
+      "$type": "duration",
+      "fast": { "$value": "120ms" },
+      "normal": { "$value": "200ms" },
+      "slow": { "$value": "320ms", "$description": "Upper bound; respect prefers-reduced-motion." }
+    },
+    "easing": {
+      "$type": "cubicBezier",
+      "standard": { "$value": [0.2, 0, 0, 1] },
+      "enter": { "$value": [0, 0, 0.2, 1] },
+      "exit": { "$value": [0.4, 0, 1, 1] }
+    }
+  },
+  "breakpoint": {
+    "$type": "dimension",
+    "sm": { "$value": "640px" },
+    "md": { "$value": "768px", "$description": "Below md, multi-column layouts must collapse to a single column." },
+    "lg": { "$value": "1024px" },
+    "xl": { "$value": "1280px" }
+  }
+}
