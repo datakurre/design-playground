@@ -1,0 +1,35 @@
+{
+  "$schema": "./flow.schema.json",
+  "id": "subscription-upgrade",
+  "goal": "Let a user move to a higher plan with a clear price difference and explicit confirmation of the new recurring charge.",
+  "intents": ["upgrade", "subscription upgrade", "change plan", "switch plan", "go pro", "upgrade my plan"],
+  "steps": [
+    {
+      "id": "choose-plan",
+      "title": "Choose your plan",
+      "description": "Selectable plan cards; the current plan is marked as text, not color alone.",
+      "components": ["card", "form", "button"],
+      "fields": [
+        { "name": "plan", "label": "Plan", "variant": "select", "required": true, "options": ["Starter - 0 EUR/month (current)", "Pro - 12 EUR/month", "Team - 39 EUR/month"] }
+      ],
+      "submitLabel": "Review upgrade",
+      "ruleTags": ["primary-action", "checkout", "cost-transparency"]
+    },
+    {
+      "id": "confirm-upgrade",
+      "title": "Confirm your upgrade",
+      "description": "Recurring-charge consequence stated before commitment.",
+      "components": ["card", "form", "button"],
+      "summary": ["New plan: Pro - 12 EUR/month", "First charge: today", "Renews monthly until cancelled"],
+      "submitLabel": "Confirm upgrade - 12 EUR/month",
+      "ruleTags": ["primary-action", "checkout", "cost-transparency", "explicit-consent", "recurring-charge"]
+    }
+  ],
+  "success": {
+    "title": "You're on Pro!",
+    "message": "Your upgrade is active immediately. The receipt is in your inbox."
+  },
+  "errors": [
+    { "code": "payment-failed", "message": "We could not charge your saved card.", "recovery": "Offer to update the payment method without losing the chosen plan." }
+  ]
+}

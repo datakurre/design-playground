@@ -1,0 +1,29 @@
+{
+  "$schema": "./flow.schema.json",
+  "id": "account-settings",
+  "goal": "Let a user view and change profile, notification, and account data - including the guarded, destructive deletion of the account.",
+  "intents": ["settings", "account settings", "profile settings", "change my email", "notifications", "delete account", "delete my account"],
+  "steps": [
+    {
+      "id": "settings",
+      "title": "Account settings",
+      "description": "Grouped sections; the destructive zone is visually and semantically separated.",
+      "components": ["card", "form", "input", "button", "dialog"],
+      "fields": [
+        { "name": "name", "label": "Full name", "variant": "text", "required": false, "autocomplete": "name" },
+        { "name": "email", "label": "Email address", "variant": "email", "required": true, "autocomplete": "email" },
+        { "name": "newsletter", "label": "Send me the monthly product newsletter", "variant": "checkbox", "required": false }
+      ],
+      "submitLabel": "Save changes",
+      "ruleTags": ["primary-action", "form-a11y", "destructive-action", "danger-zone"]
+    }
+  ],
+  "success": {
+    "title": "Settings saved",
+    "message": "Your changes have been saved."
+  },
+  "errors": [
+    { "code": "email-taken", "message": "Another account already uses this email.", "recovery": "Keep other edits; focus the email field with the inline error." },
+    { "code": "delete-failed", "message": "Account deletion failed. Nothing was changed.", "recovery": "Offer retry and a support contact link." }
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "$schema": "./flow.schema.json",
+  "id": "checkout",
+  "goal": "Let a user pay for the items in their cart with full transparency of costs before the final commitment.",
+  "intents": ["checkout", "buy", "purchase", "pay", "payment", "complete order", "place order"],
+  "steps": [
+    {
+      "id": "shipping",
+      "title": "Shipping details",
+      "components": ["form", "input", "button"],
+      "fields": [
+        { "name": "name", "label": "Full name", "variant": "text", "required": true, "autocomplete": "name" },
+        { "name": "address", "label": "Street address", "variant": "text", "required": true, "autocomplete": "street-address" },
+        { "name": "city", "label": "City", "variant": "text", "required": true, "autocomplete": "address-level2" },
+        { "name": "postal", "label": "Postal code", "variant": "text", "required": true, "autocomplete": "postal-code" }
+      ],
+      "submitLabel": "Continue to payment",
+      "ruleTags": ["primary-action", "checkout", "form-a11y"]
+    },
+    {
+      "id": "payment",
+      "title": "Payment method",
+      "components": ["form", "input", "button"],
+      "fields": [
+        { "name": "card-number", "label": "Card number", "variant": "text", "required": true, "autocomplete": "cc-number" },
+        { "name": "expiry", "label": "Expiry date (MM/YY)", "variant": "text", "required": true, "autocomplete": "cc-exp" },
+        { "name": "cvc", "label": "Security code (CVC)", "variant": "text", "required": true, "autocomplete": "cc-csc", "help": "3 digits on the back of your card." }
+      ],
+      "submitLabel": "Review order",
+      "ruleTags": ["primary-action", "checkout", "form-a11y", "sensitive-data"]
+    },
+    {
+      "id": "review",
+      "title": "Review and place order",
+      "description": "Final commitment: full cost breakdown is mandatory before the pay action.",
+      "components": ["card", "form", "button"],
+      "summary": ["Items: 2 x Design Tokens Handbook - 58 EUR", "Shipping: 4.90 EUR", "Total: 62.90 EUR (incl. VAT)"],
+      "submitLabel": "Place order and pay 62.90 EUR",
+      "ruleTags": ["primary-action", "checkout", "cost-transparency", "explicit-consent"]
+    }
+  ],
+  "success": {
+    "title": "Order placed",
+    "message": "Thank you! Order #10421 is confirmed. A receipt is on its way to your email."
+  },
+  "errors": [
+    { "code": "payment-declined", "message": "Your card was declined.", "recovery": "Keep all entered data; return to the payment step with the card fields focused and an inline explanation." },
+    { "code": "address-invalid", "message": "We could not verify this address.", "recovery": "Highlight the address fields and offer to continue with the address as entered." }
+  ]
+}

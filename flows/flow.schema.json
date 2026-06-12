@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-playground.example/flows/flow.schema.json",
+  "title": "Flow Definition",
+  "description": "A user journey the agent planner can realize as a sequence of screens. Steps reference components by id and carry rule tags that bind design rules to the step.",
+  "type": "object",
+  "required": ["id", "goal", "intents", "steps", "success", "errors"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "goal": { "type": "string", "minLength": 10 },
+    "intents": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string" },
+      "description": "Phrases/keywords the planner matches user requests against."
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "components", "ruleTags"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "components": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "enum": ["button", "input", "card", "dialog", "form"] }
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name", "label", "variant"],
+              "properties": {
+                "name": { "type": "string" },
+                "label": { "type": "string" },
+                "variant": { "enum": ["text", "email", "password", "select", "checkbox"] },
+                "required": { "type": "boolean" },
+                "options": { "type": "array", "items": { "type": "string" } },
+                "autocomplete": { "type": "string" },
+                "help": { "type": "string" }
+              },
+              "additionalProperties": false
+            }
+          },
+          "submitLabel": { "type": "string" },
+          "summary": { "type": "array", "items": { "type": "string" }, "description": "Lines for a summary card, if the step reviews prior input." },
+          "ruleTags": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Rule tags binding design rules to this step (e.g. primary-action, destructive-action)."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "success": {
+      "type": "object",
+      "required": ["title", "message"],
+      "properties": {
+        "title": { "type": "string" },
+        "message": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "message", "recovery"],
+        "properties": {
+          "code": { "type": "string" },
+          "message": { "type": "string", "description": "Human-readable, actionable error message." },
+          "recovery": { "type": "string", "description": "What the UI offers the user to recover." }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

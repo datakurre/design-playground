@@ -1,0 +1,40 @@
+{
+  "$schema": "./flow.schema.json",
+  "id": "onboarding",
+  "goal": "Let a new user create an account with the minimum information needed, building trust step by step.",
+  "intents": ["onboarding", "sign up", "signup", "create account", "register", "new user"],
+  "steps": [
+    {
+      "id": "account",
+      "title": "Create your account",
+      "description": "Collect credentials only; defer profile data until after first value.",
+      "components": ["form", "input", "button"],
+      "fields": [
+        { "name": "email", "label": "Email address", "variant": "email", "required": true, "autocomplete": "email" },
+        { "name": "password", "label": "Password", "variant": "password", "required": true, "autocomplete": "new-password", "help": "At least 12 characters." }
+      ],
+      "submitLabel": "Create account",
+      "ruleTags": ["primary-action", "onboarding", "form-a11y", "minimal-input"]
+    },
+    {
+      "id": "profile",
+      "title": "Tell us about yourself",
+      "description": "Optional personalization; skippable.",
+      "components": ["form", "input", "button"],
+      "fields": [
+        { "name": "name", "label": "Full name", "variant": "text", "required": false, "autocomplete": "name" },
+        { "name": "role", "label": "What best describes you?", "variant": "select", "required": false, "options": ["Designer", "Developer", "Product manager", "Other"] }
+      ],
+      "submitLabel": "Continue",
+      "ruleTags": ["primary-action", "onboarding", "skippable-step", "form-a11y"]
+    }
+  ],
+  "success": {
+    "title": "Welcome aboard!",
+    "message": "Your account is ready. We sent a confirmation link to your email."
+  },
+  "errors": [
+    { "code": "email-taken", "message": "An account with this email already exists.", "recovery": "Offer sign-in and password-reset links next to the error." },
+    { "code": "weak-password", "message": "Password must be at least 12 characters.", "recovery": "Keep entered email; focus the password field with inline guidance." }
+  ]
+}
