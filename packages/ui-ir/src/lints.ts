@@ -41,14 +41,18 @@ function allOfType<T extends Node>(visits: Visit[], type: T["type"]): Array<{ no
     .map((v) => ({ node: v.node as T, path: v.path }));
 }
 
-/** Generic labels that fail to state what an action does. */
+/** Contentless labels that fail to state what an action does. */
 const VAGUE_LABELS = new Set([
-  "ok", "submit", "continue", "next", "yes", "no", "click here", "go", "done", "confirm",
+  "ok", "submit", "yes", "no", "click here", "go", "done", "button", "click", "tap",
 ]);
 
-const COMMIT_LABELS = [
-  "pay", "buy", "purchase", "subscribe", "upgrade", "place order", "complete purchase", "checkout",
-];
+/** Labels that commit the user to a charge/order (word-boundary matched). */
+const COMMIT_LABEL_RE =
+  /\b(pay|buy|purchase|subscribe|place order|complete purchase|confirm upgrade|confirm order)\b/i;
+
+/** Signals that a summary describes a recurring (not one-time) charge. */
+const RECURRING_CONTEXT_RE = /(\/(mo|month|yr|year)\b|per (month|year)|monthly|annually|subscription|\bplan\b)/i;
+const RENEWAL_DISCLOSURE_RE = /(renew|recurring|until cancelled|until canceled|auto-renew|auto renew)/i;
 
 type Check = (screen: Screen, visits: Visit[]) => LintFinding[];
 
@@ -223,9 +227,7 @@ const checks: Record<string, Check> = {
   // rule-cost-transparency
   "commit-shows-summary": (_screen, visits) => {
     const commitButtons = allOfType<Button>(visits, "Button").filter(
-      (b) =>
-        b.node.variant === "primary" &&
-        COMMIT_LABELS.some((k) => b.node.label.toLowerCase().includes(k)),
+      (b) => b.node.variant === "primary" && COMMIT_LABEL_RE.test(b.node.label),
     );
     if (commitButtons.length === 0) return [];
     const hasSummary = allOfType<Card>(visits, "Card").some((c) => c.node.role === "summary");
@@ -245,11 +247,12 @@ const checks: Record<string, Check> = {
   // rule-recurring-disclosure
   "summary-mentions-renewal": (_screen, visits) => {
     const summaries = allOfType<Card>(visits, "Card").filter((c) => c.node.role === "summary");
-    const recurringWords = ["renew", "recurring", "per month", "per year", "/mo", "/yr", "monthly", "annually", "auto"];
     return summaries
       .filter((c) => {
-        const text = collectText(c.node).toLowerCase();
-        return !recurringWords.some((w) => text.includes(w));
+        const text = collectText(c.node);
+        // Only summaries that describe a recurring charge need a renewal
+        // disclosure; one-time order summaries are left alone.
+        return RECURRING_CONTEXT_RE.test(text) && !RENEWAL_DISCLOSURE_RE.test(text);
       })
       .map((c) => ({
         check: "summary-mentions-renewal",

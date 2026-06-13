@@ -14,6 +14,9 @@ importers:
       '@design-playground/mcp-server':
         specifier: workspace:*
         version: link:packages/mcp-server
+      '@design-playground/planner':
+        specifier: workspace:*
+        version: link:packages/planner
       '@design-playground/tokens-build':
         specifier: workspace:*
         version: link:packages/tokens-build
@@ -76,6 +79,15 @@ importers:
       zod:
         specifier: ^3.25.0
         version: 3.25.76
+
+  packages/planner:
+    dependencies:
+      '@design-playground/ui-ir':
+        specifier: workspace:*
+        version: link:../ui-ir
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.29.0
+        version: 1.29.0(zod@3.25.76)
 
   packages/tokens-build: {}
 

@@ -25,6 +25,7 @@
   "dependencies": {
     "@design-playground/design-db": "workspace:*",
     "@design-playground/mcp-server": "workspace:*",
+    "@design-playground/planner": "workspace:*",
     "@design-playground/tokens-build": "workspace:*",
     "@design-playground/ui-ir": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.12.0",
