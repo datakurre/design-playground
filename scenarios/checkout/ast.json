@@ -1,0 +1,156 @@
+[
+  {
+    "type": "Screen",
+    "id": "checkout-shipping",
+    "title": "Shipping details",
+    "flow": "checkout",
+    "step": "shipping",
+    "children": [
+      {
+        "type": "Form",
+        "id": "shipping-form",
+        "columns": 1,
+        "children": [
+          {
+            "type": "Field",
+            "name": "name",
+            "label": "Full name",
+            "inputType": "text",
+            "required": true,
+            "autocomplete": "name"
+          },
+          {
+            "type": "Field",
+            "name": "address",
+            "label": "Street address",
+            "inputType": "text",
+            "required": true,
+            "autocomplete": "street-address"
+          },
+          {
+            "type": "Field",
+            "name": "city",
+            "label": "City",
+            "inputType": "text",
+            "required": true,
+            "autocomplete": "address-level2"
+          },
+          {
+            "type": "Field",
+            "name": "postal",
+            "label": "Postal code",
+            "inputType": "text",
+            "required": true,
+            "autocomplete": "postal-code"
+          },
+          {
+            "type": "Button",
+            "label": "Continue to payment",
+            "variant": "primary",
+            "action": {
+              "kind": "submit",
+              "target": "shipping-form"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "type": "Screen",
+    "id": "checkout-payment",
+    "title": "Payment method",
+    "flow": "checkout",
+    "step": "payment",
+    "children": [
+      {
+        "type": "Form",
+        "id": "payment-form",
+        "columns": 1,
+        "children": [
+          {
+            "type": "Field",
+            "name": "card-number",
+            "label": "Card number",
+            "inputType": "text",
+            "required": true,
+            "autocomplete": "cc-number"
+          },
+          {
+            "type": "Field",
+            "name": "expiry",
+            "label": "Expiry date (MM/YY)",
+            "inputType": "text",
+            "required": true,
+            "autocomplete": "cc-exp"
+          },
+          {
+            "type": "Field",
+            "name": "cvc",
+            "label": "Security code (CVC)",
+            "inputType": "text",
+            "required": true,
+            "autocomplete": "cc-csc",
+            "help": "3 digits on the back of your card."
+          },
+          {
+            "type": "Button",
+            "label": "Review order",
+            "variant": "primary",
+            "action": {
+              "kind": "submit",
+              "target": "payment-form"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "type": "Screen",
+    "id": "checkout-review",
+    "title": "Review and place order",
+    "flow": "checkout",
+    "step": "review",
+    "children": [
+      {
+        "type": "Card",
+        "role": "summary",
+        "title": "Order summary",
+        "children": [
+          {
+            "type": "Text",
+            "value": "Items: 2 x Design Tokens Handbook - 58 EUR",
+            "role": "body"
+          },
+          {
+            "type": "Text",
+            "value": "Shipping: 4.90 EUR",
+            "role": "body"
+          },
+          {
+            "type": "Text",
+            "value": "Total: 62.90 EUR (incl. VAT)",
+            "role": "body"
+          }
+        ]
+      },
+      {
+        "type": "Stack",
+        "role": "actions",
+        "direction": "horizontal",
+        "children": [
+          {
+            "type": "Button",
+            "label": "Place order and pay 62.90 EUR",
+            "variant": "primary",
+            "action": {
+              "kind": "submit",
+              "target": "review-form"
+            }
+          }
+        ]
+      }
+    ]
+  }
+]

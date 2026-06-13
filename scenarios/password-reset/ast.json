@@ -1,0 +1,77 @@
+[
+  {
+    "type": "Screen",
+    "id": "password-reset-request",
+    "title": "Reset your password",
+    "flow": "password-reset",
+    "step": "request",
+    "children": [
+      {
+        "type": "Form",
+        "id": "request-form",
+        "columns": 1,
+        "children": [
+          {
+            "type": "Field",
+            "name": "email",
+            "label": "Email address",
+            "inputType": "email",
+            "required": true,
+            "autocomplete": "email"
+          },
+          {
+            "type": "Button",
+            "label": "Send reset link",
+            "variant": "primary",
+            "action": {
+              "kind": "submit",
+              "target": "request-form"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "type": "Screen",
+    "id": "password-reset-new-password",
+    "title": "Choose a new password",
+    "flow": "password-reset",
+    "step": "new-password",
+    "children": [
+      {
+        "type": "Form",
+        "id": "new-password-form",
+        "columns": 1,
+        "children": [
+          {
+            "type": "Field",
+            "name": "password",
+            "label": "New password",
+            "inputType": "password",
+            "required": true,
+            "autocomplete": "new-password",
+            "help": "At least 12 characters."
+          },
+          {
+            "type": "Field",
+            "name": "password-confirm",
+            "label": "Repeat new password",
+            "inputType": "password",
+            "required": true,
+            "autocomplete": "new-password"
+          },
+          {
+            "type": "Button",
+            "label": "Set new password",
+            "variant": "primary",
+            "action": {
+              "kind": "submit",
+              "target": "new-password-form"
+            }
+          }
+        ]
+      }
+    ]
+  }
+]

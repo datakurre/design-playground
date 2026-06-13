@@ -1,0 +1,41 @@
+{
+  "id": "password-reset",
+  "title": "Password reset",
+  "request": "I forgot my password and I'm locked out",
+  "intent": {
+    "flowId": "password-reset",
+    "score": 9.25,
+    "ranked": [
+      {
+        "flowId": "password-reset",
+        "score": 9.25,
+        "matched": [
+          "forgot my password",
+          "locked out"
+        ]
+      },
+      {
+        "flowId": "account-settings",
+        "score": 0,
+        "matched": []
+      },
+      {
+        "flowId": "checkout",
+        "score": 0,
+        "matched": []
+      },
+      {
+        "flowId": "onboarding",
+        "score": 0,
+        "matched": []
+      },
+      {
+        "flowId": "subscription-upgrade",
+        "score": 0,
+        "matched": []
+      }
+    ]
+  },
+  "flowId": "password-reset",
+  "flowGoal": "Let a locked-out user regain access safely, without revealing whether an email is registered."
+}

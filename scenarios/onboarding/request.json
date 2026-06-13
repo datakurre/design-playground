@@ -1,0 +1,40 @@
+{
+  "id": "onboarding",
+  "title": "User onboarding",
+  "request": "I want to sign up and create a new account",
+  "intent": {
+    "flowId": "onboarding",
+    "score": 4.5,
+    "ranked": [
+      {
+        "flowId": "onboarding",
+        "score": 4.5,
+        "matched": [
+          "sign up"
+        ]
+      },
+      {
+        "flowId": "account-settings",
+        "score": 0.5,
+        "matched": []
+      },
+      {
+        "flowId": "checkout",
+        "score": 0,
+        "matched": []
+      },
+      {
+        "flowId": "password-reset",
+        "score": 0,
+        "matched": []
+      },
+      {
+        "flowId": "subscription-upgrade",
+        "score": 0,
+        "matched": []
+      }
+    ]
+  },
+  "flowId": "onboarding",
+  "flowGoal": "Let a new user create an account with the minimum information needed, building trust step by step."
+}

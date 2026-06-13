@@ -1,0 +1,377 @@
+[
+  {
+    "step": "shipping",
+    "checksApplied": [
+      "label-states-action",
+      "error-has-recovery",
+      "field-has-label",
+      "forms-single-column",
+      "single-primary-action",
+      "field-has-autocomplete"
+    ],
+    "rules": [
+      {
+        "id": "rule-action-label-states-action",
+        "tag": "primary-action",
+        "category": "action",
+        "severity": "error",
+        "applies": "step",
+        "title": "Action labels state the action",
+        "description": "Button labels describe what happens ('Create account', 'Place order'). Generic labels such as 'Submit', 'OK' or 'Yes' are forbidden.",
+        "machine_check": "label-states-action",
+        "requires_confirmation": 0,
+        "wcag": null
+      },
+      {
+        "id": "rule-checkout-preserve-input",
+        "tag": "checkout",
+        "category": "error-handling",
+        "severity": "error",
+        "applies": "step",
+        "title": "Checkout failures preserve everything",
+        "description": "When payment or address validation fails, all entered data is kept and the user is returned to the failing step with the offending field focused.",
+        "machine_check": null,
+        "requires_confirmation": 0,
+        "wcag": null
+      },
+      {
+        "id": "rule-error-announce",
+        "tag": "error-states",
+        "category": "accessibility",
+        "severity": "error",
+        "applies": "global",
+        "title": "Errors are textual and announced",
+        "description": "Validation errors render as text adjacent to the offending field and are announced to assistive technology (role=alert); color alone never signals an error.",
+        "machine_check": null,
+        "requires_confirmation": 0,
+        "wcag": "3.3.1"
+      },
+      {
+        "id": "rule-error-recovery",
+        "tag": "error-states",
+        "category": "error-handling",
+        "severity": "error",
+        "applies": "global",
+        "title": "Every error state offers recovery",
+        "description": "Every error message is actionable, preserves user input, and tells the user what to do next. Dead-end errors are forbidden.",
+        "machine_check": "error-has-recovery",
+        "requires_confirmation": 0,
+        "wcag": null
+      },
+      {
+        "id": "rule-field-has-label",
+        "tag": "form-a11y",
+        "category": "accessibility",
+        "severity": "error",
+        "applies": "step",
+        "title": "Every field has a visible label",
+        "description": "Every form field has a non-empty, programmatically associated visible label. Placeholders never substitute for labels.",
+        "machine_check": "field-has-label",
+        "requires_confirmation": 0,
+        "wcag": "3.3.2"
+      },
+      {
+        "id": "rule-focus-visible",
+        "tag": "form-a11y",
+        "category": "accessibility",
+        "severity": "error",
+        "applies": "global",
+        "title": "Focus indicators are never suppressed",
+        "description": "All interactive elements show a visible focus ring using the color.border.focus token. Styles that remove outlines are forbidden.",
+        "machine_check": null,
+        "requires_confirmation": 0,
+        "wcag": "2.4.7"
+      },
+      {
+        "id": "rule-responsive-single-column",
+        "tag": "responsive",
+        "category": "layout",
+        "severity": "error",
+        "applies": "global",
+        "title": "Layouts collapse below the md breakpoint",
+        "description": "Multi-column layouts collapse to a single column below breakpoint.md (768px). Forms are single-column at every width.",
+        "machine_check": "forms-single-column",
+        "requires_confirmation": 0,
+        "wcag": null
+      },
+      {
+        "id": "rule-single-primary-action",
+        "tag": "primary-action",
+        "category": "action",
+        "severity": "error",
+        "applies": "global",
+        "title": "Exactly one primary action per screen",
+        "description": "Each screen exposes exactly one primary-variant action so the user's next step is unambiguous. Supporting actions use the secondary variant.",
+        "machine_check": "single-primary-action",
+        "requires_confirmation": 0,
+        "wcag": null
+      },
+      {
+        "id": "rule-field-autocomplete",
+        "tag": "form-a11y",
+        "category": "accessibility",
+        "severity": "warn",
+        "applies": "step",
+        "title": "Personal-data fields declare autocomplete",
+        "description": "Fields collecting information about the user (name, email, address, payment card) declare the matching HTML autocomplete purpose.",
+        "machine_check": "field-has-autocomplete",
+        "requires_confirmation": 0,
+        "wcag": "1.3.5"
+      }
+    ]
+  },
+  {
+    "step": "payment",
+    "checksApplied": [
+      "label-states-action",
+      "error-has-recovery",
+      "field-has-label",
+      "forms-single-column",
+      "single-primary-action",
+      "field-has-autocomplete"
+    ],
+    "rules": [
+      {
+        "id": "rule-action-label-states-action",
+        "tag": "primary-action",
+        "category": "action",
+        "severity": "error",
+        "applies": "step",
+        "title": "Action labels state the action",
+        "description": "Button labels describe what happens ('Create account', 'Place order'). Generic labels such as 'Submit', 'OK' or 'Yes' are forbidden.",
+        "machine_check": "label-states-action",
+        "requires_confirmation": 0,
+        "wcag": null
+      },
+      {
+        "id": "rule-checkout-preserve-input",
+        "tag": "checkout",
+        "category": "error-handling",
+        "severity": "error",
+        "applies": "step",
+        "title": "Checkout failures preserve everything",
+        "description": "When payment or address validation fails, all entered data is kept and the user is returned to the failing step with the offending field focused.",
+        "machine_check": null,
+        "requires_confirmation": 0,
+        "wcag": null
+      },
+      {
+        "id": "rule-error-announce",
+        "tag": "error-states",
+        "category": "accessibility",
+        "severity": "error",
+        "applies": "global",
+        "title": "Errors are textual and announced",
+        "description": "Validation errors render as text adjacent to the offending field and are announced to assistive technology (role=alert); color alone never signals an error.",
+        "machine_check": null,
+        "requires_confirmation": 0,
+        "wcag": "3.3.1"
+      },
+      {
+        "id": "rule-error-recovery",
+        "tag": "error-states",
+        "category": "error-handling",
+        "severity": "error",
+        "applies": "global",
+        "title": "Every error state offers recovery",
+        "description": "Every error message is actionable, preserves user input, and tells the user what to do next. Dead-end errors are forbidden.",
+        "machine_check": "error-has-recovery",
+        "requires_confirmation": 0,
+        "wcag": null
+      },
+      {
+        "id": "rule-field-has-label",
+        "tag": "form-a11y",
+        "category": "accessibility",
+        "severity": "error",
+        "applies": "step",
+        "title": "Every field has a visible label",
+        "description": "Every form field has a non-empty, programmatically associated visible label. Placeholders never substitute for labels.",
+        "machine_check": "field-has-label",
+        "requires_confirmation": 0,
+        "wcag": "3.3.2"
+      },
+      {
+        "id": "rule-focus-visible",
+        "tag": "form-a11y",
+        "category": "accessibility",
+        "severity": "error",
+        "applies": "global",
+        "title": "Focus indicators are never suppressed",
+        "description": "All interactive elements show a visible focus ring using the color.border.focus token. Styles that remove outlines are forbidden.",
+        "machine_check": null,
+        "requires_confirmation": 0,
+        "wcag": "2.4.7"
+      },
+      {
+        "id": "rule-responsive-single-column",
+        "tag": "responsive",
+        "category": "layout",
+        "severity": "error",
+        "applies": "global",
+        "title": "Layouts collapse below the md breakpoint",
+        "description": "Multi-column layouts collapse to a single column below breakpoint.md (768px). Forms are single-column at every width.",
+        "machine_check": "forms-single-column",
+        "requires_confirmation": 0,
+        "wcag": null
+      },
+      {
+        "id": "rule-sensitive-redaction",
+        "tag": "sensitive-data",
+        "category": "safety",
+        "severity": "error",
+        "applies": "step",
+        "title": "Sensitive values never reach logs",
+        "description": "Payment and credential fields are marked sensitive; their values are never persisted in audit logs or traces - only field names are.",
+        "machine_check": null,
+        "requires_confirmation": 0,
+        "wcag": null
+      },
+      {
+        "id": "rule-single-primary-action",
+        "tag": "primary-action",
+        "category": "action",
+        "severity": "error",
+        "applies": "global",
+        "title": "Exactly one primary action per screen",
+        "description": "Each screen exposes exactly one primary-variant action so the user's next step is unambiguous. Supporting actions use the secondary variant.",
+        "machine_check": "single-primary-action",
+        "requires_confirmation": 0,
+        "wcag": null
+      },
+      {
+        "id": "rule-field-autocomplete",
+        "tag": "form-a11y",
+        "category": "accessibility",
+        "severity": "warn",
+        "applies": "step",
+        "title": "Personal-data fields declare autocomplete",
+        "description": "Fields collecting information about the user (name, email, address, payment card) declare the matching HTML autocomplete purpose.",
+        "machine_check": "field-has-autocomplete",
+        "requires_confirmation": 0,
+        "wcag": "1.3.5"
+      }
+    ]
+  },
+  {
+    "step": "review",
+    "checksApplied": [
+      "label-states-action",
+      "commit-shows-summary",
+      "error-has-recovery",
+      "label-states-consequence",
+      "forms-single-column",
+      "single-primary-action"
+    ],
+    "rules": [
+      {
+        "id": "rule-action-label-states-action",
+        "tag": "primary-action",
+        "category": "action",
+        "severity": "error",
+        "applies": "step",
+        "title": "Action labels state the action",
+        "description": "Button labels describe what happens ('Create account', 'Place order'). Generic labels such as 'Submit', 'OK' or 'Yes' are forbidden.",
+        "machine_check": "label-states-action",
+        "requires_confirmation": 0,
+        "wcag": null
+      },
+      {
+        "id": "rule-checkout-preserve-input",
+        "tag": "checkout",
+        "category": "error-handling",
+        "severity": "error",
+        "applies": "step",
+        "title": "Checkout failures preserve everything",
+        "description": "When payment or address validation fails, all entered data is kept and the user is returned to the failing step with the offending field focused.",
+        "machine_check": null,
+        "requires_confirmation": 0,
+        "wcag": null
+      },
+      {
+        "id": "rule-cost-transparency",
+        "tag": "cost-transparency",
+        "category": "flow",
+        "severity": "error",
+        "applies": "step",
+        "title": "Full cost is visible at the point of commitment",
+        "description": "Any screen with a paying/committing action shows the complete cost breakdown (including taxes and fees) as a summary on the same screen.",
+        "machine_check": "commit-shows-summary",
+        "requires_confirmation": 0,
+        "wcag": null
+      },
+      {
+        "id": "rule-error-announce",
+        "tag": "error-states",
+        "category": "accessibility",
+        "severity": "error",
+        "applies": "global",
+        "title": "Errors are textual and announced",
+        "description": "Validation errors render as text adjacent to the offending field and are announced to assistive technology (role=alert); color alone never signals an error.",
+        "machine_check": null,
+        "requires_confirmation": 0,
+        "wcag": "3.3.1"
+      },
+      {
+        "id": "rule-error-recovery",
+        "tag": "error-states",
+        "category": "error-handling",
+        "severity": "error",
+        "applies": "global",
+        "title": "Every error state offers recovery",
+        "description": "Every error message is actionable, preserves user input, and tells the user what to do next. Dead-end errors are forbidden.",
+        "machine_check": "error-has-recovery",
+        "requires_confirmation": 0,
+        "wcag": null
+      },
+      {
+        "id": "rule-explicit-consent",
+        "tag": "explicit-consent",
+        "category": "flow",
+        "severity": "error",
+        "applies": "step",
+        "title": "The committing label carries the consequence",
+        "description": "The button that commits a payment or contract states the amount or consequence in its label ('Place order and pay 62.90 EUR').",
+        "machine_check": "label-states-consequence",
+        "requires_confirmation": 0,
+        "wcag": null
+      },
+      {
+        "id": "rule-focus-visible",
+        "tag": "form-a11y",
+        "category": "accessibility",
+        "severity": "error",
+        "applies": "global",
+        "title": "Focus indicators are never suppressed",
+        "description": "All interactive elements show a visible focus ring using the color.border.focus token. Styles that remove outlines are forbidden.",
+        "machine_check": null,
+        "requires_confirmation": 0,
+        "wcag": "2.4.7"
+      },
+      {
+        "id": "rule-responsive-single-column",
+        "tag": "responsive",
+        "category": "layout",
+        "severity": "error",
+        "applies": "global",
+        "title": "Layouts collapse below the md breakpoint",
+        "description": "Multi-column layouts collapse to a single column below breakpoint.md (768px). Forms are single-column at every width.",
+        "machine_check": "forms-single-column",
+        "requires_confirmation": 0,
+        "wcag": null
+      },
+      {
+        "id": "rule-single-primary-action",
+        "tag": "primary-action",
+        "category": "action",
+        "severity": "error",
+        "applies": "global",
+        "title": "Exactly one primary action per screen",
+        "description": "Each screen exposes exactly one primary-variant action so the user's next step is unambiguous. Supporting actions use the secondary variant.",
+        "machine_check": "single-primary-action",
+        "requires_confirmation": 0,
+        "wcag": null
+      }
+    ]
+  }
+]

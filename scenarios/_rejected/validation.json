@@ -1,0 +1,49 @@
+{
+  "valid": false,
+  "structural": {
+    "valid": true,
+    "errors": []
+  },
+  "semantic": {
+    "findings": [
+      {
+        "check": "single-primary-action",
+        "severity": "error",
+        "message": "A screen may have at most one primary action; found 2 (\"Submit\", \"Save\").",
+        "path": "children[2]"
+      },
+      {
+        "check": "label-states-action",
+        "severity": "error",
+        "message": "Action label \"Submit\" does not state the action; name the outcome (e.g. \"Create account\", \"Delete project\").",
+        "path": "children[0].children[1]"
+      },
+      {
+        "check": "destructive-needs-confirmation",
+        "severity": "error",
+        "message": "Destructive action \"Delete everything\" must open a confirmation dialog (action.kind \"open-dialog\" targeting a destructive Dialog).",
+        "path": "children[1]"
+      },
+      {
+        "check": "danger-zone-separated",
+        "severity": "error",
+        "message": "Destructive action \"Delete everything\" must sit inside a danger-zone region, separated from routine controls.",
+        "path": "children[1]"
+      },
+      {
+        "check": "field-has-autocomplete",
+        "severity": "warn",
+        "message": "Field \"email\" (email) should set an autocomplete token to help password managers and assistive tech.",
+        "path": "children[0].children[0]"
+      },
+      {
+        "check": "forms-single-column",
+        "severity": "error",
+        "message": "Form \"signup\" must be single-column so it reflows on narrow viewports.",
+        "path": "children[0]"
+      }
+    ],
+    "errorCount": 5,
+    "warnCount": 1
+  }
+}

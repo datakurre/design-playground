@@ -1,0 +1,41 @@
+{
+  "id": "subscription-upgrade",
+  "title": "Subscription upgrade",
+  "request": "upgrade my plan to pro",
+  "intent": {
+    "flowId": "subscription-upgrade",
+    "score": 8.5,
+    "ranked": [
+      {
+        "flowId": "subscription-upgrade",
+        "score": 8.5,
+        "matched": [
+          "upgrade",
+          "upgrade my plan"
+        ]
+      },
+      {
+        "flowId": "account-settings",
+        "score": 0,
+        "matched": []
+      },
+      {
+        "flowId": "checkout",
+        "score": 0,
+        "matched": []
+      },
+      {
+        "flowId": "onboarding",
+        "score": 0,
+        "matched": []
+      },
+      {
+        "flowId": "password-reset",
+        "score": 0,
+        "matched": []
+      }
+    ]
+  },
+  "flowId": "subscription-upgrade",
+  "flowGoal": "Let a user move to a higher plan with a clear price difference and explicit confirmation of the new recurring charge."
+}

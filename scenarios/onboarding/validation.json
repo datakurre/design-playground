@@ -1,0 +1,28 @@
+[
+  {
+    "step": "account",
+    "valid": true,
+    "structural": {
+      "valid": true,
+      "errors": []
+    },
+    "semantic": {
+      "findings": [],
+      "errorCount": 0,
+      "warnCount": 0
+    }
+  },
+  {
+    "step": "profile",
+    "valid": true,
+    "structural": {
+      "valid": true,
+      "errors": []
+    },
+    "semantic": {
+      "findings": [],
+      "errorCount": 0,
+      "warnCount": 0
+    }
+  }
+]

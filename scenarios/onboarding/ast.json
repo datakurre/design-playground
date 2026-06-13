@@ -1,0 +1,111 @@
+[
+  {
+    "type": "Screen",
+    "id": "onboarding-account",
+    "title": "Create your account",
+    "flow": "onboarding",
+    "step": "account",
+    "children": [
+      {
+        "type": "Form",
+        "id": "account-form",
+        "columns": 1,
+        "children": [
+          {
+            "type": "Field",
+            "name": "email",
+            "label": "Email address",
+            "inputType": "email",
+            "required": true,
+            "autocomplete": "email"
+          },
+          {
+            "type": "Field",
+            "name": "password",
+            "label": "Password",
+            "inputType": "password",
+            "required": true,
+            "autocomplete": "new-password",
+            "help": "At least 12 characters."
+          },
+          {
+            "type": "Button",
+            "label": "Create account",
+            "variant": "primary",
+            "action": {
+              "kind": "submit",
+              "target": "account-form"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "type": "Screen",
+    "id": "onboarding-profile",
+    "title": "Tell us about yourself",
+    "flow": "onboarding",
+    "step": "profile",
+    "children": [
+      {
+        "type": "Form",
+        "id": "profile-form",
+        "columns": 1,
+        "children": [
+          {
+            "type": "Field",
+            "name": "name",
+            "label": "Full name",
+            "inputType": "text",
+            "required": false,
+            "autocomplete": "name"
+          },
+          {
+            "type": "Field",
+            "name": "role",
+            "label": "What best describes you?",
+            "inputType": "select",
+            "required": false,
+            "options": [
+              {
+                "value": "designer",
+                "label": "Designer"
+              },
+              {
+                "value": "developer",
+                "label": "Developer"
+              },
+              {
+                "value": "product-manager",
+                "label": "Product manager"
+              },
+              {
+                "value": "other",
+                "label": "Other"
+              }
+            ]
+          },
+          {
+            "type": "Button",
+            "label": "Continue",
+            "variant": "primary",
+            "action": {
+              "kind": "submit",
+              "target": "profile-form"
+            }
+          },
+          {
+            "type": "Button",
+            "label": "Skip for now",
+            "variant": "secondary",
+            "action": {
+              "kind": "skip",
+              "target": "onboarding"
+            }
+          }
+        ]
+      }
+    ]
+  }
+]

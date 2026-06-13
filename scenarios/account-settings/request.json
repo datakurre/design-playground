@@ -1,0 +1,42 @@
+{
+  "id": "account-settings",
+  "title": "Account settings",
+  "request": "change my account settings and maybe delete my account",
+  "intent": {
+    "flowId": "account-settings",
+    "score": 13,
+    "ranked": [
+      {
+        "flowId": "account-settings",
+        "score": 13,
+        "matched": [
+          "account settings",
+          "delete my account",
+          "settings"
+        ]
+      },
+      {
+        "flowId": "onboarding",
+        "score": 0.25,
+        "matched": []
+      },
+      {
+        "flowId": "checkout",
+        "score": 0,
+        "matched": []
+      },
+      {
+        "flowId": "password-reset",
+        "score": 0,
+        "matched": []
+      },
+      {
+        "flowId": "subscription-upgrade",
+        "score": 0,
+        "matched": []
+      }
+    ]
+  },
+  "flowId": "account-settings",
+  "flowGoal": "Let a user view and change profile, notification, and account data - including the guarded, destructive deletion of the account."
+}

@@ -1,0 +1,41 @@
+{
+  "id": "checkout",
+  "title": "Checkout",
+  "request": "I want to buy the items in my cart and pay",
+  "intent": {
+    "flowId": "checkout",
+    "score": 6.5,
+    "ranked": [
+      {
+        "flowId": "checkout",
+        "score": 6.5,
+        "matched": [
+          "buy",
+          "pay"
+        ]
+      },
+      {
+        "flowId": "account-settings",
+        "score": 0,
+        "matched": []
+      },
+      {
+        "flowId": "onboarding",
+        "score": 0,
+        "matched": []
+      },
+      {
+        "flowId": "password-reset",
+        "score": 0,
+        "matched": []
+      },
+      {
+        "flowId": "subscription-upgrade",
+        "score": 0,
+        "matched": []
+      }
+    ]
+  },
+  "flowId": "checkout",
+  "flowGoal": "Let a user pay for the items in their cart with full transparency of costs before the final commitment."
+}

@@ -1,0 +1,86 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Password reset</title>
+<style>/* GENERATED FILE - do not edit.
+ * Source: tokens/design-tokens.json
+ * Regenerate with: pnpm build:tokens
+ */
+:root {
+  --color-brand-primary: #4f46e5; /* Primary brand color; the only color allowed for primary actions. */
+  --color-brand-primary-hover: #4338ca;
+  --color-brand-primary-contrast: #ffffff; /* Text/icon color on primary surfaces; meets WCAG AA against brand.primary. */
+  --color-semantic-danger: #dc2626; /* Destructive actions and error states only. */
+  --color-semantic-danger-hover: #b91c1c;
+  --color-semantic-danger-contrast: #ffffff;
+  --color-semantic-success: #16a34a;
+  --color-semantic-warning: #d97706;
+  --color-semantic-info: #0284c7;
+  --color-surface-background: #f8fafc;
+  --color-surface-card: #ffffff;
+  --color-surface-overlay: #0f172a99; /* Dialog backdrop overlay. */
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-disabled: #94a3b8;
+  --color-text-error: #b91c1c; /* Inline error message text; meets WCAG AA on surface.card. */
+  --color-border-default: #cbd5e1;
+  --color-border-focus: #4f46e5; /* Focus ring color; must remain visible on all surfaces (WCAG 2.4.7). */
+  --color-border-error: #dc2626;
+  --font-family-base: Inter, system-ui, sans-serif;
+  --font-family-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-md: 1rem; /* Body text; minimum size for form inputs (a11y). */
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.5rem;
+  --font-size-2xl: 2rem;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-line-height-tight: 1.25;
+  --font-line-height-normal: 1.5; /* WCAG 1.4.12 requires body line-height >= 1.5. */
+  --space-0: 0rem;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-12: 3rem;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-full: 9999px;
+  --shadow-sm: 0px 1px 2px 0px #0f172a14;
+  --shadow-md: 0px 4px 12px -2px #0f172a1f;
+  --shadow-overlay: 0px 16px 48px -8px #0f172a33; /* Dialogs and popovers. */
+  --motion-duration-fast: 120ms;
+  --motion-duration-normal: 200ms;
+  --motion-duration-slow: 320ms; /* Upper bound; respect prefers-reduced-motion. */
+  --motion-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --motion-easing-enter: cubic-bezier(0, 0, 0.2, 1);
+  --motion-easing-exit: cubic-bezier(0.4, 0, 1, 1);
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px; /* Below md, multi-column layouts must collapse to a single column. */
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+}
+
+body{margin:0;background:var(--color-surface-muted,#f5f6f8);font-family:var(--typography-font-family-sans,system-ui,sans-serif)}
+.dp-doc-head{padding:24px 32px;background:var(--color-surface-default,#fff);border-bottom:1px solid var(--color-border-default,#e2e4e8)}
+.dp-step{border-bottom:1px dashed var(--color-border-default,#e2e4e8)}
+.dp-step-label{padding:8px 32px;color:var(--color-text-secondary,#6b7280);font-size:13px;text-transform:uppercase;letter-spacing:.04em}
+</style></head><body>
+<div class="dp-doc-head"><h1>Password reset</h1></div>
+<section class="dp-step"><div class="dp-step-label">Step: request</div><main class="dp-screen" data-flow="password-reset" data-step="request">
+<h1>Reset your password</h1>
+<form class="dp-form" data-id="request-form"><div class="dp-field"><label for="f-email">Email address <span class="dp-req">*</span></label><input type="email" id="f-email" name="email" autocomplete="email" required/></div><button type="button" class="dp-btn" data-variant="primary" data-action="submit:request-form">Send reset link</button></form>
+
+</main>
+</section>
+<section class="dp-step"><div class="dp-step-label">Step: new-password</div><main class="dp-screen" data-flow="password-reset" data-step="new-password">
+<h1>Choose a new password</h1>
+<form class="dp-form" data-id="new-password-form"><div class="dp-field"><label for="f-password">New password <span class="dp-req">*</span></label><input type="password" id="f-password" name="password" autocomplete="new-password" required/><small class="dp-help">At least 12 characters.</small></div><div class="dp-field"><label for="f-password-confirm">Repeat new password <span class="dp-req">*</span></label><input type="password" id="f-password-confirm" name="password-confirm" autocomplete="new-password" required/></div><button type="button" class="dp-btn" data-variant="primary" data-action="submit:new-password-form">Set new password</button></form>
+
+</main>
+</section>
+</body></html>

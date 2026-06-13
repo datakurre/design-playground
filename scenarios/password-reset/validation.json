@@ -1,0 +1,28 @@
+[
+  {
+    "step": "request",
+    "valid": true,
+    "structural": {
+      "valid": true,
+      "errors": []
+    },
+    "semantic": {
+      "findings": [],
+      "errorCount": 0,
+      "warnCount": 0
+    }
+  },
+  {
+    "step": "new-password",
+    "valid": true,
+    "structural": {
+      "valid": true,
+      "errors": []
+    },
+    "semantic": {
+      "findings": [],
+      "errorCount": 0,
+      "warnCount": 0
+    }
+  }
+]

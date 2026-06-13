@@ -1,0 +1,41 @@
+[
+  {
+    "step": "shipping",
+    "valid": true,
+    "structural": {
+      "valid": true,
+      "errors": []
+    },
+    "semantic": {
+      "findings": [],
+      "errorCount": 0,
+      "warnCount": 0
+    }
+  },
+  {
+    "step": "payment",
+    "valid": true,
+    "structural": {
+      "valid": true,
+      "errors": []
+    },
+    "semantic": {
+      "findings": [],
+      "errorCount": 0,
+      "warnCount": 0
+    }
+  },
+  {
+    "step": "review",
+    "valid": true,
+    "structural": {
+      "valid": true,
+      "errors": []
+    },
+    "semantic": {
+      "findings": [],
+      "errorCount": 0,
+      "warnCount": 0
+    }
+  }
+]

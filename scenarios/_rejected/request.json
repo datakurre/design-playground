@@ -1,0 +1,7 @@
+{
+  "id": "_rejected",
+  "title": "Rejected: malformed plan",
+  "note": "Demonstrates that an AST violating the design rules is rejected, never rendered.",
+  "valid": false,
+  "errorCount": 5
+}

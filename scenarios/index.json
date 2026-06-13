@@ -1,0 +1,48 @@
+[
+  {
+    "id": "onboarding",
+    "title": "User onboarding",
+    "request": "I want to sign up and create a new account",
+    "flowId": "onboarding",
+    "steps": 2,
+    "valid": true
+  },
+  {
+    "id": "checkout",
+    "title": "Checkout",
+    "request": "I want to buy the items in my cart and pay",
+    "flowId": "checkout",
+    "steps": 3,
+    "valid": true
+  },
+  {
+    "id": "subscription-upgrade",
+    "title": "Subscription upgrade",
+    "request": "upgrade my plan to pro",
+    "flowId": "subscription-upgrade",
+    "steps": 2,
+    "valid": true
+  },
+  {
+    "id": "account-settings",
+    "title": "Account settings",
+    "request": "change my account settings and maybe delete my account",
+    "flowId": "account-settings",
+    "steps": 1,
+    "valid": true
+  },
+  {
+    "id": "password-reset",
+    "title": "Password reset",
+    "request": "I forgot my password and I'm locked out",
+    "flowId": "password-reset",
+    "steps": 2,
+    "valid": true
+  },
+  {
+    "id": "_rejected",
+    "title": "Rejected: malformed plan",
+    "valid": false,
+    "errorCount": 5
+  }
+]

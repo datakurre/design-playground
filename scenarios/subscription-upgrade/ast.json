@@ -1,0 +1,95 @@
+[
+  {
+    "type": "Screen",
+    "id": "subscription-upgrade-choose-plan",
+    "title": "Choose your plan",
+    "flow": "subscription-upgrade",
+    "step": "choose-plan",
+    "children": [
+      {
+        "type": "Form",
+        "id": "choose-plan-form",
+        "columns": 1,
+        "children": [
+          {
+            "type": "Field",
+            "name": "plan",
+            "label": "Plan",
+            "inputType": "select",
+            "required": true,
+            "options": [
+              {
+                "value": "starter-0-eur-month-current",
+                "label": "Starter - 0 EUR/month (current)"
+              },
+              {
+                "value": "pro-12-eur-month",
+                "label": "Pro - 12 EUR/month"
+              },
+              {
+                "value": "team-39-eur-month",
+                "label": "Team - 39 EUR/month"
+              }
+            ]
+          },
+          {
+            "type": "Button",
+            "label": "Review upgrade",
+            "variant": "primary",
+            "action": {
+              "kind": "submit",
+              "target": "choose-plan-form"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "type": "Screen",
+    "id": "subscription-upgrade-confirm-upgrade",
+    "title": "Confirm your upgrade",
+    "flow": "subscription-upgrade",
+    "step": "confirm-upgrade",
+    "children": [
+      {
+        "type": "Card",
+        "role": "summary",
+        "title": "Order summary",
+        "children": [
+          {
+            "type": "Text",
+            "value": "New plan: Pro - 12 EUR/month",
+            "role": "body"
+          },
+          {
+            "type": "Text",
+            "value": "First charge: today",
+            "role": "body"
+          },
+          {
+            "type": "Text",
+            "value": "Renews monthly until cancelled",
+            "role": "body"
+          }
+        ]
+      },
+      {
+        "type": "Stack",
+        "role": "actions",
+        "direction": "horizontal",
+        "children": [
+          {
+            "type": "Button",
+            "label": "Confirm upgrade - 12 EUR/month",
+            "variant": "primary",
+            "action": {
+              "kind": "submit",
+              "target": "confirm-upgrade-form"
+            }
+          }
+        ]
+      }
+    ]
+  }
+]
