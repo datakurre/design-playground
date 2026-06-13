@@ -23,6 +23,8 @@
     governance.exec = "pnpm governance";
     screenshots.exec = "pnpm screenshots";
     demo.exec = "pnpm --filter @design-playground/renderer dev";
+    storybook.exec = "pnpm storybook";
+    site.exec = "pnpm pipeline && pnpm site";
     pipeline.exec = "pnpm pipeline";
     check.exec = "pnpm typecheck && pnpm test";
   };
@@ -32,6 +34,8 @@
     echo "  setup        install workspace dependencies"
     echo "  pipeline     run the full artifact pipeline (tokens -> db -> scenarios -> governance)"
     echo "  demo         start the React renderer demo app"
+    echo "  storybook    start Storybook (component workbench + docs)"
+    echo "  site         build the published Storybook site into site/"
   '';
 
   enterTest = ''

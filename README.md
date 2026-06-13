@@ -25,10 +25,13 @@ rationale behind each choice, and
 [`docs/standards.md`](docs/standards.md) for the approach, stack, and
 relation to open standards (W3C DTCG, JSON Schema, MCP, WCAG/ARIA).
 
-📖 **Published site:** the docs and all generated artifacts (scenario
-gallery, governance reports, schemas, and the live renderer) are
-published to GitHub Pages via `.github/workflows/pages.yml` — build it
-locally with `pnpm site` (output in `site/`).
+📖 **Published site:** the project ships as a **Storybook** at
+[datakurre.github.io/design-playground](https://datakurre.github.io/design-playground/)
+— one place to read the docs (Foundations), browse and visually approve
+every component (Components), and see the live, validated generated
+screens (Screens). It is built and deployed by
+`.github/workflows/pages.yml`; build it locally with `pnpm site` (output
+in `site/`) or develop it with `pnpm storybook`.
 
 ## Quick start
 
@@ -39,6 +42,7 @@ devenv shell        # node 22, pnpm, sqlite, jq
 setup               # pnpm install
 pipeline            # tokens → db → scenarios → governance
 demo                # start the React renderer on http://localhost:5173
+storybook           # component workbench + docs on http://localhost:6006
 ```
 
 ### With plain Node + pnpm
@@ -46,7 +50,8 @@ demo                # start the React renderer on http://localhost:5173
 ```sh
 pnpm install
 pnpm pipeline       # regenerate every artifact deterministically
-pnpm test           # 17 tests: validation, planner, SQLite enforcement
+pnpm test           # 32 tests: validation, planner, SQLite enforcement, stories
+pnpm storybook      # browse, approve & test components (http://localhost:6006)
 pnpm --filter @design-playground/renderer dev
 ```
 
@@ -71,6 +76,7 @@ docker compose run --rm pipeline       # regenerate artifacts (one-shot)
 | 8. Runtime renderer | `packages/renderer` (React + Vite) | `pnpm --filter renderer dev` |
 | 9. Scenarios | `scenarios/<flow>/{request,retrieved-rules,planning-trace,ast,validation}.json`, `render.html`, `screenshot.svg` | `pnpm scenarios` + `pnpm screenshots` |
 | 10. Governance | `governance/{audit-log.json,decision-traces/,explainability-report.md,safety-constraints.json,compliance-report.md}` | `pnpm governance` |
+| 11. Storybook | component workbench + docs + live screens; the published Pages site → `site/` | `pnpm storybook` / `pnpm site` |
 
 ## Repository layout
 
@@ -87,11 +93,13 @@ packages/
   mcp-server    MCP tools over the rule store
   ui-ir         AST validator, semantic lints, HTML transform
   planner       deterministic agent planner (MCP client)
-  renderer      React + Vite runtime renderer
+  renderer      React + Vite runtime renderer + Storybook
+    .storybook  Storybook config (the published site)
+    src/stories component, screen & token stories + docs (MDX)
 scenarios/      committed end-to-end runs (one per flow) + a rejected demo
 governance/     audit log, decision traces, explainability + compliance reports
-scripts/        run-scenarios, generate-governance, take-screenshots
-docs/           architecture documentation and diagrams
+scripts/        run-scenarios, generate-governance, take-screenshots, build-site (Storybook)
+docs/           architecture & standards documentation (also rendered in Storybook)
 .claude/skills/ devenv + nix-cmd skills for agents
 ```
 
@@ -119,6 +127,33 @@ each enforced by code (full inventory in
 The React renderer runs layers 2–3 on every AST and renders a
 **rejection panel** instead of UI when an AST fails — invalid plans can
 never reach the user.
+
+## Component workbench (Storybook)
+
+Teams browse, visually approve, and test components in **Storybook**,
+which is also the published Pages site:
+
+```sh
+pnpm storybook        # http://localhost:6006
+pnpm storybook:build  # static build (or pnpm site for the full Pages output)
+```
+
+- **Foundations** — the docs (Introduction, Architecture, Governance,
+  Schemas) and the live **Design Tokens** reference, rendered from the
+  same committed markdown and `variables.css` (no duplicated prose).
+- **Components** — every primitive (Button, Field, Card, Dialog, Form,
+  Nav, Text) with Controls for each variant. Stories render through the
+  **same** `RenderNode` bindings and design-token CSS as the production
+  renderer, so visual approval here matches what ships.
+- **Screens** — the five generated scenarios plus the rejected plan,
+  rendered through the validating `ScreenRenderer` (invalid → rejection
+  panel).
+
+**Testing.** Stories *are* the tests. Each story's `play` function runs as
+a browserless interaction test via Storybook portable stories on Vitest
+(`pnpm test:stories`, included in `pnpm test`), and the same stories run
+under the Storybook test-runner when a browser is available.
+Accessibility is checked in-browser by `addon-a11y`.
 
 ## Using the MCP server interactively
 

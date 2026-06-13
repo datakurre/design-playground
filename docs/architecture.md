@@ -101,7 +101,13 @@ reference a component or rule that does not exist.
 | `packages/mcp-server` | MCP tools over the rule store |
 | `packages/ui-ir` | AST schema, validator, lints, HTML transform |
 | `packages/planner` | deterministic planner (MCP client) |
-| `packages/renderer` | React + Vite runtime renderer |
+| `packages/renderer` | React + Vite runtime renderer + Storybook |
+
+The published site is **Storybook** (`pnpm site` → `site/`): the
+Foundations docs (this page included), the component workbench, and the
+live, validated generated screens — all rendered through the renderer's
+own bindings and design tokens. Because Storybook emits relative asset
+URLs it is served unchanged from the project sub-path.
 
 ## Reproducibility
 

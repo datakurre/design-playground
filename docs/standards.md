@@ -45,6 +45,7 @@ append-only audit log, so any generated screen is fully explainable.
 | Planner | TypeScript (MCP client) | intent → rules → AST, with a decision trace |
 | AST | JSON Schema 2020-12 (Ajv) + semantic lints | safe, closed UI vocabulary |
 | Renderer | React + Vite | token-styled runtime that rejects invalid ASTs |
+| Workbench | Storybook (CSF) | browse, visually approve & test components; the published site |
 | Governance | JSON + Markdown | audit log, traces, explainability, compliance |
 
 Everything is open source and TypeScript-first; the whole pipeline runs
@@ -89,6 +90,18 @@ one unambiguous primary action, destructive actions confirmed). The
 renderer emits [WAI-ARIA](https://www.w3.org/TR/wai-aria-1.2/) semantics
 (`role="dialog"`, `aria-modal`, `aria-current`) for the nodes that need
 them.
+
+### Component Story Format (Storybook)
+The component workbench — and this published site — is
+[Storybook](https://storybook.js.org/), with stories written in the open
+[Component Story Format (CSF)](https://storybook.js.org/docs/api/csf).
+Crucially, every story renders through the **same** `RenderNode` bindings
+and the **same** generated design-token CSS as the production renderer, so
+what a team browses and visually approves is exactly what ships. The same
+stories double as tests: each story's `play` function runs as a
+browserless interaction test (Storybook portable stories on Vitest, part
+of `pnpm test`) and, where a browser is available, under the Storybook
+test-runner. Accessibility is checked in-browser by `addon-a11y`.
 
 ### WHATWG HTML autofill
 Field `autocomplete` values use the

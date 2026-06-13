@@ -1,9 +1,9 @@
 name: Deploy GitHub Pages
 
-# Builds the static site (docs + all generated artifacts + the live React
-# renderer) and publishes it to GitHub Pages. Runs on the default branch
-# and on demand. One-time setup: repository Settings → Pages → Source =
-# "GitHub Actions".
+# Builds the published site — Storybook (design system docs, component
+# workbench, and the live validated screens) — and deploys it to GitHub
+# Pages. Runs on the default branch and on demand. One-time setup:
+# repository Settings → Pages → Source = "GitHub Actions".
 
 on:
   push:
@@ -36,11 +36,10 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Regenerate every artifact deterministically, then assemble the site.
-      # Screenshots fall back to SVG when chromium is unavailable (it is not
-      # installed here), which is exactly what the site embeds.
+      # Regenerate every artifact deterministically (the Screens stories
+      # import the generated scenario ASTs and the Governance doc embeds the
+      # generated reports), then build Storybook as the published site.
       - run: pnpm pipeline
-      - run: pnpm screenshots
       - run: pnpm site
 
       - uses: actions/configure-pages@v5
