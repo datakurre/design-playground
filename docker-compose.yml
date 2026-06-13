@@ -1,0 +1,24 @@
+# SQLite is embedded and the planner is deterministic, so there are no
+# databases or model services to run - only the demo app, plus an
+# optional one-shot service that regenerates all artifacts.
+services:
+  # The React runtime renderer, served as static files on http://localhost:8080
+  demo:
+    build:
+      context: .
+      target: demo
+    ports:
+      - "8080:80"
+
+  # One-shot: regenerate tokens, seed the DB, run scenarios + governance,
+  # and write screenshots back to the mounted working tree.
+  #   docker compose run --rm pipeline
+  pipeline:
+    build:
+      context: .
+      target: build
+    command: pnpm pipeline
+    volumes:
+      - .:/work
+    working_dir: /work
+    profiles: ["tools"]

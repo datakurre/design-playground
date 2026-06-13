@@ -18,10 +18,13 @@
     setup.exec = "pnpm install";
     build-tokens.exec = "pnpm build:tokens";
     db-seed.exec = "pnpm db:seed";
+    db-verify.exec = "pnpm db:verify";
     scenarios.exec = "pnpm scenarios";
     governance.exec = "pnpm governance";
+    screenshots.exec = "pnpm screenshots";
     demo.exec = "pnpm --filter @design-playground/renderer dev";
     pipeline.exec = "pnpm pipeline";
+    check.exec = "pnpm typecheck && pnpm test";
   };
 
   enterShell = ''
