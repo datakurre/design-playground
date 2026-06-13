@@ -1,0 +1,39 @@
+{
+  "request": "upgrade my plan to pro",
+  "flowId": "subscription-upgrade",
+  "steps": [
+    {
+      "step": "choose-plan",
+      "notes": [
+        "primary-action: exactly one primary action (the step's submit)",
+        "responsive: form is single-column so it reflows on small screens"
+      ],
+      "checksApplied": [
+        "label-states-action",
+        "commit-shows-summary",
+        "error-has-recovery",
+        "forms-single-column",
+        "single-primary-action"
+      ],
+      "valid": true
+    },
+    {
+      "step": "confirm-upgrade",
+      "notes": [
+        "cost-transparency: rendered an order summary before the commit action",
+        "recurring-charge: summary states the renewal cadence",
+        "primary-action: exactly one primary action (the step's submit)"
+      ],
+      "checksApplied": [
+        "label-states-action",
+        "commit-shows-summary",
+        "error-has-recovery",
+        "label-states-consequence",
+        "summary-mentions-renewal",
+        "forms-single-column",
+        "single-primary-action"
+      ],
+      "valid": true
+    }
+  ]
+}

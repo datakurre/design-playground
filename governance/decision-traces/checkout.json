@@ -1,0 +1,54 @@
+{
+  "request": "I want to buy the items in my cart and pay",
+  "flowId": "checkout",
+  "steps": [
+    {
+      "step": "shipping",
+      "notes": [
+        "primary-action: exactly one primary action (the step's submit)",
+        "responsive: form is single-column so it reflows on small screens"
+      ],
+      "checksApplied": [
+        "label-states-action",
+        "error-has-recovery",
+        "field-has-label",
+        "forms-single-column",
+        "single-primary-action",
+        "field-has-autocomplete"
+      ],
+      "valid": true
+    },
+    {
+      "step": "payment",
+      "notes": [
+        "primary-action: exactly one primary action (the step's submit)",
+        "responsive: form is single-column so it reflows on small screens"
+      ],
+      "checksApplied": [
+        "label-states-action",
+        "error-has-recovery",
+        "field-has-label",
+        "forms-single-column",
+        "single-primary-action",
+        "field-has-autocomplete"
+      ],
+      "valid": true
+    },
+    {
+      "step": "review",
+      "notes": [
+        "cost-transparency: rendered an order summary before the commit action",
+        "primary-action: exactly one primary action (the step's submit)"
+      ],
+      "checksApplied": [
+        "label-states-action",
+        "commit-shows-summary",
+        "error-has-recovery",
+        "label-states-consequence",
+        "forms-single-column",
+        "single-primary-action"
+      ],
+      "valid": true
+    }
+  ]
+}

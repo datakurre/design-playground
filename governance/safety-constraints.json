@@ -1,0 +1,225 @@
+{
+  "description": "Defence in depth: a generated UI must pass three independent layers before it can reach a user. Each layer is enforced by code, not convention.",
+  "layers": [
+    {
+      "layer": "1. Database (SQLite)",
+      "mechanism": "foreign keys, CHECK constraints, triggers",
+      "guarantees": [
+        "Design knowledge that violates an invariant cannot even be stored.",
+        "Destructive-action rules cannot exist without requires_confirmation=1.",
+        "Error states cannot be stored without recovery guidance.",
+        "Flow steps/bindings can only reference real components, flows and rules.",
+        "The audit log is append-only (UPDATE/DELETE rejected)."
+      ],
+      "counts": {
+        "triggers": 5,
+        "triggerNames": [
+          "rules_destructive_need_confirmation_ins",
+          "rules_destructive_need_confirmation_upd",
+          "step_tag_resolves_to_rule",
+          "audit_log_no_update",
+          "audit_log_no_delete"
+        ],
+        "checkConstraints": 27,
+        "foreignKeys": 9
+      },
+      "proof": "db/verify-enforcement.ts (run: pnpm db:verify) attempts each violation and shows SQLite rejecting it."
+    },
+    {
+      "layer": "2. Structure (JSON Schema)",
+      "mechanism": "ui-ir/ui-ast.schema.json validated with Ajv (2020-12)",
+      "guarantees": [
+        "Closed vocabulary: only known node types and action kinds; no raw HTML, URLs, scripts or styles.",
+        "additionalProperties:false everywhere - unknown keys are rejected.",
+        "Required props and identifier patterns enforced."
+      ],
+      "vocabulary": {
+        "nodeTypes": [
+          "Stack",
+          "Grid",
+          "Card",
+          "Text",
+          "Form",
+          "Field",
+          "Button",
+          "Dialog",
+          "Nav"
+        ],
+        "actionKinds": [
+          "submit",
+          "navigate",
+          "open-dialog",
+          "close-dialog",
+          "confirm",
+          "cancel",
+          "skip"
+        ]
+      }
+    },
+    {
+      "layer": "3. Design rules (semantic lints)",
+      "mechanism": "executable lints in @design-playground/ui-ir, linked to rules by machineCheck",
+      "guarantees": [
+        "At most one primary action per screen.",
+        "Destructive actions are isolated and guarded by a confirmation dialog.",
+        "Form fields are labelled; forms stay single-column (responsive).",
+        "Commit actions disclose cost; recurring charges disclose renewal."
+      ],
+      "implementedChecks": [
+        "single-primary-action",
+        "label-states-action",
+        "destructive-needs-confirmation",
+        "destructive-dialog-shape",
+        "danger-zone-separated",
+        "field-has-label",
+        "field-has-autocomplete",
+        "forms-single-column",
+        "minimal-fields",
+        "commit-shows-summary",
+        "summary-mentions-renewal"
+      ]
+    }
+  ],
+  "rulesCatalogue": [
+    {
+      "id": "rule-action-label-states-action",
+      "category": "action",
+      "severity": "error",
+      "machineCheck": "label-states-action",
+      "enforcedBy": "lint (validate_ast)"
+    },
+    {
+      "id": "rule-checkout-preserve-input",
+      "category": "error-handling",
+      "severity": "error",
+      "machineCheck": null,
+      "enforcedBy": "planner construction / manual review"
+    },
+    {
+      "id": "rule-cost-transparency",
+      "category": "flow",
+      "severity": "error",
+      "machineCheck": "commit-shows-summary",
+      "enforcedBy": "lint (validate_ast)"
+    },
+    {
+      "id": "rule-danger-zone-separation",
+      "category": "layout",
+      "severity": "error",
+      "machineCheck": "danger-zone-separated",
+      "enforcedBy": "lint (validate_ast)"
+    },
+    {
+      "id": "rule-destructive-dialog-shape",
+      "category": "destructive-action",
+      "severity": "error",
+      "machineCheck": "destructive-dialog-shape",
+      "enforcedBy": "lint (validate_ast)"
+    },
+    {
+      "id": "rule-destructive-needs-confirmation",
+      "category": "destructive-action",
+      "severity": "error",
+      "machineCheck": "destructive-needs-confirmation",
+      "enforcedBy": "lint (validate_ast)"
+    },
+    {
+      "id": "rule-error-announce",
+      "category": "accessibility",
+      "severity": "error",
+      "machineCheck": null,
+      "enforcedBy": "planner construction / manual review"
+    },
+    {
+      "id": "rule-error-recovery",
+      "category": "error-handling",
+      "severity": "error",
+      "machineCheck": "error-has-recovery",
+      "enforcedBy": "planner construction / manual review"
+    },
+    {
+      "id": "rule-explicit-consent",
+      "category": "flow",
+      "severity": "error",
+      "machineCheck": "label-states-consequence",
+      "enforcedBy": "planner construction / manual review"
+    },
+    {
+      "id": "rule-field-autocomplete",
+      "category": "accessibility",
+      "severity": "warn",
+      "machineCheck": "field-has-autocomplete",
+      "enforcedBy": "lint (validate_ast)"
+    },
+    {
+      "id": "rule-field-has-label",
+      "category": "accessibility",
+      "severity": "error",
+      "machineCheck": "field-has-label",
+      "enforcedBy": "lint (validate_ast)"
+    },
+    {
+      "id": "rule-focus-visible",
+      "category": "accessibility",
+      "severity": "error",
+      "machineCheck": null,
+      "enforcedBy": "planner construction / manual review"
+    },
+    {
+      "id": "rule-minimal-input",
+      "category": "flow",
+      "severity": "warn",
+      "machineCheck": "minimal-fields",
+      "enforcedBy": "lint (validate_ast)"
+    },
+    {
+      "id": "rule-no-account-disclosure",
+      "category": "safety",
+      "severity": "error",
+      "machineCheck": null,
+      "enforcedBy": "planner construction / manual review"
+    },
+    {
+      "id": "rule-onboarding-defer",
+      "category": "flow",
+      "severity": "info",
+      "machineCheck": null,
+      "enforcedBy": "planner construction / manual review"
+    },
+    {
+      "id": "rule-recurring-disclosure",
+      "category": "content",
+      "severity": "error",
+      "machineCheck": "summary-mentions-renewal",
+      "enforcedBy": "lint (validate_ast)"
+    },
+    {
+      "id": "rule-responsive-single-column",
+      "category": "layout",
+      "severity": "error",
+      "machineCheck": "forms-single-column",
+      "enforcedBy": "lint (validate_ast)"
+    },
+    {
+      "id": "rule-sensitive-redaction",
+      "category": "safety",
+      "severity": "error",
+      "machineCheck": null,
+      "enforcedBy": "planner construction / manual review"
+    },
+    {
+      "id": "rule-single-primary-action",
+      "category": "action",
+      "severity": "error",
+      "machineCheck": "single-primary-action",
+      "enforcedBy": "lint (validate_ast)"
+    },
+    {
+      "id": "rule-skippable-optional",
+      "category": "flow",
+      "severity": "error",
+      "machineCheck": "optional-step-skippable",
+      "enforcedBy": "planner construction / manual review"
+    }
+  ]
+}

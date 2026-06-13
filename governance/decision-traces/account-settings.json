@@ -1,0 +1,26 @@
+{
+  "request": "change my account settings and maybe delete my account",
+  "flowId": "account-settings",
+  "steps": [
+    {
+      "step": "settings",
+      "notes": [
+        "primary-action: exactly one primary action (the step's submit)",
+        "responsive: form is single-column so it reflows on small screens",
+        "destructive-action: danger action is isolated in a danger zone and guarded by a destructive confirmation dialog"
+      ],
+      "checksApplied": [
+        "label-states-action",
+        "danger-zone-separated",
+        "destructive-dialog-shape",
+        "destructive-needs-confirmation",
+        "error-has-recovery",
+        "field-has-label",
+        "forms-single-column",
+        "single-primary-action",
+        "field-has-autocomplete"
+      ],
+      "valid": true
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "request": "I want to sign up and create a new account",
+  "flowId": "onboarding",
+  "steps": [
+    {
+      "step": "account",
+      "notes": [
+        "primary-action: exactly one primary action (the step's submit)",
+        "responsive: form is single-column so it reflows on small screens",
+        "minimal-input: form asks for only 2 field(s)"
+      ],
+      "checksApplied": [
+        "label-states-action",
+        "error-has-recovery",
+        "field-has-label",
+        "forms-single-column",
+        "single-primary-action",
+        "field-has-autocomplete",
+        "minimal-fields"
+      ],
+      "valid": true
+    },
+    {
+      "step": "profile",
+      "notes": [
+        "primary-action: exactly one primary action (the step's submit)",
+        "skippable-step: added a secondary Skip action",
+        "responsive: form is single-column so it reflows on small screens"
+      ],
+      "checksApplied": [
+        "label-states-action",
+        "error-has-recovery",
+        "field-has-label",
+        "forms-single-column",
+        "single-primary-action",
+        "optional-step-skippable",
+        "field-has-autocomplete"
+      ],
+      "valid": true
+    }
+  ]
+}

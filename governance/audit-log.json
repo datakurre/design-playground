@@ -1,0 +1,705 @@
+[
+  {
+    "id": 1,
+    "ts": "2026-06-13T04:24:53.354Z",
+    "actor": "planner",
+    "event": "intent",
+    "scenario": "onboarding",
+    "detail": {
+      "request": "I want to sign up and create a new account",
+      "matched": "onboarding",
+      "score": 4.5
+    }
+  },
+  {
+    "id": 2,
+    "ts": "2026-06-13T04:24:53.365Z",
+    "actor": "planner",
+    "event": "retrieval",
+    "scenario": "onboarding",
+    "detail": {
+      "step": "account",
+      "ruleTags": [
+        "primary-action",
+        "onboarding",
+        "form-a11y",
+        "minimal-input"
+      ],
+      "ruleIds": [
+        "rule-action-label-states-action",
+        "rule-error-announce",
+        "rule-error-recovery",
+        "rule-field-has-label",
+        "rule-focus-visible",
+        "rule-responsive-single-column",
+        "rule-single-primary-action",
+        "rule-onboarding-defer",
+        "rule-field-autocomplete",
+        "rule-minimal-input"
+      ]
+    }
+  },
+  {
+    "id": 3,
+    "ts": "2026-06-13T04:24:53.371Z",
+    "actor": "planner",
+    "event": "plan",
+    "scenario": "onboarding",
+    "detail": {
+      "step": "account",
+      "screenId": "onboarding-account",
+      "notes": [
+        "primary-action: exactly one primary action (the step's submit)",
+        "responsive: form is single-column so it reflows on small screens",
+        "minimal-input: form asks for only 2 field(s)"
+      ]
+    }
+  },
+  {
+    "id": 4,
+    "ts": "2026-06-13T04:24:53.466Z",
+    "actor": "planner",
+    "event": "validation",
+    "scenario": "onboarding",
+    "detail": {
+      "step": "account",
+      "valid": true,
+      "checksApplied": [
+        "label-states-action",
+        "error-has-recovery",
+        "field-has-label",
+        "forms-single-column",
+        "single-primary-action",
+        "field-has-autocomplete",
+        "minimal-fields"
+      ],
+      "errorCount": 0,
+      "findings": []
+    }
+  },
+  {
+    "id": 5,
+    "ts": "2026-06-13T04:24:53.476Z",
+    "actor": "planner",
+    "event": "retrieval",
+    "scenario": "onboarding",
+    "detail": {
+      "step": "profile",
+      "ruleTags": [
+        "primary-action",
+        "onboarding",
+        "skippable-step",
+        "form-a11y"
+      ],
+      "ruleIds": [
+        "rule-action-label-states-action",
+        "rule-error-announce",
+        "rule-error-recovery",
+        "rule-field-has-label",
+        "rule-focus-visible",
+        "rule-responsive-single-column",
+        "rule-single-primary-action",
+        "rule-skippable-optional",
+        "rule-onboarding-defer",
+        "rule-field-autocomplete"
+      ]
+    }
+  },
+  {
+    "id": 6,
+    "ts": "2026-06-13T04:24:53.483Z",
+    "actor": "planner",
+    "event": "plan",
+    "scenario": "onboarding",
+    "detail": {
+      "step": "profile",
+      "screenId": "onboarding-profile",
+      "notes": [
+        "primary-action: exactly one primary action (the step's submit)",
+        "skippable-step: added a secondary Skip action",
+        "responsive: form is single-column so it reflows on small screens"
+      ]
+    }
+  },
+  {
+    "id": 7,
+    "ts": "2026-06-13T04:24:53.490Z",
+    "actor": "planner",
+    "event": "validation",
+    "scenario": "onboarding",
+    "detail": {
+      "step": "profile",
+      "valid": true,
+      "checksApplied": [
+        "label-states-action",
+        "error-has-recovery",
+        "field-has-label",
+        "forms-single-column",
+        "single-primary-action",
+        "optional-step-skippable",
+        "field-has-autocomplete"
+      ],
+      "errorCount": 0,
+      "findings": []
+    }
+  },
+  {
+    "id": 8,
+    "ts": "2026-06-13T04:24:54.429Z",
+    "actor": "planner",
+    "event": "intent",
+    "scenario": "checkout",
+    "detail": {
+      "request": "I want to buy the items in my cart and pay",
+      "matched": "checkout",
+      "score": 6.5
+    }
+  },
+  {
+    "id": 9,
+    "ts": "2026-06-13T04:24:54.440Z",
+    "actor": "planner",
+    "event": "retrieval",
+    "scenario": "checkout",
+    "detail": {
+      "step": "shipping",
+      "ruleTags": [
+        "primary-action",
+        "checkout",
+        "form-a11y"
+      ],
+      "ruleIds": [
+        "rule-action-label-states-action",
+        "rule-checkout-preserve-input",
+        "rule-error-announce",
+        "rule-error-recovery",
+        "rule-field-has-label",
+        "rule-focus-visible",
+        "rule-responsive-single-column",
+        "rule-single-primary-action",
+        "rule-field-autocomplete"
+      ]
+    }
+  },
+  {
+    "id": 10,
+    "ts": "2026-06-13T04:24:54.445Z",
+    "actor": "planner",
+    "event": "plan",
+    "scenario": "checkout",
+    "detail": {
+      "step": "shipping",
+      "screenId": "checkout-shipping",
+      "notes": [
+        "primary-action: exactly one primary action (the step's submit)",
+        "responsive: form is single-column so it reflows on small screens"
+      ]
+    }
+  },
+  {
+    "id": 11,
+    "ts": "2026-06-13T04:24:54.557Z",
+    "actor": "planner",
+    "event": "validation",
+    "scenario": "checkout",
+    "detail": {
+      "step": "shipping",
+      "valid": true,
+      "checksApplied": [
+        "label-states-action",
+        "error-has-recovery",
+        "field-has-label",
+        "forms-single-column",
+        "single-primary-action",
+        "field-has-autocomplete"
+      ],
+      "errorCount": 0,
+      "findings": []
+    }
+  },
+  {
+    "id": 12,
+    "ts": "2026-06-13T04:24:54.565Z",
+    "actor": "planner",
+    "event": "retrieval",
+    "scenario": "checkout",
+    "detail": {
+      "step": "payment",
+      "ruleTags": [
+        "primary-action",
+        "checkout",
+        "form-a11y",
+        "sensitive-data"
+      ],
+      "ruleIds": [
+        "rule-action-label-states-action",
+        "rule-checkout-preserve-input",
+        "rule-error-announce",
+        "rule-error-recovery",
+        "rule-field-has-label",
+        "rule-focus-visible",
+        "rule-responsive-single-column",
+        "rule-sensitive-redaction",
+        "rule-single-primary-action",
+        "rule-field-autocomplete"
+      ]
+    }
+  },
+  {
+    "id": 13,
+    "ts": "2026-06-13T04:24:54.571Z",
+    "actor": "planner",
+    "event": "plan",
+    "scenario": "checkout",
+    "detail": {
+      "step": "payment",
+      "screenId": "checkout-payment",
+      "notes": [
+        "primary-action: exactly one primary action (the step's submit)",
+        "responsive: form is single-column so it reflows on small screens"
+      ]
+    }
+  },
+  {
+    "id": 14,
+    "ts": "2026-06-13T04:24:54.578Z",
+    "actor": "planner",
+    "event": "validation",
+    "scenario": "checkout",
+    "detail": {
+      "step": "payment",
+      "valid": true,
+      "checksApplied": [
+        "label-states-action",
+        "error-has-recovery",
+        "field-has-label",
+        "forms-single-column",
+        "single-primary-action",
+        "field-has-autocomplete"
+      ],
+      "errorCount": 0,
+      "findings": []
+    }
+  },
+  {
+    "id": 15,
+    "ts": "2026-06-13T04:24:54.586Z",
+    "actor": "planner",
+    "event": "retrieval",
+    "scenario": "checkout",
+    "detail": {
+      "step": "review",
+      "ruleTags": [
+        "primary-action",
+        "checkout",
+        "cost-transparency",
+        "explicit-consent"
+      ],
+      "ruleIds": [
+        "rule-action-label-states-action",
+        "rule-checkout-preserve-input",
+        "rule-cost-transparency",
+        "rule-error-announce",
+        "rule-error-recovery",
+        "rule-explicit-consent",
+        "rule-focus-visible",
+        "rule-responsive-single-column",
+        "rule-single-primary-action"
+      ]
+    }
+  },
+  {
+    "id": 16,
+    "ts": "2026-06-13T04:24:54.592Z",
+    "actor": "planner",
+    "event": "plan",
+    "scenario": "checkout",
+    "detail": {
+      "step": "review",
+      "screenId": "checkout-review",
+      "notes": [
+        "cost-transparency: rendered an order summary before the commit action",
+        "primary-action: exactly one primary action (the step's submit)"
+      ]
+    }
+  },
+  {
+    "id": 17,
+    "ts": "2026-06-13T04:24:54.600Z",
+    "actor": "planner",
+    "event": "validation",
+    "scenario": "checkout",
+    "detail": {
+      "step": "review",
+      "valid": true,
+      "checksApplied": [
+        "label-states-action",
+        "commit-shows-summary",
+        "error-has-recovery",
+        "label-states-consequence",
+        "forms-single-column",
+        "single-primary-action"
+      ],
+      "errorCount": 0,
+      "findings": []
+    }
+  },
+  {
+    "id": 18,
+    "ts": "2026-06-13T04:24:55.477Z",
+    "actor": "planner",
+    "event": "intent",
+    "scenario": "subscription-upgrade",
+    "detail": {
+      "request": "upgrade my plan to pro",
+      "matched": "subscription-upgrade",
+      "score": 8.5
+    }
+  },
+  {
+    "id": 19,
+    "ts": "2026-06-13T04:24:55.489Z",
+    "actor": "planner",
+    "event": "retrieval",
+    "scenario": "subscription-upgrade",
+    "detail": {
+      "step": "choose-plan",
+      "ruleTags": [
+        "primary-action",
+        "checkout",
+        "cost-transparency"
+      ],
+      "ruleIds": [
+        "rule-action-label-states-action",
+        "rule-checkout-preserve-input",
+        "rule-cost-transparency",
+        "rule-error-announce",
+        "rule-error-recovery",
+        "rule-focus-visible",
+        "rule-responsive-single-column",
+        "rule-single-primary-action"
+      ]
+    }
+  },
+  {
+    "id": 20,
+    "ts": "2026-06-13T04:24:55.495Z",
+    "actor": "planner",
+    "event": "plan",
+    "scenario": "subscription-upgrade",
+    "detail": {
+      "step": "choose-plan",
+      "screenId": "subscription-upgrade-choose-plan",
+      "notes": [
+        "primary-action: exactly one primary action (the step's submit)",
+        "responsive: form is single-column so it reflows on small screens"
+      ]
+    }
+  },
+  {
+    "id": 21,
+    "ts": "2026-06-13T04:24:55.602Z",
+    "actor": "planner",
+    "event": "validation",
+    "scenario": "subscription-upgrade",
+    "detail": {
+      "step": "choose-plan",
+      "valid": true,
+      "checksApplied": [
+        "label-states-action",
+        "commit-shows-summary",
+        "error-has-recovery",
+        "forms-single-column",
+        "single-primary-action"
+      ],
+      "errorCount": 0,
+      "findings": []
+    }
+  },
+  {
+    "id": 22,
+    "ts": "2026-06-13T04:24:55.611Z",
+    "actor": "planner",
+    "event": "retrieval",
+    "scenario": "subscription-upgrade",
+    "detail": {
+      "step": "confirm-upgrade",
+      "ruleTags": [
+        "primary-action",
+        "checkout",
+        "cost-transparency",
+        "explicit-consent",
+        "recurring-charge"
+      ],
+      "ruleIds": [
+        "rule-action-label-states-action",
+        "rule-checkout-preserve-input",
+        "rule-cost-transparency",
+        "rule-error-announce",
+        "rule-error-recovery",
+        "rule-explicit-consent",
+        "rule-focus-visible",
+        "rule-recurring-disclosure",
+        "rule-responsive-single-column",
+        "rule-single-primary-action"
+      ]
+    }
+  },
+  {
+    "id": 23,
+    "ts": "2026-06-13T04:24:55.617Z",
+    "actor": "planner",
+    "event": "plan",
+    "scenario": "subscription-upgrade",
+    "detail": {
+      "step": "confirm-upgrade",
+      "screenId": "subscription-upgrade-confirm-upgrade",
+      "notes": [
+        "cost-transparency: rendered an order summary before the commit action",
+        "recurring-charge: summary states the renewal cadence",
+        "primary-action: exactly one primary action (the step's submit)"
+      ]
+    }
+  },
+  {
+    "id": 24,
+    "ts": "2026-06-13T04:24:55.625Z",
+    "actor": "planner",
+    "event": "validation",
+    "scenario": "subscription-upgrade",
+    "detail": {
+      "step": "confirm-upgrade",
+      "valid": true,
+      "checksApplied": [
+        "label-states-action",
+        "commit-shows-summary",
+        "error-has-recovery",
+        "label-states-consequence",
+        "summary-mentions-renewal",
+        "forms-single-column",
+        "single-primary-action"
+      ],
+      "errorCount": 0,
+      "findings": []
+    }
+  },
+  {
+    "id": 25,
+    "ts": "2026-06-13T04:24:56.558Z",
+    "actor": "planner",
+    "event": "intent",
+    "scenario": "account-settings",
+    "detail": {
+      "request": "change my account settings and maybe delete my account",
+      "matched": "account-settings",
+      "score": 13
+    }
+  },
+  {
+    "id": 26,
+    "ts": "2026-06-13T04:24:56.568Z",
+    "actor": "planner",
+    "event": "retrieval",
+    "scenario": "account-settings",
+    "detail": {
+      "step": "settings",
+      "ruleTags": [
+        "primary-action",
+        "form-a11y",
+        "destructive-action",
+        "danger-zone"
+      ],
+      "ruleIds": [
+        "rule-action-label-states-action",
+        "rule-danger-zone-separation",
+        "rule-destructive-dialog-shape",
+        "rule-destructive-needs-confirmation",
+        "rule-error-announce",
+        "rule-error-recovery",
+        "rule-field-has-label",
+        "rule-focus-visible",
+        "rule-responsive-single-column",
+        "rule-single-primary-action",
+        "rule-field-autocomplete"
+      ]
+    }
+  },
+  {
+    "id": 27,
+    "ts": "2026-06-13T04:24:56.575Z",
+    "actor": "planner",
+    "event": "plan",
+    "scenario": "account-settings",
+    "detail": {
+      "step": "settings",
+      "screenId": "account-settings-settings",
+      "notes": [
+        "primary-action: exactly one primary action (the step's submit)",
+        "responsive: form is single-column so it reflows on small screens",
+        "destructive-action: danger action is isolated in a danger zone and guarded by a destructive confirmation dialog"
+      ]
+    }
+  },
+  {
+    "id": 28,
+    "ts": "2026-06-13T04:24:56.660Z",
+    "actor": "planner",
+    "event": "validation",
+    "scenario": "account-settings",
+    "detail": {
+      "step": "settings",
+      "valid": true,
+      "checksApplied": [
+        "label-states-action",
+        "danger-zone-separated",
+        "destructive-dialog-shape",
+        "destructive-needs-confirmation",
+        "error-has-recovery",
+        "field-has-label",
+        "forms-single-column",
+        "single-primary-action",
+        "field-has-autocomplete"
+      ],
+      "errorCount": 0,
+      "findings": []
+    }
+  },
+  {
+    "id": 29,
+    "ts": "2026-06-13T04:24:57.493Z",
+    "actor": "planner",
+    "event": "intent",
+    "scenario": "password-reset",
+    "detail": {
+      "request": "I forgot my password and I'm locked out",
+      "matched": "password-reset",
+      "score": 9.25
+    }
+  },
+  {
+    "id": 30,
+    "ts": "2026-06-13T04:24:57.502Z",
+    "actor": "planner",
+    "event": "retrieval",
+    "scenario": "password-reset",
+    "detail": {
+      "step": "request",
+      "ruleTags": [
+        "primary-action",
+        "form-a11y",
+        "minimal-input",
+        "no-account-disclosure"
+      ],
+      "ruleIds": [
+        "rule-action-label-states-action",
+        "rule-error-announce",
+        "rule-error-recovery",
+        "rule-field-has-label",
+        "rule-focus-visible",
+        "rule-no-account-disclosure",
+        "rule-responsive-single-column",
+        "rule-single-primary-action",
+        "rule-field-autocomplete",
+        "rule-minimal-input"
+      ]
+    }
+  },
+  {
+    "id": 31,
+    "ts": "2026-06-13T04:24:57.508Z",
+    "actor": "planner",
+    "event": "plan",
+    "scenario": "password-reset",
+    "detail": {
+      "step": "request",
+      "screenId": "password-reset-request",
+      "notes": [
+        "primary-action: exactly one primary action (the step's submit)",
+        "responsive: form is single-column so it reflows on small screens",
+        "minimal-input: form asks for only 1 field(s)"
+      ]
+    }
+  },
+  {
+    "id": 32,
+    "ts": "2026-06-13T04:24:57.578Z",
+    "actor": "planner",
+    "event": "validation",
+    "scenario": "password-reset",
+    "detail": {
+      "step": "request",
+      "valid": true,
+      "checksApplied": [
+        "label-states-action",
+        "error-has-recovery",
+        "field-has-label",
+        "forms-single-column",
+        "single-primary-action",
+        "field-has-autocomplete",
+        "minimal-fields"
+      ],
+      "errorCount": 0,
+      "findings": []
+    }
+  },
+  {
+    "id": 33,
+    "ts": "2026-06-13T04:24:57.586Z",
+    "actor": "planner",
+    "event": "retrieval",
+    "scenario": "password-reset",
+    "detail": {
+      "step": "new-password",
+      "ruleTags": [
+        "primary-action",
+        "form-a11y"
+      ],
+      "ruleIds": [
+        "rule-action-label-states-action",
+        "rule-error-announce",
+        "rule-error-recovery",
+        "rule-field-has-label",
+        "rule-focus-visible",
+        "rule-responsive-single-column",
+        "rule-single-primary-action",
+        "rule-field-autocomplete"
+      ]
+    }
+  },
+  {
+    "id": 34,
+    "ts": "2026-06-13T04:24:57.592Z",
+    "actor": "planner",
+    "event": "plan",
+    "scenario": "password-reset",
+    "detail": {
+      "step": "new-password",
+      "screenId": "password-reset-new-password",
+      "notes": [
+        "primary-action: exactly one primary action (the step's submit)",
+        "responsive: form is single-column so it reflows on small screens"
+      ]
+    }
+  },
+  {
+    "id": 35,
+    "ts": "2026-06-13T04:24:57.598Z",
+    "actor": "planner",
+    "event": "validation",
+    "scenario": "password-reset",
+    "detail": {
+      "step": "new-password",
+      "valid": true,
+      "checksApplied": [
+        "label-states-action",
+        "error-has-recovery",
+        "field-has-label",
+        "forms-single-column",
+        "single-primary-action",
+        "field-has-autocomplete"
+      ],
+      "errorCount": 0,
+      "findings": []
+    }
+  }
+]
