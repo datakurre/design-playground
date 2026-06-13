@@ -7,6 +7,7 @@
   "scripts": {
     "build:tokens": "tsx packages/tokens-build/src/build.ts",
     "db:seed": "tsx db/seed.ts",
+    "db:verify": "tsx db/verify-enforcement.ts",
     "scenarios": "tsx scripts/run-scenarios.ts",
     "governance": "tsx scripts/generate-governance.ts",
     "pipeline": "pnpm build:tokens && pnpm db:seed && pnpm scenarios && pnpm governance",
@@ -22,6 +23,8 @@
     "vitest": "^3.1.0"
   },
   "dependencies": {
+    "@design-playground/design-db": "workspace:*",
+    "@design-playground/tokens-build": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.12.0",
     "ajv": "^8.17.0",
     "ajv-formats": "^3.0.0",

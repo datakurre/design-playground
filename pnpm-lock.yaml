@@ -8,6 +8,12 @@ importers:
 
   .:
     dependencies:
+      '@design-playground/design-db':
+        specifier: workspace:*
+        version: link:packages/design-db
+      '@design-playground/tokens-build':
+        specifier: workspace:*
+        version: link:packages/tokens-build
       '@modelcontextprotocol/sdk':
         specifier: ^1.12.0
         version: 1.29.0(zod@3.25.76)
@@ -39,6 +45,16 @@ importers:
       vitest:
         specifier: ^3.1.0
         version: 3.2.6(@types/node@22.19.21)(tsx@4.22.4)
+
+  packages/design-db:
+    dependencies:
+      better-sqlite3:
+        specifier: ^11.10.0
+        version: 11.10.0
+    devDependencies:
+      '@types/better-sqlite3':
+        specifier: ^7.6.13
+        version: 7.6.13
 
   packages/tokens-build: {}
 

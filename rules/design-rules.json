@@ -1,0 +1,205 @@
+{
+  "$schema": "./design-rules.schema.json",
+  "rules": [
+    {
+      "id": "rule-single-primary-action",
+      "tag": "primary-action",
+      "category": "action",
+      "severity": "error",
+      "applies": "global",
+      "title": "Exactly one primary action per screen",
+      "description": "Each screen exposes exactly one primary-variant action so the user's next step is unambiguous. Supporting actions use the secondary variant.",
+      "machineCheck": "single-primary-action"
+    },
+    {
+      "id": "rule-action-label-states-action",
+      "tag": "primary-action",
+      "category": "action",
+      "severity": "error",
+      "applies": "step",
+      "title": "Action labels state the action",
+      "description": "Button labels describe what happens ('Create account', 'Place order'). Generic labels such as 'Submit', 'OK' or 'Yes' are forbidden.",
+      "machineCheck": "label-states-action"
+    },
+    {
+      "id": "rule-destructive-needs-confirmation",
+      "tag": "destructive-action",
+      "category": "destructive-action",
+      "severity": "error",
+      "applies": "step",
+      "title": "Destructive actions require confirmation",
+      "description": "Hard-to-reverse actions (delete account, cancel subscription) never execute directly; they open a confirmation dialog first.",
+      "machineCheck": "destructive-needs-confirmation",
+      "requiresConfirmation": true
+    },
+    {
+      "id": "rule-destructive-dialog-shape",
+      "tag": "destructive-action",
+      "category": "destructive-action",
+      "severity": "error",
+      "applies": "step",
+      "title": "Destructive confirmations state the consequence",
+      "description": "A destructive confirmation dialog states the irreversible consequence in body text, uses a danger-variant confirm button whose label repeats the action, and offers a safe cancel.",
+      "machineCheck": "destructive-dialog-shape",
+      "requiresConfirmation": true
+    },
+    {
+      "id": "rule-danger-zone-separation",
+      "tag": "danger-zone",
+      "category": "layout",
+      "severity": "error",
+      "applies": "step",
+      "title": "Destructive controls live in a separated danger zone",
+      "description": "Destructive controls are grouped in their own clearly titled card, never adjacent to routine save actions.",
+      "machineCheck": "danger-zone-separated"
+    },
+    {
+      "id": "rule-field-has-label",
+      "tag": "form-a11y",
+      "category": "accessibility",
+      "severity": "error",
+      "applies": "step",
+      "title": "Every field has a visible label",
+      "description": "Every form field has a non-empty, programmatically associated visible label. Placeholders never substitute for labels.",
+      "machineCheck": "field-has-label",
+      "wcag": "3.3.2"
+    },
+    {
+      "id": "rule-field-autocomplete",
+      "tag": "form-a11y",
+      "category": "accessibility",
+      "severity": "warn",
+      "applies": "step",
+      "title": "Personal-data fields declare autocomplete",
+      "description": "Fields collecting information about the user (name, email, address, payment card) declare the matching HTML autocomplete purpose.",
+      "machineCheck": "field-has-autocomplete",
+      "wcag": "1.3.5"
+    },
+    {
+      "id": "rule-focus-visible",
+      "tag": "form-a11y",
+      "category": "accessibility",
+      "severity": "error",
+      "applies": "global",
+      "title": "Focus indicators are never suppressed",
+      "description": "All interactive elements show a visible focus ring using the color.border.focus token. Styles that remove outlines are forbidden.",
+      "wcag": "2.4.7"
+    },
+    {
+      "id": "rule-error-recovery",
+      "tag": "error-states",
+      "category": "error-handling",
+      "severity": "error",
+      "applies": "global",
+      "title": "Every error state offers recovery",
+      "description": "Every error message is actionable, preserves user input, and tells the user what to do next. Dead-end errors are forbidden.",
+      "machineCheck": "error-has-recovery"
+    },
+    {
+      "id": "rule-error-announce",
+      "tag": "error-states",
+      "category": "accessibility",
+      "severity": "error",
+      "applies": "global",
+      "title": "Errors are textual and announced",
+      "description": "Validation errors render as text adjacent to the offending field and are announced to assistive technology (role=alert); color alone never signals an error.",
+      "wcag": "3.3.1"
+    },
+    {
+      "id": "rule-responsive-single-column",
+      "tag": "responsive",
+      "category": "layout",
+      "severity": "error",
+      "applies": "global",
+      "title": "Layouts collapse below the md breakpoint",
+      "description": "Multi-column layouts collapse to a single column below breakpoint.md (768px). Forms are single-column at every width.",
+      "machineCheck": "forms-single-column"
+    },
+    {
+      "id": "rule-cost-transparency",
+      "tag": "cost-transparency",
+      "category": "flow",
+      "severity": "error",
+      "applies": "step",
+      "title": "Full cost is visible at the point of commitment",
+      "description": "Any screen with a paying/committing action shows the complete cost breakdown (including taxes and fees) as a summary on the same screen.",
+      "machineCheck": "commit-shows-summary"
+    },
+    {
+      "id": "rule-explicit-consent",
+      "tag": "explicit-consent",
+      "category": "flow",
+      "severity": "error",
+      "applies": "step",
+      "title": "The committing label carries the consequence",
+      "description": "The button that commits a payment or contract states the amount or consequence in its label ('Place order and pay 62.90 EUR').",
+      "machineCheck": "label-states-consequence"
+    },
+    {
+      "id": "rule-recurring-disclosure",
+      "tag": "recurring-charge",
+      "category": "content",
+      "severity": "error",
+      "applies": "step",
+      "title": "Recurring charges disclose renewal terms",
+      "description": "Before committing to a recurring charge, the summary states the cadence and that it renews until cancelled.",
+      "machineCheck": "summary-mentions-renewal"
+    },
+    {
+      "id": "rule-minimal-input",
+      "tag": "minimal-input",
+      "category": "flow",
+      "severity": "warn",
+      "applies": "step",
+      "title": "First contact asks for the minimum",
+      "description": "The first screen of an acquisition or recovery flow asks for at most three fields; everything else is deferred.",
+      "machineCheck": "minimal-fields"
+    },
+    {
+      "id": "rule-skippable-optional",
+      "tag": "skippable-step",
+      "category": "flow",
+      "severity": "error",
+      "applies": "step",
+      "title": "Optional steps are skippable",
+      "description": "A step that collects only optional data offers an explicit secondary 'Skip for now' action.",
+      "machineCheck": "optional-step-skippable"
+    },
+    {
+      "id": "rule-no-account-disclosure",
+      "tag": "no-account-disclosure",
+      "category": "safety",
+      "severity": "error",
+      "applies": "step",
+      "title": "Never disclose account existence",
+      "description": "Account-recovery responses are identical whether or not the address is registered ('If an account exists, we sent a link')."
+    },
+    {
+      "id": "rule-sensitive-redaction",
+      "tag": "sensitive-data",
+      "category": "safety",
+      "severity": "error",
+      "applies": "step",
+      "title": "Sensitive values never reach logs",
+      "description": "Payment and credential fields are marked sensitive; their values are never persisted in audit logs or traces - only field names are."
+    },
+    {
+      "id": "rule-onboarding-defer",
+      "tag": "onboarding",
+      "category": "flow",
+      "severity": "info",
+      "applies": "step",
+      "title": "Defer everything but credentials at signup",
+      "description": "Signup collects credentials only; profile and preference data is collected after the user has reached first value, and is optional."
+    },
+    {
+      "id": "rule-checkout-preserve-input",
+      "tag": "checkout",
+      "category": "error-handling",
+      "severity": "error",
+      "applies": "step",
+      "title": "Checkout failures preserve everything",
+      "description": "When payment or address validation fails, all entered data is kept and the user is returned to the failing step with the offending field focused."
+    }
+  ]
+}

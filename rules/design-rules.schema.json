@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-playground.example/rules/design-rules.schema.json",
+  "title": "Design Rules",
+  "description": "Design intent encoded as retrievable, enforceable rules. Rules are matched to flow steps via tags; 'global' rules apply to every screen. machineCheck names the semantic lint in @design-playground/ui-ir that enforces the rule automatically.",
+  "type": "object",
+  "required": ["rules"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "rules": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "tag", "category", "severity", "applies", "title", "description"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^rule-[a-z0-9-]+$" },
+          "tag": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+          "category": {
+            "enum": ["action", "destructive-action", "accessibility", "flow", "layout", "content", "safety", "error-handling"]
+          },
+          "severity": { "enum": ["error", "warn", "info"] },
+          "applies": { "enum": ["step", "global"] },
+          "title": { "type": "string" },
+          "description": { "type": "string", "minLength": 20 },
+          "machineCheck": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+          "requiresConfirmation": { "type": "boolean" },
+          "wcag": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
