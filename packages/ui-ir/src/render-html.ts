@@ -103,7 +103,23 @@ function renderDialog(d: Dialog): string {
 </div>`;
 }
 
-const BASE_CSS = `
+// Alias the semantic names used below to the generated design tokens, so
+// the rendered output is genuinely token-driven (change a token, restyle
+// everything). The token :root (variables.css) must be included first.
+const TOKEN_ALIASES = `
+:root {
+  --spacing-xs: var(--space-1); --spacing-sm: var(--space-2); --spacing-md: var(--space-4);
+  --spacing-lg: var(--space-6); --spacing-xl: var(--space-8);
+  --color-surface-default: var(--color-surface-card);
+  --color-surface-muted: var(--color-surface-background);
+  --typography-font-family-sans: var(--font-family-base);
+  --typography-font-size-sm: var(--font-size-sm);
+  --typography-font-size-lg: var(--font-size-lg);
+  --typography-font-size-2xl: var(--font-size-2xl);
+  --shadow-lg: var(--shadow-overlay);
+}`;
+
+export const screenBaseCss = `${TOKEN_ALIASES}
 :root { color-scheme: light; }
 * { box-sizing: border-box; }
 body { margin:0; font-family: var(--typography-font-family-sans, system-ui, sans-serif);
@@ -157,7 +173,7 @@ export function astToHtmlDocument(screen: Screen, tokensCss = ""): string {
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>${esc(screen.title)}</title>
-<style>${tokensCss}${BASE_CSS}</style>
+<style>${tokensCss}${screenBaseCss}</style>
 </head>
 <body>
 <main class="dp-screen" data-flow="${esc(screen.flow ?? "")}" data-step="${esc(screen.step ?? "")}">

@@ -6,21 +6,18 @@
  *   2. semantic - design lints (see lints.ts) that enforce the design
  *      rules an agent must obey.
  */
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import Ajv2020, { type ErrorObject, type ValidateFunction } from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
 import type { Screen } from "./types.js";
 import { runLints, type LintFinding } from "./lints.js";
-
-const here = dirname(fileURLToPath(import.meta.url));
-const schemaPath = join(here, "../../../ui-ir/ui-ast.schema.json");
+// Import the schema as a JSON module so the validator is isomorphic:
+// the same code runs under Node (tsx) and in the browser (Vite), with no
+// filesystem access. ui-ir/ui-ast.schema.json remains the single source.
+import schema from "../../../ui-ir/ui-ast.schema.json" with { type: "json" };
 
 let validator: ValidateFunction | null = null;
 function getValidator(): ValidateFunction {
   if (!validator) {
-    const schema = JSON.parse(readFileSync(schemaPath, "utf8"));
     const ajv = new Ajv2020({ allErrors: true, strict: false, discriminator: true });
     addFormats(ajv);
     validator = ajv.compile(schema);
