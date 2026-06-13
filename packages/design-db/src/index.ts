@@ -136,6 +136,57 @@ export class DesignDb {
     return this.db.prepare("SELECT * FROM rules ORDER BY id").all() as Rule[];
   }
 
+  getRulesByCategory(category: string): Rule[] {
+    return this.db
+      .prepare("SELECT * FROM rules WHERE category = ? ORDER BY severity, id")
+      .all(category) as Rule[];
+  }
+
+  /** Map a machineCheck name to the rule(s) that declare it. */
+  getRulesByMachineCheck(machineCheck: string): Rule[] {
+    return this.db
+      .prepare("SELECT * FROM rules WHERE machine_check = ? ORDER BY id")
+      .all(machineCheck) as Rule[];
+  }
+
+  /**
+   * Deterministically match free text to a flow. Scores each flow by how
+   * many of its declared intent phrases appear in the input (longer
+   * phrases weighted higher), with a token-overlap tie-breaker. Same
+   * input always yields the same ranking - no model, no randomness.
+   */
+  matchIntent(text: string): {
+    flowId: string | null;
+    score: number;
+    ranked: Array<{ flowId: string; score: number; matched: string[] }>;
+  } {
+    const haystack = ` ${text.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ")} `;
+    const tokens = new Set(haystack.trim().split(" ").filter(Boolean));
+    const ranked = this.listFlows()
+      .map((flow) => {
+        const matched: string[] = [];
+        let score = 0;
+        for (const phrase of flow.intents) {
+          const p = phrase.toLowerCase();
+          if (haystack.includes(` ${p} `) || haystack.includes(`${p} `) || haystack.includes(` ${p}`)) {
+            matched.push(phrase);
+            score += 2 + p.split(" ").length; // longer phrases are stronger signals
+          }
+        }
+        // token-overlap tie-breaker against the flow id words and goal
+        const flowWords = `${flow.id.replace(/-/g, " ")} ${flow.goal.toLowerCase()}`.split(/\s+/);
+        for (const w of flowWords) if (w.length > 3 && tokens.has(w)) score += 0.25;
+        return { flowId: flow.id, score, matched };
+      })
+      .sort((a, b) => b.score - a.score || a.flowId.localeCompare(b.flowId));
+    const best = ranked[0];
+    return {
+      flowId: best && best.score > 0 ? best.flowId : null,
+      score: best?.score ?? 0,
+      ranked,
+    };
+  }
+
   logAudit(actor: string, event: AuditEvent, scenario: string | null, detail: unknown): number {
     const result = this.db
       .prepare("INSERT INTO audit_log (actor, event, scenario, detail) VALUES (?, ?, ?, ?)")
