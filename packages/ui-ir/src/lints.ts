@@ -6,7 +6,7 @@
  * so on. Each finding carries the machineCheck id so it can be traced
  * back to its rule in the SQLite store.
  */
-import type { Screen, Node, Dialog, Button, Field, Card } from "./types.js";
+import type { Screen, Node, Dialog, Button, Field, Card, Form } from "./types.js";
 
 export type Severity = "error" | "warn" | "info";
 

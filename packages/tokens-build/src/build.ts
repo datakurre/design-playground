@@ -6,7 +6,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { flattenTokens, cssVarName, cssValue } from "./dtcg.ts";
+import { flattenTokens, cssVarName, cssValue } from "./dtcg.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const source = JSON.parse(readFileSync(join(root, "tokens/design-tokens.json"), "utf8"));

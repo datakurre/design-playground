@@ -53,8 +53,8 @@ export interface PlanResult {
   valid: boolean;
 }
 
-function parse<T>(result: { content: unknown }): T {
-  const content = result.content as Array<{ type: string; text: string }>;
+function parse<T>(result: unknown): T {
+  const content = (result as { content: Array<{ type: string; text: string }> }).content;
   return JSON.parse(content[0].text) as T;
 }
 

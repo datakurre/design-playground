@@ -6,14 +6,25 @@
  *   2. semantic - design lints (see lints.ts) that enforce the design
  *      rules an agent must obey.
  */
-import Ajv2020, { type ErrorObject, type ValidateFunction } from "ajv/dist/2020.js";
-import addFormats from "ajv-formats";
+import AjvModule from "ajv/dist/2020.js";
+import addFormatsModule from "ajv-formats";
+import type { ErrorObject, ValidateFunction } from "ajv";
 import type { Screen } from "./types.js";
 import { runLints, type LintFinding } from "./lints.js";
 // Import the schema as a JSON module so the validator is isomorphic:
 // the same code runs under Node (tsx) and in the browser (Vite), with no
 // filesystem access. ui-ir/ui-ast.schema.json remains the single source.
 import schema from "../../../ui-ir/ui-ast.schema.json" with { type: "json" };
+
+// Interop shim: Ajv and ajv-formats ship as CJS, so the default export
+// lands differently under tsx (ESM) vs bundlers. Normalise both.
+type AjvCtor = new (opts: Record<string, unknown>) => {
+  compile: (schema: object) => ValidateFunction;
+};
+const Ajv2020 = (((AjvModule as unknown as { default?: AjvCtor }).default ?? AjvModule) as unknown) as AjvCtor;
+const addFormats = (((addFormatsModule as unknown as { default?: unknown }).default ?? addFormatsModule) as unknown) as (
+  ajv: unknown,
+) => void;
 
 let validator: ValidateFunction | null = null;
 function getValidator(): ValidateFunction {
