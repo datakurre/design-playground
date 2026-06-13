@@ -21,7 +21,14 @@ dialog, because the design rules require it.
 ![Account settings scenario](scenarios/account-settings/screenshot.svg)
 
 See [`docs/architecture.md`](docs/architecture.md) for diagrams and the
-rationale behind each choice.
+rationale behind each choice, and
+[`docs/standards.md`](docs/standards.md) for the approach, stack, and
+relation to open standards (W3C DTCG, JSON Schema, MCP, WCAG/ARIA).
+
+📖 **Published site:** the docs and all generated artifacts (scenario
+gallery, governance reports, schemas, and the live renderer) are
+published to GitHub Pages via `.github/workflows/pages.yml` — build it
+locally with `pnpm site` (output in `site/`).
 
 ## Quick start
 

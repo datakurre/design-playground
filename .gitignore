@@ -14,3 +14,6 @@ playwright-browsers/
 # human-readable artifacts live in scenarios/ and governance/.
 db/design.db
 db/design.db-journal
+
+# Generated static site (built and deployed by the Pages workflow)
+site/
