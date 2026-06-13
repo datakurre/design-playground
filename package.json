@@ -25,6 +25,7 @@
   "dependencies": {
     "@design-playground/design-db": "workspace:*",
     "@design-playground/tokens-build": "workspace:*",
+    "@design-playground/ui-ir": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.12.0",
     "ajv": "^8.17.0",
     "ajv-formats": "^3.0.0",

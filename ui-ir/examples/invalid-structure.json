@@ -1,0 +1,9 @@
+{
+  "type": "Screen",
+  "id": "Bad_Id",
+  "title": "Broken screen",
+  "children": [
+    { "type": "Button", "label": "Go", "variant": "rainbow", "action": { "kind": "teleport" } },
+    { "type": "Marquee", "value": "hello" }
+  ]
+}

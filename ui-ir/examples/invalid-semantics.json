@@ -1,0 +1,20 @@
+{
+  "type": "Screen",
+  "id": "confusing-screen",
+  "title": "Confusing screen",
+  "flow": "onboarding",
+  "step": "details",
+  "children": [
+    {
+      "type": "Form",
+      "id": "signup",
+      "columns": 2,
+      "children": [
+        { "type": "Field", "name": "email", "label": "Email", "inputType": "email", "required": true },
+        { "type": "Button", "label": "Submit", "variant": "primary", "action": { "kind": "submit", "target": "signup" } }
+      ]
+    },
+    { "type": "Button", "label": "Delete everything", "variant": "danger", "action": { "kind": "submit", "target": "signup" } },
+    { "type": "Button", "label": "Save", "variant": "primary", "action": { "kind": "submit", "target": "signup" } }
+  ]
+}

@@ -1,0 +1,215 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-playground.dev/ui-ast.schema.json",
+  "title": "UI Intermediate Representation (AST)",
+  "description": "A safe, closed-vocabulary intermediate representation for agent-generated interfaces. There is no escape hatch into raw HTML, scripts, URLs or styles: an agent can only assemble nodes from this vocabulary, so the renderer can trust any AST that validates against this schema.",
+  "$ref": "#/$defs/Screen",
+  "$defs": {
+    "Identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "ActionRef": {
+      "type": "object",
+      "description": "A declarative reference to an action. No inline code or URLs - only a known kind plus an optional target identifier the host application resolves.",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "enum": ["submit", "navigate", "open-dialog", "close-dialog", "confirm", "cancel", "skip"]
+        },
+        "target": { "$ref": "#/$defs/Identifier" }
+      }
+    },
+    "Node": {
+      "discriminator": { "propertyName": "type" },
+      "oneOf": [
+        { "$ref": "#/$defs/Stack" },
+        { "$ref": "#/$defs/Grid" },
+        { "$ref": "#/$defs/Card" },
+        { "$ref": "#/$defs/Text" },
+        { "$ref": "#/$defs/Form" },
+        { "$ref": "#/$defs/Field" },
+        { "$ref": "#/$defs/Button" },
+        { "$ref": "#/$defs/Dialog" },
+        { "$ref": "#/$defs/Nav" }
+      ]
+    },
+    "Screen": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id", "title", "children"],
+      "properties": {
+        "type": { "const": "Screen" },
+        "id": { "$ref": "#/$defs/Identifier" },
+        "title": { "type": "string", "minLength": 1 },
+        "flow": { "$ref": "#/$defs/Identifier" },
+        "step": { "$ref": "#/$defs/Identifier" },
+        "children": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/Node" }
+        },
+        "dialogs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Dialog" }
+        }
+      }
+    },
+    "Stack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "children"],
+      "properties": {
+        "type": { "const": "Stack" },
+        "direction": { "enum": ["vertical", "horizontal"], "default": "vertical" },
+        "gap": { "enum": ["xs", "sm", "md", "lg", "xl"], "default": "md" },
+        "role": { "enum": ["plain", "danger-zone", "actions"], "default": "plain" },
+        "children": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/Node" }
+        }
+      }
+    },
+    "Grid": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "columns", "children"],
+      "properties": {
+        "type": { "const": "Grid" },
+        "columns": { "type": "integer", "minimum": 1, "maximum": 4 },
+        "gap": { "enum": ["xs", "sm", "md", "lg", "xl"], "default": "md" },
+        "children": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/Node" }
+        }
+      }
+    },
+    "Card": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "children"],
+      "properties": {
+        "type": { "const": "Card" },
+        "title": { "type": "string" },
+        "role": { "enum": ["plain", "summary", "danger-zone"], "default": "plain" },
+        "children": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/Node" }
+        }
+      }
+    },
+    "Text": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "value"],
+      "properties": {
+        "type": { "const": "Text" },
+        "value": { "type": "string", "minLength": 1 },
+        "role": { "enum": ["heading", "subheading", "body", "caption", "error"], "default": "body" },
+        "level": { "type": "integer", "minimum": 1, "maximum": 6 }
+      }
+    },
+    "Form": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id", "children"],
+      "properties": {
+        "type": { "const": "Form" },
+        "id": { "$ref": "#/$defs/Identifier" },
+        "columns": { "type": "integer", "minimum": 1, "maximum": 2, "default": 1 },
+        "children": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/Node" }
+        }
+      }
+    },
+    "Field": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "name", "label", "inputType"],
+      "properties": {
+        "type": { "const": "Field" },
+        "name": { "$ref": "#/$defs/Identifier" },
+        "label": { "type": "string", "minLength": 1 },
+        "inputType": {
+          "enum": ["text", "email", "password", "number", "tel", "checkbox", "select", "textarea"]
+        },
+        "required": { "type": "boolean", "default": false },
+        "autocomplete": { "type": "string" },
+        "help": { "type": "string" },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["value", "label"],
+            "properties": {
+              "value": { "type": "string" },
+              "label": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "Button": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "label", "variant", "action"],
+      "properties": {
+        "type": { "const": "Button" },
+        "label": { "type": "string", "minLength": 1 },
+        "variant": { "enum": ["primary", "secondary", "danger"] },
+        "action": { "$ref": "#/$defs/ActionRef" },
+        "disabled": { "type": "boolean", "default": false }
+      }
+    },
+    "Dialog": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id", "title", "children", "confirmLabel", "cancelLabel"],
+      "properties": {
+        "type": { "const": "Dialog" },
+        "id": { "$ref": "#/$defs/Identifier" },
+        "title": { "type": "string", "minLength": 1 },
+        "destructive": { "type": "boolean", "default": false },
+        "children": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/Node" }
+        },
+        "confirmLabel": { "type": "string", "minLength": 1 },
+        "cancelLabel": { "type": "string", "minLength": 1 },
+        "confirmVariant": { "enum": ["primary", "danger"], "default": "primary" }
+      }
+    },
+    "Nav": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "items"],
+      "properties": {
+        "type": { "const": "Nav" },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["label", "action"],
+            "properties": {
+              "label": { "type": "string", "minLength": 1 },
+              "action": { "$ref": "#/$defs/ActionRef" },
+              "current": { "type": "boolean", "default": false }
+            }
+          }
+        }
+      }
+    }
+  }
+}

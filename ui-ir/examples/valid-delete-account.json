@@ -1,0 +1,40 @@
+{
+  "type": "Screen",
+  "id": "danger-settings",
+  "title": "Account settings",
+  "flow": "account-settings",
+  "step": "danger-zone",
+  "children": [
+    {
+      "type": "Card",
+      "title": "Profile",
+      "children": [
+        { "type": "Text", "value": "Manage how your name appears across the product.", "role": "body" },
+        { "type": "Button", "label": "Edit profile", "variant": "primary", "action": { "kind": "navigate", "target": "profile" } }
+      ]
+    },
+    {
+      "type": "Card",
+      "role": "danger-zone",
+      "title": "Danger zone",
+      "children": [
+        { "type": "Text", "value": "Deleting your account is permanent and removes all your data.", "role": "body" },
+        { "type": "Button", "label": "Delete account", "variant": "danger", "action": { "kind": "open-dialog", "target": "confirm-delete" } }
+      ]
+    }
+  ],
+  "dialogs": [
+    {
+      "type": "Dialog",
+      "id": "confirm-delete",
+      "title": "Delete your account?",
+      "destructive": true,
+      "confirmVariant": "danger",
+      "confirmLabel": "Delete my account",
+      "cancelLabel": "Keep my account",
+      "children": [
+        { "type": "Text", "value": "This permanently deletes your account and data. This cannot be undone.", "role": "body" }
+      ]
+    }
+  ]
+}
