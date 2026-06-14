@@ -118,6 +118,9 @@ importers:
 
   packages/renderer:
     dependencies:
+      '@design-playground/tokens-build':
+        specifier: workspace:*
+        version: link:../tokens-build
       '@design-playground/ui-ir':
         specifier: workspace:*
         version: link:../ui-ir

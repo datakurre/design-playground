@@ -5,6 +5,7 @@ import preview from "../../.storybook/preview";
 import * as ButtonStories from "./Button.stories";
 import * as FieldStories from "./Field.stories";
 import * as DialogStories from "./Dialog.stories";
+import * as TokenPlaygroundStories from "./TokenPlayground.stories";
 
 // Apply the global decorators/parameters (token CSS, stage) so a composed
 // story renders exactly as it does in Storybook.
@@ -16,6 +17,7 @@ const suites = {
   Button: composeStories(ButtonStories),
   Field: composeStories(FieldStories),
   Dialog: composeStories(DialogStories),
+  TokenPlayground: composeStories(TokenPlaygroundStories),
 };
 
 for (const [group, stories] of Object.entries(suites)) {

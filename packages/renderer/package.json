@@ -11,6 +11,7 @@
     "build-storybook": "storybook build"
   },
   "dependencies": {
+    "@design-playground/tokens-build": "workspace:*",
     "@design-playground/ui-ir": "workspace:*",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"

@@ -103,6 +103,14 @@ browserless interaction test (Storybook portable stories on Vitest, part
 of `pnpm test`) and, where a browser is available, under the Storybook
 test-runner. Accessibility is checked in-browser by `addon-a11y`.
 
+The **Design Token Playground** (Foundations) makes the token's role
+across phases tangible: editing one DTCG value live updates the generated
+CSS variable, the list of component variants that bind it (read from
+`components/*.json`), and a re-themed screen — all from the same
+`flattenTokens`/`cssVarName`/`cssValue` helpers the CSS build uses. A
+toolbar theme control applies the same overrides across every story, so
+the ripple is visible system-wide.
+
 ### WHATWG HTML autofill
 Field `autocomplete` values use the
 [WHATWG HTML autofill](https://html.spec.whatwg.org/multipage/form-control-infrastructure.html#autofill)

@@ -139,8 +139,14 @@ pnpm storybook:build  # static build (or pnpm site for the full Pages output)
 ```
 
 - **Foundations** — the docs (Introduction, Architecture, Governance,
-  Schemas) and the live **Design Tokens** reference, rendered from the
-  same committed markdown and `variables.css` (no duplicated prose).
+  Schemas) rendered from the same committed markdown, plus the **Design
+  Token Playground**: pick a token, edit its value, and watch the change
+  propagate through every phase at once — DTCG source → generated CSS
+  variable → the component variants that bind it → a live, re-themed
+  screen — with a copy-pasteable DTCG round-trip. A **Tokens** toolbar
+  control re-themes every story globally to show the same ripple
+  system-wide. (The data comes from the real `flattenTokens` build helper
+  and `components/*.json`, not a hand-kept copy.)
 - **Components** — every primitive (Button, Field, Card, Dialog, Form,
   Nav, Text) with Controls for each variant. Stories render through the
   **same** `RenderNode` bindings and design-token CSS as the production
