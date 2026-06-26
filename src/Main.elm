@@ -3,12 +3,16 @@ module Main exposing (main)
 import Auth
 import Browser
 import Browser.Navigation as Nav
-import Html exposing (Html, a, button, div, h1, img, text)
+import Html exposing (Html, a, button, div, h1, h2, h3, h4, img, li, span, text, ul)
 import Html.Attributes exposing (href, src, style)
 import Html.Events exposing (onClick)
 import Http
 import Ports
 import Url exposing (Url)
+
+import GitLab.Projects exposing (Project)
+import GitLab.Files exposing (TreeItem)
+import GitLab.Commits exposing (CommitPayload, Action)
 
 
 
@@ -41,6 +45,10 @@ type alias Model =
     , token : Maybe String
     , user : Maybe Auth.User
     , error : Maybe String
+    , projects : Maybe (List Project)
+    , selectedProject : Maybe Project
+    , repositoryTree : Maybe (List TreeItem)
+    , commitStatus : Maybe String
     }
 
 
@@ -66,6 +74,10 @@ init flags url key =
             , token = finalToken
             , user = Nothing
             , error = Nothing
+            , projects = Nothing
+            , selectedProject = Nothing
+            , repositoryTree = Nothing
+            , commitStatus = Nothing
             }
 
         cmds =
@@ -97,6 +109,12 @@ type Msg
     | UrlChanged Url
     | GotProfile (Result Http.Error Auth.User)
     | Logout
+    | FetchProjects
+    | GotProjects (Result Http.Error (List Project))
+    | SelectProject Project
+    | GotTree (Result Http.Error (List TreeItem))
+    | WriteTestFile
+    | GotCommitResult (Result Http.Error ())
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -131,7 +149,11 @@ update msg model =
         GotProfile result ->
             case result of
                 Ok user ->
-                    ( { model | user = Just user, error = Nothing }, Cmd.none )
+                    ( { model | user = Just user, error = Nothing }
+                    , case model.token of
+                        Just t -> GitLab.Projects.listProjects t GotProjects
+                        Nothing -> Cmd.none
+                    )
 
                 Err _ ->
                     -- On error (e.g., token expired), clear the token
@@ -140,9 +162,73 @@ update msg model =
                     )
 
         Logout ->
-            ( { model | token = Nothing, user = Nothing, error = Nothing }
+            ( { model | token = Nothing, user = Nothing, error = Nothing, projects = Nothing, selectedProject = Nothing, repositoryTree = Nothing, commitStatus = Nothing }
             , Ports.clearToken ()
             )
+
+        FetchProjects ->
+            case model.token of
+                Just token ->
+                    ( model, GitLab.Projects.listProjects token GotProjects )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        GotProjects result ->
+            case result of
+                Ok projects ->
+                    ( { model | projects = Just projects }, Cmd.none )
+
+                Err _ ->
+                    ( { model | error = Just "Failed to fetch projects." }, Cmd.none )
+
+        SelectProject project ->
+            case model.token of
+                Just token ->
+                    ( { model | selectedProject = Just project, repositoryTree = Nothing, commitStatus = Nothing }
+                    , GitLab.Files.listTree token project.id project.defaultBranch GotTree
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        GotTree result ->
+            case result of
+                Ok tree ->
+                    ( { model | repositoryTree = Just tree }, Cmd.none )
+
+                Err _ ->
+                    ( { model | error = Just "Failed to fetch repository tree." }, Cmd.none )
+
+        WriteTestFile ->
+            case ( model.token, model.selectedProject ) of
+                ( Just token, Just project ) ->
+                    let
+                        payload =
+                            { branch = project.defaultBranch
+                            , commitMessage = "Test commit from Design Playground"
+                            , actions =
+                                [ { action = "create"
+                                  , filePath = "test-commit.txt"
+                                  , content = Just "This is a test commit."
+                                  }
+                                ]
+                            }
+                    in
+                    ( { model | commitStatus = Just "Writing..." }
+                    , GitLab.Commits.createCommit token project.id payload GotCommitResult
+                    )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        GotCommitResult result ->
+            case result of
+                Ok () ->
+                    ( { model | commitStatus = Just "Success!" }, Cmd.none )
+
+                Err _ ->
+                    ( { model | commitStatus = Just "Failed to commit. (Is test-commit.txt already created?)" }, Cmd.none )
 
 
 
@@ -171,6 +257,7 @@ view model =
                 , text " | "
                 , a [ href "/about" ] [ text "About" ]
                 ]
+            , viewProjects model
             ]
         ]
     }
@@ -222,4 +309,80 @@ viewAuth model =
                                 ]
                                 [ text "Logout" ]
                             ]
+        ]
+
+
+viewProjects : Model -> Html Msg
+viewProjects model =
+    case ( model.token, model.user ) of
+        ( Just _, Just _ ) ->
+            div [ style "margin-top" "2rem", style "border-top" "1px solid #ccc", style "padding-top" "1rem" ]
+                [ h2 [] [ text "GitLab Persistence Layer" ]
+                , case model.projects of
+                    Nothing ->
+                        button [ onClick FetchProjects ] [ text "Load My Projects" ]
+
+                    Just projects ->
+                        div [ style "display" "flex", style "gap" "2rem" ]
+                            [ div [ style "flex" "1" ]
+                                [ h3 [] [ text "Select a Repository" ]
+                                , ul [ style "list-style" "none", style "padding" "0" ]
+                                    (List.map
+                                        (\p ->
+                                            li
+                                                [ style "padding" "0.5rem"
+                                                , style "cursor" "pointer"
+                                                , style "border-bottom" "1px solid #eee"
+                                                , style "background"
+                                                    (if model.selectedProject == Just p then
+                                                        "#e0f7fa"
+                                                     else
+                                                        "transparent"
+                                                    )
+                                                , onClick (SelectProject p)
+                                                ]
+                                                [ text p.pathWithNamespace ]
+                                        )
+                                        projects
+                                    )
+                                ]
+                            , div [ style "flex" "2" ]
+                                [ case model.selectedProject of
+                                    Nothing ->
+                                        text "Select a project to view its repository."
+
+                                    Just project ->
+                                        viewProjectDetails model project
+                                ]
+                            ]
+                ]
+
+        _ ->
+            text ""
+
+
+viewProjectDetails : Model -> Project -> Html Msg
+viewProjectDetails model project =
+    div []
+        [ h3 [] [ text ("Repository: " ++ project.name) ]
+        , div [ style "margin-bottom" "1rem" ]
+            [ button [ onClick WriteTestFile ] [ text "Test Write Operation" ]
+            , case model.commitStatus of
+                Just status ->
+                    span [ style "margin-left" "1rem", style "font-weight" "bold", style "color" (if status == "Success!" then "green" else if status == "Writing..." then "blue" else "red") ] [ text status ]
+
+                Nothing ->
+                    text ""
+            ]
+        , h4 [] [ text ("Files in " ++ project.defaultBranch) ]
+        , case model.repositoryTree of
+            Nothing ->
+                text "Loading files..."
+
+            Just tree ->
+                if List.isEmpty tree then
+                    text "Repository is empty."
+                else
+                    ul [ style "font-family" "monospace", style "background" "#f4f4f4", style "padding" "1rem", style "border-radius" "4px" ]
+                        (List.map (\item -> li [] [ text (item.mode ++ " " ++ item.type_ ++ " " ++ item.path) ]) tree)
         ]
