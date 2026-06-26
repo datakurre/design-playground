@@ -16,6 +16,7 @@ import Ports
 import Themes exposing (Theme)
 import Tokens
 import Components exposing (Component)
+import Renderer
 import Url exposing (Url)
 
 
@@ -178,6 +179,10 @@ type Msg
     | UpdateNewComponentState String
     | AddComponentState
     | SaveComponent
+    | InitComponentLayout
+    | UpdateLayoutPadding String
+    | UpdateLayoutBackgroundColor String
+    | AddLayoutText String
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -608,7 +613,7 @@ update msg model =
             if name /= "" && not (List.any (\c -> c.name == name) currentComponents) then
                 let
                     newComponent =
-                        { name = name, description = Nothing, variants = [], slots = [], states = [] }
+                        { name = name, description = Nothing, variants = [], slots = [], states = [], layout = Nothing }
                 in
                 ( { model | components = Just (newComponent :: currentComponents), selectedComponentName = Just name, newComponentName = "" }, Cmd.none )
 
@@ -756,6 +761,83 @@ update msg model =
                             ( model, Cmd.none )
 
                 _ ->
+                    ( model, Cmd.none )
+
+        InitComponentLayout ->
+            case model.selectedComponentName of
+                Just name ->
+                    let
+                        currentComponents =
+                            model.components |> Maybe.withDefault []
+
+                        updateComponent c =
+                            if c.name == name then
+                                { c | layout = Just (Components.Stack { direction = "column", padding = Nothing, gap = Nothing, backgroundColor = Nothing } []) }
+                            else
+                                c
+                    in
+                    ( { model | components = Just (List.map updateComponent currentComponents) }, Cmd.none )
+                Nothing ->
+                    ( model, Cmd.none )
+
+        UpdateLayoutPadding p ->
+            case model.selectedComponentName of
+                Just name ->
+                    let
+                        currentComponents =
+                            model.components |> Maybe.withDefault []
+
+                        updateComponent c =
+                            if c.name == name then
+                                case c.layout of
+                                    Just (Components.Stack props children) ->
+                                        { c | layout = Just (Components.Stack { props | padding = if p == "" then Nothing else Just p } children) }
+                                    _ -> c
+                            else
+                                c
+                    in
+                    ( { model | components = Just (List.map updateComponent currentComponents) }, Cmd.none )
+                Nothing ->
+                    ( model, Cmd.none )
+
+        UpdateLayoutBackgroundColor bg ->
+            case model.selectedComponentName of
+                Just name ->
+                    let
+                        currentComponents =
+                            model.components |> Maybe.withDefault []
+
+                        updateComponent c =
+                            if c.name == name then
+                                case c.layout of
+                                    Just (Components.Stack props children) ->
+                                        { c | layout = Just (Components.Stack { props | backgroundColor = if bg == "" then Nothing else Just bg } children) }
+                                    _ -> c
+                            else
+                                c
+                    in
+                    ( { model | components = Just (List.map updateComponent currentComponents) }, Cmd.none )
+                Nothing ->
+                    ( model, Cmd.none )
+
+        AddLayoutText content ->
+            case model.selectedComponentName of
+                Just name ->
+                    let
+                        currentComponents =
+                            model.components |> Maybe.withDefault []
+
+                        updateComponent c =
+                            if c.name == name then
+                                case c.layout of
+                                    Just (Components.Stack props children) ->
+                                        { c | layout = Just (Components.Stack props (children ++ [Components.Element { isSlot = False, color = Nothing, typography = Nothing } content])) }
+                                    _ -> c
+                            else
+                                c
+                    in
+                    ( { model | components = Just (List.map updateComponent currentComponents) }, Cmd.none )
+                Nothing ->
                     ( model, Cmd.none )
 
 
@@ -1113,37 +1195,89 @@ viewComponentRegistry model =
                         Just activeName ->
                             let
                                 activeComponent = List.filter (\c -> c.name == activeName) components |> List.head
+
+                                baseTokens =
+                                    model.tokens |> Maybe.withDefault []
+
+                                displayTokens =
+                                    case model.activeThemeName of
+                                        Nothing ->
+                                            baseTokens
+
+                                        Just activeThemeNameStr ->
+                                            let
+                                                activeTheme =
+                                                    List.filter (\t -> t.name == activeThemeNameStr) model.themes |> List.head
+                                            in
+                                            case activeTheme of
+                                                Just theme ->
+                                                    Themes.applyTheme baseTokens theme
+
+                                                Nothing ->
+                                                    baseTokens
                             in
                             case activeComponent of
                                 Just comp ->
-                                    div [ style "background" "#fff", style "padding" "1rem", style "border" "1px solid #ccc", style "border-radius" "8px" ]
-                                        [ div [ style "display" "flex", style "justify-content" "space-between", style "margin-bottom" "1rem" ]
-                                            [ h4 [ style "margin" "0" ] [ text ("Component: " ++ comp.name) ]
-                                            , button [ onClick SaveComponent, style "padding" "0.5rem 1rem", style "background" "#28a745", style "color" "white", style "border" "none", style "border-radius" "4px", style "cursor" "pointer" ] [ text "Save Component" ]
-                                            ]
-                                        , div [ style "margin-bottom" "1rem" ]
-                                            [ h5 [] [ text "Variants" ]
-                                            , ul [] (List.map (\v -> li [] [ text v ]) comp.variants)
-                                            , div [ style "display" "flex", style "gap" "0.5rem" ]
-                                                [ Html.input [ value model.newComponentVariant, onInput UpdateNewComponentVariant, Html.Attributes.placeholder "New Variant", style "padding" "0.5rem" ] []
-                                                , button [ onClick AddComponentVariant, style "padding" "0.5rem" ] [ text "Add Variant" ]
+                                    div [ style "display" "flex", style "gap" "1rem" ]
+                                        [ div [ style "flex" "1", style "background" "#fff", style "padding" "1rem", style "border" "1px solid #ccc", style "border-radius" "8px" ]
+                                            [ div [ style "display" "flex", style "justify-content" "space-between", style "margin-bottom" "1rem" ]
+                                                [ h4 [ style "margin" "0" ] [ text ("Component: " ++ comp.name) ]
+                                                , button [ onClick SaveComponent, style "padding" "0.5rem 1rem", style "background" "#28a745", style "color" "white", style "border" "none", style "border-radius" "4px", style "cursor" "pointer" ] [ text "Save Component" ]
+                                                ]
+                                            , div [ style "margin-bottom" "1rem" ]
+                                                [ h5 [] [ text "Variants" ]
+                                                , ul [] (List.map (\v -> li [] [ text v ]) comp.variants)
+                                                , div [ style "display" "flex", style "gap" "0.5rem" ]
+                                                    [ Html.input [ value model.newComponentVariant, onInput UpdateNewComponentVariant, Html.Attributes.placeholder "New Variant", style "padding" "0.5rem" ] []
+                                                    , button [ onClick AddComponentVariant, style "padding" "0.5rem" ] [ text "Add Variant" ]
+                                                    ]
+                                                ]
+                                            , div [ style "margin-bottom" "1rem" ]
+                                                [ h5 [] [ text "States" ]
+                                                , ul [] (List.map (\s -> li [] [ text s ]) comp.states)
+                                                , div [ style "display" "flex", style "gap" "0.5rem" ]
+                                                    [ Html.input [ value model.newComponentState, onInput UpdateNewComponentState, Html.Attributes.placeholder "New State", style "padding" "0.5rem" ] []
+                                                    , button [ onClick AddComponentState, style "padding" "0.5rem" ] [ text "Add State" ]
+                                                    ]
+                                                ]
+                                            , div [ style "margin-bottom" "1rem" ]
+                                                [ h5 [] [ text "Slots" ]
+                                                , ul [] (List.map (\s -> li [] [ text s ]) comp.slots)
+                                                , div [ style "display" "flex", style "gap" "0.5rem" ]
+                                                    [ Html.input [ value model.newComponentSlot, onInput UpdateNewComponentSlot, Html.Attributes.placeholder "New Slot", style "padding" "0.5rem" ] []
+                                                    , button [ onClick AddComponentSlot, style "padding" "0.5rem" ] [ text "Add Slot" ]
+                                                    ]
+                                                ]
+                                            , div [ style "margin-bottom" "1rem", style "border-top" "1px solid #eee", style "padding-top" "1rem" ]
+                                                [ h5 [] [ text "Visual Layout Editor" ]
+                                                , case comp.layout of
+                                                    Nothing ->
+                                                        button [ onClick InitComponentLayout, style "padding" "0.5rem" ] [ text "Initialize Layout (Stack)" ]
+                                                    
+                                                    Just (Components.Stack props _) ->
+                                                        div []
+                                                            [ div [ style "display" "flex", style "flex-direction" "column", style "gap" "0.5rem", style "margin-bottom" "1rem" ]
+                                                                [ Html.input [ value (Maybe.withDefault "" props.padding), onInput UpdateLayoutPadding, Html.Attributes.placeholder "Padding (e.g. spacing.md)", style "padding" "0.5rem" ] []
+                                                                , Html.input [ value (Maybe.withDefault "" props.backgroundColor), onInput UpdateLayoutBackgroundColor, Html.Attributes.placeholder "Background (e.g. color.primary)", style "padding" "0.5rem" ] []
+                                                                ]
+                                                            , div [ style "display" "flex", style "gap" "0.5rem" ]
+                                                                [ button [ onClick (AddLayoutText "New Text Node"), style "padding" "0.5rem" ] [ text "Add Text Node" ]
+                                                                ]
+                                                            ]
+                                                    
+                                                    Just _ ->
+                                                        text "Advanced layout editing not supported yet."
                                                 ]
                                             ]
-                                        , div [ style "margin-bottom" "1rem" ]
-                                            [ h5 [] [ text "States" ]
-                                            , ul [] (List.map (\s -> li [] [ text s ]) comp.states)
-                                            , div [ style "display" "flex", style "gap" "0.5rem" ]
-                                                [ Html.input [ value model.newComponentState, onInput UpdateNewComponentState, Html.Attributes.placeholder "New State", style "padding" "0.5rem" ] []
-                                                , button [ onClick AddComponentState, style "padding" "0.5rem" ] [ text "Add State" ]
-                                                ]
-                                            ]
-                                        , div [ style "margin-bottom" "1rem" ]
-                                            [ h5 [] [ text "Slots" ]
-                                            , ul [] (List.map (\s -> li [] [ text s ]) comp.slots)
-                                            , div [ style "display" "flex", style "gap" "0.5rem" ]
-                                                [ Html.input [ value model.newComponentSlot, onInput UpdateNewComponentSlot, Html.Attributes.placeholder "New Slot", style "padding" "0.5rem" ] []
-                                                , button [ onClick AddComponentSlot, style "padding" "0.5rem" ] [ text "Add Slot" ]
-                                                ]
+                                        , div [ style "flex" "1", style "background" "#f9f9f9", style "padding" "1rem", style "border" "1px solid #ccc", style "border-radius" "8px", style "display" "flex", style "flex-direction" "column" ]
+                                            [ h4 [ style "margin" "0 0 1rem 0" ] [ text "Live Preview" ]
+                                            , case comp.layout of
+                                                Just l ->
+                                                    div [ style "border" "1px dashed #aaa", style "padding" "1rem", style "min-height" "100px", style "background" "#fff" ]
+                                                        [ Renderer.render displayTokens l ]
+                                                
+                                                Nothing ->
+                                                    text "No layout defined."
                                             ]
                                         ]
                                 Nothing ->

@@ -18,6 +18,7 @@ suite =
                         , variants = [ "primary", "secondary" ]
                         , slots = [ "icon" ]
                         , states = [ "hover", "disabled" ]
+                        , layout = Nothing
                         }
 
                     encoded =
@@ -47,6 +48,7 @@ suite =
                         , variants = [ "elevated" ]
                         , slots = [ "header", "content" ]
                         , states = []
+                        , layout = Nothing
                         }
 
                     decoded =
