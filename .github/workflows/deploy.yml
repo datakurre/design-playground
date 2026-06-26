@@ -43,7 +43,12 @@ jobs:
         run: devenv shell elm-review
 
       - name: Setup Pages
+        id: pages
         uses: actions/configure-pages@v5
+
+      - name: Update base href in index.html
+        run: |
+          sed -i 's|<head>|<head>\n    <base href="${{ steps.pages.outputs.base_path }}/">|' public/index.html
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
