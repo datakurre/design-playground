@@ -1,4 +1,4 @@
-module GitLab.Branches exposing (Branch, listBranches, branchDecoder)
+module GitLab.Branches exposing (Branch, branchDecoder, listBranches)
 
 import Http
 import Json.Decode as Decode exposing (Decoder)

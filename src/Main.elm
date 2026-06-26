@@ -3,16 +3,18 @@ module Main exposing (main)
 import Auth
 import Browser
 import Browser.Navigation as Nav
-import Html exposing (Html, a, button, div, h1, h2, h3, h4, img, li, span, text, ul)
-import Html.Attributes exposing (href, src, style)
-import Html.Events exposing (onClick)
-import Http
-import Ports
-import Url exposing (Url)
-
-import GitLab.Projects exposing (Project)
+import GitLab.Commits exposing (Action, CommitPayload)
 import GitLab.Files exposing (TreeItem)
-import GitLab.Commits exposing (CommitPayload, Action)
+import GitLab.Projects exposing (Project)
+import Html exposing (Html, a, button, div, h1, h2, h3, h4, img, li, span, text, ul)
+import Html.Attributes exposing (href, src, style, value)
+import Html.Events exposing (onClick, onInput)
+import Http
+import Json.Decode as Decode
+import Json.Encode as Encode
+import Ports
+import Tokens exposing (FlatToken)
+import Url exposing (Url)
 
 
 
@@ -49,6 +51,7 @@ type alias Model =
     , selectedProject : Maybe Project
     , repositoryTree : Maybe (List TreeItem)
     , commitStatus : Maybe String
+    , tokens : Maybe (List Tokens.FlatToken)
     }
 
 
@@ -78,6 +81,7 @@ init flags url key =
             , selectedProject = Nothing
             , repositoryTree = Nothing
             , commitStatus = Nothing
+            , tokens = Nothing
             }
 
         cmds =
@@ -115,6 +119,10 @@ type Msg
     | GotTree (Result Http.Error (List TreeItem))
     | WriteTestFile
     | GotCommitResult (Result Http.Error ())
+    | FetchTokens
+    | GotTokensFile (Result Http.Error String)
+    | UpdateToken Tokens.TokenPath String
+    | SaveTokens
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -151,8 +159,11 @@ update msg model =
                 Ok user ->
                     ( { model | user = Just user, error = Nothing }
                     , case model.token of
-                        Just t -> GitLab.Projects.listProjects t GotProjects
-                        Nothing -> Cmd.none
+                        Just t ->
+                            GitLab.Projects.listProjects t GotProjects
+
+                        Nothing ->
+                            Cmd.none
                     )
 
                 Err _ ->
@@ -162,7 +173,7 @@ update msg model =
                     )
 
         Logout ->
-            ( { model | token = Nothing, user = Nothing, error = Nothing, projects = Nothing, selectedProject = Nothing, repositoryTree = Nothing, commitStatus = Nothing }
+            ( { model | token = Nothing, user = Nothing, error = Nothing, projects = Nothing, selectedProject = Nothing, repositoryTree = Nothing, commitStatus = Nothing, tokens = Nothing }
             , Ports.clearToken ()
             )
 
@@ -185,8 +196,11 @@ update msg model =
         SelectProject project ->
             case model.token of
                 Just token ->
-                    ( { model | selectedProject = Just project, repositoryTree = Nothing, commitStatus = Nothing }
-                    , GitLab.Files.listTree token project.id project.defaultBranch GotTree
+                    ( { model | selectedProject = Just project, repositoryTree = Nothing, commitStatus = Nothing, tokens = Nothing }
+                    , Cmd.batch
+                        [ GitLab.Files.listTree token project.id project.defaultBranch GotTree
+                        , GitLab.Files.getFileRaw token project.id project.defaultBranch "tokens/tokens.json" GotTokensFile
+                        ]
                     )
 
                 Nothing ->
@@ -228,7 +242,69 @@ update msg model =
                     ( { model | commitStatus = Just "Success!" }, Cmd.none )
 
                 Err _ ->
-                    ( { model | commitStatus = Just "Failed to commit. (Is test-commit.txt already created?)" }, Cmd.none )
+                    ( { model | commitStatus = Just "Failed to commit." }, Cmd.none )
+
+        FetchTokens ->
+            case ( model.token, model.selectedProject ) of
+                ( Just token, Just project ) ->
+                    ( model
+                    , GitLab.Files.getFileRaw token project.id project.defaultBranch "tokens/tokens.json" GotTokensFile
+                    )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        GotTokensFile result ->
+            case result of
+                Ok content ->
+                    case Decode.decodeString Tokens.decoder content of
+                        Ok tokensList ->
+                            ( { model | tokens = Just tokensList, error = Nothing }, Cmd.none )
+
+                        Err err ->
+                            ( { model | error = Just ("Failed to parse tokens: " ++ Decode.errorToString err) }, Cmd.none )
+
+                Err _ ->
+                    ( { model | tokens = Just [], error = Just "No tokens found or failed to fetch. Start fresh!" }, Cmd.none )
+
+        UpdateToken path newValue ->
+            let
+                updateToken ( p, t ) =
+                    if p == path then
+                        ( p, { t | value = newValue } )
+
+                    else
+                        ( p, t )
+
+                newTokens =
+                    Maybe.map (List.map updateToken) model.tokens
+            in
+            ( { model | tokens = newTokens }, Cmd.none )
+
+        SaveTokens ->
+            case ( model.token, model.selectedProject, model.tokens ) of
+                ( Just token, Just project, Just tokensList ) ->
+                    let
+                        jsonString =
+                            Encode.encode 2 (Tokens.encoder tokensList)
+
+                        payload =
+                            { branch = project.defaultBranch
+                            , commitMessage = "Update design tokens"
+                            , actions =
+                                [ { action = "update" -- Using update for simplicity, could be create if it doesn't exist yet, wait, we might need a smart create/update or force commit
+                                  , filePath = "tokens/tokens.json"
+                                  , content = Just jsonString
+                                  }
+                                ]
+                            }
+                    in
+                    ( { model | commitStatus = Just "Saving tokens..." }
+                    , GitLab.Commits.createCommit token project.id payload GotCommitResult
+                    )
+
+                _ ->
+                    ( model, Cmd.none )
 
 
 
@@ -336,6 +412,7 @@ viewProjects model =
                                                 , style "background"
                                                     (if model.selectedProject == Just p then
                                                         "#e0f7fa"
+
                                                      else
                                                         "transparent"
                                                     )
@@ -369,12 +446,44 @@ viewProjectDetails model project =
             [ button [ onClick WriteTestFile ] [ text "Test Write Operation" ]
             , case model.commitStatus of
                 Just status ->
-                    span [ style "margin-left" "1rem", style "font-weight" "bold", style "color" (if status == "Success!" then "green" else if status == "Writing..." then "blue" else "red") ] [ text status ]
+                    span
+                        [ style "margin-left" "1rem"
+                        , style "font-weight" "bold"
+                        , style "color"
+                            (if status == "Success!" then
+                                "green"
+
+                             else if status == "Writing..." then
+                                "blue"
+
+                             else
+                                "red"
+                            )
+                        ]
+                        [ text status ]
 
                 Nothing ->
                     text ""
             ]
-        , h4 [] [ text ("Files in " ++ project.defaultBranch) ]
+        , h4 [] [ text "Design Tokens" ]
+        , case model.tokens of
+            Nothing ->
+                text "Loading tokens..."
+
+            Just tokensList ->
+                div [ style "background" "#fff", style "padding" "1rem", style "border" "1px solid #ccc", style "border-radius" "8px" ]
+                    [ div [ style "display" "flex", style "justify-content" "space-between", style "align-items" "center", style "margin-bottom" "1rem" ]
+                        [ h4 [ style "margin" "0" ] [ text "Token Studio" ]
+                        , button [ onClick SaveTokens, style "padding" "0.5rem 1rem", style "background" "#28a745", style "color" "white", style "border" "none", style "border-radius" "4px", style "cursor" "pointer" ] [ text "Save to GitLab" ]
+                        ]
+                    , if List.isEmpty tokensList then
+                        text "No tokens found."
+
+                      else
+                        ul [ style "list-style" "none", style "padding" "0" ]
+                            (List.map (\( path, token ) -> viewTokenEditor path token) tokensList)
+                    ]
+        , h4 [ style "margin-top" "2rem" ] [ text ("Files in " ++ project.defaultBranch) ]
         , case model.repositoryTree of
             Nothing ->
                 text "Loading files..."
@@ -382,7 +491,34 @@ viewProjectDetails model project =
             Just tree ->
                 if List.isEmpty tree then
                     text "Repository is empty."
+
                 else
                     ul [ style "font-family" "monospace", style "background" "#f4f4f4", style "padding" "1rem", style "border-radius" "4px" ]
                         (List.map (\item -> li [] [ text (item.mode ++ " " ++ item.type_ ++ " " ++ item.path) ]) tree)
+        ]
+
+
+viewTokenEditor : Tokens.TokenPath -> Tokens.DesignToken -> Html Msg
+viewTokenEditor path token =
+    let
+        pathString =
+            String.join "." path
+    in
+    li [ style "display" "flex", style "align-items" "center", style "padding" "0.5rem 0", style "border-bottom" "1px solid #eee" ]
+        [ div [ style "width" "200px", style "font-family" "monospace", style "font-weight" "bold" ] [ text pathString ]
+        , if token.type_ == "color" then
+            div [ style "width" "24px", style "height" "24px", style "background" token.value, style "margin-right" "1rem", style "border" "1px solid #ccc", style "border-radius" "4px" ] []
+
+          else
+            text ""
+        , Html.input
+            [ value token.value
+            , onInput (UpdateToken path)
+            , style "flex" "1"
+            , style "padding" "0.5rem"
+            , style "border" "1px solid #ccc"
+            , style "border-radius" "4px"
+            ]
+            []
+        , div [ style "width" "100px", style "margin-left" "1rem", style "color" "#666", style "font-size" "0.9em" ] [ text token.type_ ]
         ]
