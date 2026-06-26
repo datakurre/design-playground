@@ -64,6 +64,31 @@ decoder =
     Decode.map flattenAst astDecoder
 
 
+resolveAlias : List FlatToken -> String -> String
+resolveAlias tokens value =
+    if String.startsWith "{" value && String.endsWith "}" value then
+        let
+            aliasPathStr =
+                String.dropLeft 1 value |> String.dropRight 1
+
+            aliasPath =
+                String.split "." aliasPathStr
+
+            maybeToken =
+                List.filter (\( p, _ ) -> p == aliasPath) tokens |> List.head
+        in
+        case maybeToken of
+            Just ( _, token ) ->
+                -- Recursively resolve in case the alias points to another alias
+                resolveAlias tokens token.value
+
+            Nothing ->
+                value
+
+    else
+        value
+
+
 
 -- ENCODER
 

@@ -31,7 +31,6 @@ in
 
     echo ""
     echo "── template dev environment ─────────────────────────"
-    echo "  GHC:    $(ghc --version)"
     echo "  Elm:    $(elm --version)"
     echo "  Node:   $(node --version)"
     echo "  Vite:   $(vite --version)"

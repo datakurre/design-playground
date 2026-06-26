@@ -56,6 +56,9 @@ type alias Model =
     , themes : List Theme
     , activeThemeName : Maybe String
     , newThemeName : String
+    , newTokenPath : String
+    , newTokenType : String
+    , newTokenValue : String
     }
 
 
@@ -89,6 +92,9 @@ init flags url key =
             , themes = []
             , activeThemeName = Nothing
             , newThemeName = ""
+            , newTokenPath = ""
+            , newTokenType = "color"
+            , newTokenValue = ""
             }
 
         cmds =
@@ -135,6 +141,10 @@ type Msg
     | CreateTheme
     | UpdateToken Tokens.TokenPath String
     | SaveTokens
+    | UpdateNewTokenPath String
+    | UpdateNewTokenType String
+    | UpdateNewTokenValue String
+    | CreateToken
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -185,7 +195,7 @@ update msg model =
                     )
 
         Logout ->
-            ( { model | token = Nothing, user = Nothing, error = Nothing, projects = Nothing, selectedProject = Nothing, repositoryTree = Nothing, commitStatus = Nothing, tokens = Nothing, themes = [], activeThemeName = Nothing, newThemeName = "" }
+            ( { model | token = Nothing, user = Nothing, error = Nothing, projects = Nothing, selectedProject = Nothing, repositoryTree = Nothing, commitStatus = Nothing, tokens = Nothing, themes = [], activeThemeName = Nothing, newThemeName = "", newTokenPath = "", newTokenType = "color", newTokenValue = "" }
             , Ports.clearToken ()
             )
 
@@ -402,6 +412,44 @@ update msg model =
                                 theme
                     in
                     ( { model | themes = List.map updateTheme model.themes }, Cmd.none )
+
+        UpdateNewTokenPath path ->
+            ( { model | newTokenPath = path }, Cmd.none )
+
+        UpdateNewTokenType t ->
+            ( { model | newTokenType = t }, Cmd.none )
+
+        UpdateNewTokenValue value ->
+            ( { model | newTokenValue = value }, Cmd.none )
+
+        CreateToken ->
+            case model.tokens of
+                Just tokensList ->
+                    let
+                        path =
+                            String.split "." model.newTokenPath |> List.map String.trim |> List.filter (\s -> s /= "")
+
+                        newToken =
+                            { value = model.newTokenValue
+                            , type_ = model.newTokenType
+                            , description = Nothing
+                            }
+
+                        tokenExists =
+                            List.any (\( p, _ ) -> p == path) tokensList
+                    in
+                    if not (List.isEmpty path) && not tokenExists then
+                        let
+                            newTokens =
+                                ( path, newToken ) :: tokensList
+                        in
+                        ( { model | tokens = Just newTokens, newTokenPath = "", newTokenValue = "" }, Cmd.none )
+
+                    else
+                        ( model, Cmd.none )
+
+                Nothing ->
+                    ( model, Cmd.none )
 
         SaveTokens ->
             case ( model.token, model.selectedProject ) of
@@ -697,7 +745,35 @@ viewProjectDetails model project =
 
                       else
                         ul [ style "list-style" "none", style "padding" "0" ]
-                            (List.map (\( path, token ) -> viewTokenEditor path token activeThemeObj) displayTokens)
+                            (List.map (\( path, token ) -> viewTokenEditor path token activeThemeObj displayTokens) displayTokens)
+                    , div [ style "margin-top" "2rem", style "padding-top" "1rem", style "border-top" "1px solid #eee" ]
+                        [ h4 [ style "margin" "0 0 1rem 0" ] [ text "Create New Token" ]
+                        , div [ style "display" "flex", style "gap" "1rem", style "align-items" "center" ]
+                            [ Html.input
+                                [ value model.newTokenPath
+                                , onInput UpdateNewTokenPath
+                                , Html.Attributes.placeholder "Path (e.g. color.primary)"
+                                , style "padding" "0.5rem"
+                                ]
+                                []
+                            , Html.select
+                                [ onInput UpdateNewTokenType
+                                , style "padding" "0.5rem"
+                                ]
+                                [ Html.option [ value "color", Html.Attributes.selected (model.newTokenType == "color") ] [ text "Color" ]
+                                , Html.option [ value "dimension", Html.Attributes.selected (model.newTokenType == "dimension") ] [ text "Dimension" ]
+                                , Html.option [ value "typography", Html.Attributes.selected (model.newTokenType == "typography") ] [ text "Typography" ]
+                                ]
+                            , Html.input
+                                [ value model.newTokenValue
+                                , onInput UpdateNewTokenValue
+                                , Html.Attributes.placeholder "Value or {alias}"
+                                , style "padding" "0.5rem"
+                                ]
+                                []
+                            , button [ onClick CreateToken, style "padding" "0.5rem" ] [ text "Add Token" ]
+                            ]
+                        ]
                     ]
         , h4 [ style "margin-top" "2rem" ] [ text ("Files in " ++ project.defaultBranch) ]
         , case model.repositoryTree of
@@ -714,8 +790,8 @@ viewProjectDetails model project =
         ]
 
 
-viewTokenEditor : Tokens.TokenPath -> Tokens.DesignToken -> Maybe Theme -> Html Msg
-viewTokenEditor path token activeThemeObj =
+viewTokenEditor : Tokens.TokenPath -> Tokens.DesignToken -> Maybe Theme -> List Tokens.FlatToken -> Html Msg
+viewTokenEditor path token activeThemeObj displayTokens =
     let
         pathString =
             String.join "." path
@@ -727,11 +803,18 @@ viewTokenEditor path token activeThemeObj =
 
                 Nothing ->
                     False
+
+        resolvedColor =
+            if token.type_ == "color" then
+                Tokens.resolveAlias displayTokens token.value
+
+            else
+                ""
     in
     li [ style "display" "flex", style "align-items" "center", style "padding" "0.5rem 0", style "border-bottom" "1px solid #eee" ]
         [ div [ style "width" "200px", style "font-family" "monospace", style "font-weight" "bold" ] [ text pathString ]
         , if token.type_ == "color" then
-            div [ style "width" "24px", style "height" "24px", style "background" token.value, style "margin-right" "1rem", style "border" "1px solid #ccc", style "border-radius" "4px" ] []
+            div [ style "width" "24px", style "height" "24px", style "background" resolvedColor, style "margin-right" "1rem", style "border" "1px solid #ccc", style "border-radius" "4px" ] []
 
           else
             text ""

@@ -3,6 +3,7 @@ module ExampleTest exposing (..)
 import Expect
 import Test exposing (..)
 
+
 suite : Test
 suite =
     describe "Example Test Suite"
