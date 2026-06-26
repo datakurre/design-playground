@@ -1,4 +1,4 @@
-module GitLab.Branches exposing (Branch, branchDecoder, listBranches)
+module GitLab.Branches exposing (Branch, branchDecoder, createBranch, listBranches)
 
 import Http
 import Json.Decode as Decode exposing (Decoder)
@@ -25,6 +25,28 @@ listBranches token projectId toMsg =
         , url = "https://gitlab.com/api/v4/projects/" ++ String.fromInt projectId ++ "/repository/branches"
         , body = Http.emptyBody
         , expect = Http.expectJson toMsg (Decode.list branchDecoder)
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
+createBranch : String -> Int -> String -> String -> (Result Http.Error Branch -> msg) -> Cmd msg
+createBranch token projectId branchName ref toMsg =
+    let
+        url =
+            "https://gitlab.com/api/v4/projects/"
+                ++ String.fromInt projectId
+                ++ "/repository/branches?branch="
+                ++ branchName
+                ++ "&ref="
+                ++ ref
+    in
+    Http.request
+        { method = "POST"
+        , headers = [ Http.header "Authorization" ("Bearer " ++ token) ]
+        , url = url
+        , body = Http.emptyBody
+        , expect = Http.expectJson toMsg branchDecoder
         , timeout = Nothing
         , tracker = Nothing
         }

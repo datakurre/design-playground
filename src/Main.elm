@@ -6,7 +6,9 @@ import Browser.Navigation as Nav
 import GitLab.Commits
 import GitLab.Files exposing (TreeItem)
 import GitLab.Projects exposing (Project)
-import Html exposing (Html, a, button, div, h1, h2, h3, h4, h5, img, li, span, text, ul)
+import GitLab.Branches exposing (Branch)
+import GitLab.MergeRequests exposing (MergeRequest)
+import Html exposing (Html, a, button, div, h1, h2, h3, h4, h5, img, li, span, text, ul, select, option, input, strong)
 import Html.Attributes exposing (href, src, style, value)
 import Html.Events exposing (onClick, onInput)
 import Http
@@ -50,6 +52,7 @@ type Tab
     = TokenStudio
     | ComponentRegistry
     | ScreenComposer
+    | GitWorkflows
 
 
 type alias Model =
@@ -62,6 +65,7 @@ type alias Model =
     , selectedProject : Maybe Project
     , repositoryTree : Maybe (List TreeItem)
     , commitStatus : Maybe String
+    , originalTokens : Maybe (List Tokens.FlatToken)
     , tokens : Maybe (List Tokens.FlatToken)
     , themes : List Theme
     , activeThemeName : Maybe String
@@ -70,6 +74,7 @@ type alias Model =
     , newTokenType : String
     , newTokenValue : String
     , activeTab : Tab
+    , originalComponents : Maybe (List Component)
     , components : Maybe (List Component)
     , selectedComponentName : Maybe String
     , newComponentName : String
@@ -79,6 +84,13 @@ type alias Model =
     , screens : Maybe (List Screen)
     , selectedScreenName : Maybe String
     , newScreenName : String
+    , branches : Maybe (List Branch)
+    , currentBranch : Maybe String
+    , newBranchName : String
+    , commitMessage : String
+    , stagedActions : List GitLab.Commits.Action
+    , mrTitle : String
+    , mergeRequests : Maybe (List MergeRequest)
     }
 
 
@@ -108,6 +120,7 @@ init flags url key =
             , selectedProject = Nothing
             , repositoryTree = Nothing
             , commitStatus = Nothing
+            , originalTokens = Nothing
             , tokens = Nothing
             , themes = []
             , activeThemeName = Nothing
@@ -116,6 +129,7 @@ init flags url key =
             , newTokenType = "color"
             , newTokenValue = ""
             , activeTab = TokenStudio
+            , originalComponents = Nothing
             , components = Nothing
             , selectedComponentName = Nothing
             , newComponentName = ""
@@ -125,6 +139,13 @@ init flags url key =
             , screens = Nothing
             , selectedScreenName = Nothing
             , newScreenName = ""
+            , branches = Nothing
+            , currentBranch = Nothing
+            , newBranchName = ""
+            , commitMessage = ""
+            , stagedActions = []
+            , mrTitle = ""
+            , mergeRequests = Nothing
             }
 
         cmds =
@@ -199,6 +220,14 @@ type Msg
     | CreateScreen
     | SaveScreen
     | AddComponentToScreen String
+    | SwitchBranch String
+    | UpdateNewBranchName String
+    | CreateBranch
+    | GotCreateBranchResult (Result Http.Error Branch)
+    | UpdateMRTitle String
+    | CreateMergeRequest
+    | GotBranches (Result Http.Error (List Branch))
+    | GotMRResult (Result Http.Error MergeRequest)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -272,13 +301,14 @@ update msg model =
         SelectProject project ->
             case model.token of
                 Just token ->
-                    ( { model | selectedProject = Just project, repositoryTree = Nothing, commitStatus = Nothing, tokens = Nothing, themes = [], activeThemeName = Nothing, components = Nothing, selectedComponentName = Nothing, screens = Nothing, selectedScreenName = Nothing }
+                    ( { model | selectedProject = Just project, repositoryTree = Nothing, commitStatus = Nothing, originalTokens = Nothing, tokens = Nothing, themes = [], activeThemeName = Nothing, originalComponents = Nothing, components = Nothing, selectedComponentName = Nothing, screens = Nothing, selectedScreenName = Nothing, currentBranch = Just project.defaultBranch }
                     , Cmd.batch
                         [ GitLab.Files.listTree token project.id project.defaultBranch GotTree
                         , GitLab.Files.getFileRaw token project.id project.defaultBranch "tokens/tokens.json" GotTokensFile
                         , GitLab.Files.listTreeAtPath token project.id project.defaultBranch "themes" GotThemesTree
                         , GitLab.Files.listTreeAtPath token project.id project.defaultBranch "components" GotComponentsTree
                         , GitLab.Files.listTreeAtPath token project.id project.defaultBranch "layouts" GotScreensTree
+                        , GitLab.Branches.listBranches token project.id GotBranches
                         ]
                     )
 
@@ -338,13 +368,13 @@ update msg model =
                 Ok content ->
                     case Decode.decodeString Tokens.decoder content of
                         Ok tokensList ->
-                            ( { model | tokens = Just tokensList, error = Nothing }, Cmd.none )
+                            ( { model | tokens = Just tokensList, originalTokens = Just tokensList, error = Nothing }, Cmd.none )
 
                         Err err ->
                             ( { model | error = Just ("Failed to parse tokens: " ++ Decode.errorToString err) }, Cmd.none )
 
                 Err _ ->
-                    ( { model | tokens = Just [], error = Just "No tokens found or failed to fetch. Start fresh!" }, Cmd.none )
+                    ( { model | tokens = Just [], originalTokens = Just [], error = Just "No tokens found or failed to fetch. Start fresh!" }, Cmd.none )
 
         GotThemesTree result ->
             case result of
@@ -519,7 +549,7 @@ update msg model =
                                             Encode.encode 2 (Tokens.encoder tokensList)
 
                                         payload =
-                                            { branch = project.defaultBranch
+                                            { branch = Maybe.withDefault project.defaultBranch model.currentBranch
                                             , commitMessage = "Update base design tokens"
                                             , actions =
                                                 [ { action = "update"
@@ -548,7 +578,7 @@ update msg model =
                                             Encode.encode 2 (Tokens.encoder theme.overrides)
 
                                         payload =
-                                            { branch = project.defaultBranch
+                                            { branch = Maybe.withDefault project.defaultBranch model.currentBranch
                                             , commitMessage = "Update " ++ activeName ++ " theme"
                                             , actions =
                                                 [ { action = "update"
@@ -605,7 +635,7 @@ update msg model =
                                 newComponents =
                                     component :: List.filter (\c -> c.name /= component.name) currentComponents
                             in
-                            ( { model | components = Just newComponents }, Cmd.none )
+                            ( { model | components = Just newComponents, originalComponents = Just newComponents }, Cmd.none )
 
                         Err _ ->
                             ( model, Cmd.none )
@@ -760,7 +790,7 @@ update msg model =
                                     "create" -- This might fail if updating. Let's see if we can just use create. 
                                 
                                 payload =
-                                    { branch = project.defaultBranch
+                                    { branch = Maybe.withDefault project.defaultBranch model.currentBranch
                                     , commitMessage = "Save component " ++ comp.name
                                     , actions =
                                         [ { action = actionType
@@ -943,7 +973,7 @@ update msg model =
                                     Encode.encode 2 (Screens.encoder screen)
                                 
                                 payload =
-                                    { branch = project.defaultBranch
+                                    { branch = Maybe.withDefault project.defaultBranch model.currentBranch
                                     , commitMessage = "Save screen " ++ screen.name
                                     , actions =
                                         [ { action = "create"
@@ -963,28 +993,105 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
-        AddComponentToScreen compName ->
+        AddComponentToScreen componentName ->
             case model.selectedScreenName of
                 Just activeName ->
                     let
                         currentScreens =
                             model.screens |> Maybe.withDefault []
-                        
+
                         updateScreen s =
                             if s.name == activeName then
                                 case s.root of
                                     Container props children ->
                                         let
-                                            newNode = ComponentInstance { componentName = compName, variant = Nothing, state = Nothing, slots = [] }
+                                            newNode = ComponentInstance { componentName = componentName, variant = Nothing, state = Nothing, slots = [] }
                                         in
                                         { s | root = Container props (children ++ [newNode]) }
-                                    _ -> s
+                                    _ ->
+                                        s
                             else
                                 s
                     in
                     ( { model | screens = Just (List.map updateScreen currentScreens) }, Cmd.none )
+
                 Nothing ->
                     ( model, Cmd.none )
+
+        GotBranches result ->
+            case result of
+                Ok branchList ->
+                    ( { model | branches = Just branchList }, Cmd.none )
+                Err _ ->
+                    ( model, Cmd.none )
+
+        SwitchBranch branchName ->
+            case ( model.token, model.selectedProject ) of
+                ( Just token, Just project ) ->
+                    ( { model | currentBranch = Just branchName, repositoryTree = Nothing, originalComponents = Nothing, components = Nothing, originalTokens = Nothing, tokens = Nothing, themes = [], screens = Nothing, commitStatus = Just ("Switched to branch " ++ branchName) }
+                    , Cmd.batch
+                        [ GitLab.Files.listTree token project.id branchName GotTree
+                        , GitLab.Files.getFileRaw token project.id branchName "tokens/tokens.json" GotTokensFile
+                        , GitLab.Files.listTreeAtPath token project.id branchName "themes" GotThemesTree
+                        , GitLab.Files.listTreeAtPath token project.id branchName "components" GotComponentsTree
+                        , GitLab.Files.listTreeAtPath token project.id branchName "layouts" GotScreensTree
+                        ]
+                    )
+                _ ->
+                    ( model, Cmd.none )
+
+        UpdateNewBranchName name ->
+            ( { model | newBranchName = name }, Cmd.none )
+
+        CreateBranch ->
+            case ( model.token, model.selectedProject, model.currentBranch ) of
+                ( Just token, Just project, Just currentBranch ) ->
+                    let
+                        branchName = String.trim model.newBranchName
+                    in
+                    if branchName /= "" then
+                        ( { model | commitStatus = Just "Creating branch..." }
+                        , GitLab.Branches.createBranch token project.id branchName currentBranch GotCreateBranchResult
+                        )
+                    else
+                        ( model, Cmd.none )
+                _ ->
+                    ( model, Cmd.none )
+
+        GotCreateBranchResult result ->
+            case result of
+                Ok branch ->
+                    let
+                        currentBranches = model.branches |> Maybe.withDefault []
+                    in
+                    ( { model | branches = Just (branch :: currentBranches), commitStatus = Just "Branch created!", newBranchName = "", currentBranch = Just branch.name }, Cmd.none )
+                Err _ ->
+                    ( { model | commitStatus = Just "Failed to create branch." }, Cmd.none )
+
+        UpdateMRTitle title ->
+            ( { model | mrTitle = title }, Cmd.none )
+
+        CreateMergeRequest ->
+            case ( model.token, model.selectedProject, model.currentBranch ) of
+                ( Just token, Just project, Just currentBranch ) ->
+                    if currentBranch /= project.defaultBranch && model.mrTitle /= "" then
+                        ( { model | commitStatus = Just "Creating Merge Request..." }
+                        , GitLab.MergeRequests.createMergeRequest token project.id currentBranch project.defaultBranch model.mrTitle GotMRResult
+                        )
+                    else
+                        ( model, Cmd.none )
+                _ ->
+                    ( model, Cmd.none )
+
+        GotMRResult result ->
+            case result of
+                Ok mr ->
+                    let
+                        currentMRs = model.mergeRequests |> Maybe.withDefault []
+                    in
+                    ( { model | mergeRequests = Just (mr :: currentMRs), commitStatus = Just ("Merge Request Created: " ++ mr.webUrl), mrTitle = "" }, Cmd.none )
+                Err _ ->
+                    ( { model | commitStatus = Just "Failed to create Merge Request." }, Cmd.none )
 
 
 -- SUBSCRIPTIONS
@@ -1172,13 +1279,24 @@ viewProjectDetails model project =
                 , style "font-weight" (if model.activeTab == ScreenComposer then "bold" else "normal")
                 ]
                 [ text "Screen Composer" ]
+            , button
+                [ onClick (SwitchTab GitWorkflows)
+                , style "padding" "0.5rem 1rem"
+                , style "background" (if model.activeTab == GitWorkflows then "#e0f7fa" else "transparent")
+                , style "border" "none"
+                , style "cursor" "pointer"
+                , style "font-weight" (if model.activeTab == GitWorkflows then "bold" else "normal")
+                ]
+                [ text "Git Workflows" ]
             ]
         , if model.activeTab == TokenStudio then
             viewTokenStudio model
           else if model.activeTab == ComponentRegistry then
             viewComponentRegistry model
-          else
+          else if model.activeTab == ScreenComposer then
             viewScreenComposer model
+          else
+            viewGitWorkflows model
         , h4 [ style "margin-top" "2rem" ] [ text ("Files in " ++ project.defaultBranch) ]
         , case model.repositoryTree of
             Nothing ->
@@ -1598,3 +1716,121 @@ viewTokenEditor path token activeThemeObj displayTokens =
           else
             text ""
         ]
+
+
+viewGitWorkflows : Model -> Html Msg
+viewGitWorkflows model =
+    div [ style "padding" "2rem", style "background" "#fff", style "border-radius" "8px", style "box-shadow" "0 2px 4px rgba(0,0,0,0.1)" ]
+        [ h2 [] [ text "Git Workflows" ]
+        , case model.selectedProject of
+            Just project ->
+                div []
+                    [ h3 [] [ text "Branch Management" ]
+                    , div [ style "margin-bottom" "1rem" ]
+                        [ text "Current Branch: "
+                        , select [ onInput SwitchBranch, style "padding" "0.5rem", style "margin-left" "1rem" ]
+                            (List.map
+                                (\branch ->
+                                    option
+                                        [ value branch.name, Html.Attributes.selected (model.currentBranch == Just branch.name) ]
+                                        [ text branch.name ]
+                                )
+                                (model.branches |> Maybe.withDefault [])
+                            )
+                        ]
+                    , div [ style "margin-bottom" "2rem" ]
+                        [ input
+                            [ Html.Attributes.placeholder "New branch name (e.g. feature/new-colors)"
+                            , value model.newBranchName
+                            , onInput UpdateNewBranchName
+                            , style "padding" "0.5rem"
+                            ]
+                            []
+                        , button
+                            [ onClick CreateBranch
+                            , style "padding" "0.5rem 1rem"
+                            , style "margin-left" "1rem"
+                            , style "background" "#4caf50"
+                            , style "color" "white"
+                            , style "border" "none"
+                            , style "border-radius" "4px"
+                            , style "cursor" "pointer"
+                            ]
+                            [ text "Create Branch" ]
+                        ]
+                    , h3 [] [ text "Visual Diffs (Local Unsaved Changes)" ]
+                    , div [ style "margin-bottom" "2rem", style "padding" "1rem", style "background" "#f9f9f9", style "border" "1px solid #eee" ]
+                        [ case (model.originalTokens, model.tokens) of
+                            (Just origTokens, Just currentTokens) ->
+                                viewTokenDiffs origTokens currentTokens
+                            _ -> text ""
+                        , case (model.originalComponents, model.components) of
+                            (Just origComps, Just currentComps) ->
+                                if origComps /= currentComps then
+                                    div [ style "margin-top" "0.5rem" ] [ text "Components have been modified locally. Please Save in Component Registry to commit to the current branch." ]
+                                else
+                                    text ""
+                            _ -> text ""
+                        ]
+                    , h3 [] [ text "Merge Requests" ]
+                    , div [ style "margin-bottom" "2rem" ]
+                        [ input
+                            [ Html.Attributes.placeholder "Merge Request Title"
+                            , value model.mrTitle
+                            , onInput UpdateMRTitle
+                            , style "padding" "0.5rem"
+                            , style "width" "300px"
+                            ]
+                            []
+                        , button
+                            [ onClick CreateMergeRequest
+                            , style "padding" "0.5rem 1rem"
+                            , style "margin-left" "1rem"
+                            , style "background" "#2196f3"
+                            , style "color" "white"
+                            , style "border" "none"
+                            , style "border-radius" "4px"
+                            , style "cursor" "pointer"
+                            ]
+                            [ text "Open Merge Request" ]
+                        , case model.mergeRequests of
+                            Just mrs ->
+                                ul [ style "margin-top" "1rem" ]
+                                    (List.map (\mr -> li [] [ a [ href mr.webUrl, Html.Attributes.target "_blank" ] [ text (mr.title ++ " (" ++ mr.state ++ ")") ] ]) mrs)
+                            Nothing ->
+                                text ""
+                        ]
+                    ]
+            Nothing ->
+                text "Select a project first."
+        ]
+
+viewTokenDiffs : List Tokens.FlatToken -> List Tokens.FlatToken -> Html Msg
+viewTokenDiffs orig current =
+    let
+        getVal path tokens =
+            List.filter (\(p, _) -> p == path) tokens |> List.head |> Maybe.map (Tuple.second >> .value)
+        
+        diffs =
+            List.filterMap (\(path, tok) ->
+                let
+                    origVal = getVal path orig |> Maybe.withDefault "(new)"
+                in
+                if origVal /= tok.value then
+                    Just (path, origVal, tok.value)
+                else
+                    Nothing
+            ) current
+    in
+    if List.isEmpty diffs then
+        text ""
+    else
+        div []
+            (List.map (\(path, oldVal, newVal) ->
+                div [ style "margin-bottom" "0.5rem" ]
+                    [ strong [] [ text (String.join "." path ++ ": ") ]
+                    , span [ style "color" "red", style "text-decoration" "line-through" ] [ text oldVal ]
+                    , text " -> "
+                    , span [ style "color" "green" ] [ text newVal ]
+                    ]
+            ) diffs)
