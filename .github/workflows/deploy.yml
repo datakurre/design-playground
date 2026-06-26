@@ -36,6 +36,12 @@ jobs:
         run: |
           devenv shell elm make src/Main.elm --optimize --output=public/elm.js
 
+      - name: Run Tests (elm-test)
+        run: devenv shell elm-test
+
+      - name: Run Linter (elm-review)
+        run: devenv shell elm-review
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 

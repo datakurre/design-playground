@@ -3,7 +3,7 @@ module Main exposing (main)
 import Auth
 import Browser
 import Browser.Navigation as Nav
-import GitLab.Commits exposing (Action, CommitPayload)
+import GitLab.Commits
 import GitLab.Files exposing (TreeItem)
 import GitLab.Projects exposing (Project)
 import Html exposing (Html, a, button, div, h1, h2, h3, h4, img, li, span, text, ul)
@@ -14,7 +14,7 @@ import Json.Decode as Decode
 import Json.Encode as Encode
 import Ports
 import Themes exposing (Theme)
-import Tokens exposing (FlatToken)
+import Tokens
 import Url exposing (Url)
 
 
@@ -657,7 +657,16 @@ viewProjectDetails model project =
                             [ h4 [ style "margin" "0 0 0.5rem 0" ] [ text "Token Studio" ]
                             , div [ style "display" "flex", style "gap" "0.5rem", style "align-items" "center" ]
                                 [ Html.select
-                                    [ onInput (\val -> SelectTheme (if val == "" then Nothing else Just val))
+                                    [ onInput
+                                        (\val ->
+                                            SelectTheme
+                                                (if val == "" then
+                                                    Nothing
+
+                                                 else
+                                                    Just val
+                                                )
+                                        )
                                     , style "padding" "0.5rem"
                                     ]
                                     (Html.option [ value "" ] [ text "Base Theme" ]
@@ -674,7 +683,14 @@ viewProjectDetails model project =
                                 ]
                             ]
                         , button [ onClick SaveTokens, style "padding" "0.5rem 1rem", style "background" "#28a745", style "color" "white", style "border" "none", style "border-radius" "4px", style "cursor" "pointer" ]
-                            [ text (if model.activeThemeName == Nothing then "Save Base Tokens" else "Save Theme") ]
+                            [ text
+                                (if model.activeThemeName == Nothing then
+                                    "Save Base Tokens"
+
+                                 else
+                                    "Save Theme"
+                                )
+                            ]
                         ]
                     , if List.isEmpty displayTokens then
                         text "No tokens found."
@@ -703,7 +719,7 @@ viewTokenEditor path token activeThemeObj =
     let
         pathString =
             String.join "." path
-            
+
         isOverridden =
             case activeThemeObj of
                 Just theme ->
@@ -731,6 +747,7 @@ viewTokenEditor path token activeThemeObj =
         , div [ style "width" "100px", style "margin-left" "1rem", style "color" "#666", style "font-size" "0.9em" ] [ text token.type_ ]
         , if isOverridden then
             span [ style "margin-left" "1rem", style "background" "#ffeeba", style "padding" "0.2rem 0.5rem", style "border-radius" "4px", style "font-size" "0.8em" ] [ text "Overridden" ]
+
           else
             text ""
         ]
