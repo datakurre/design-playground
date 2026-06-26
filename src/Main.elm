@@ -8,7 +8,7 @@ import GitLab.Files exposing (TreeItem)
 import GitLab.Projects exposing (Project)
 import GitLab.Branches exposing (Branch)
 import GitLab.MergeRequests exposing (MergeRequest)
-import Html exposing (Html, a, button, div, h1, h2, h3, h4, h5, img, li, span, text, ul, select, option, input, strong)
+import Html exposing (Html, a, button, div, h1, h2, h3, h4, h5, img, li, span, text, ul, select, option, input, strong, p)
 import Html.Attributes exposing (href, src, style, value)
 import Html.Events exposing (onClick, onInput)
 import Http
@@ -22,6 +22,7 @@ import Dict
 import Screens exposing (Screen, ScreenNode(..))
 import Renderer
 import Url exposing (Url)
+import Export
 
 
 
@@ -53,6 +54,7 @@ type Tab
     | ComponentRegistry
     | ScreenComposer
     | GitWorkflows
+    | ExportPipeline
 
 
 type alias Model =
@@ -91,6 +93,7 @@ type alias Model =
     , stagedActions : List GitLab.Commits.Action
     , mrTitle : String
     , mergeRequests : Maybe (List MergeRequest)
+    , exportTargets : List String
     }
 
 
@@ -146,6 +149,7 @@ init flags url key =
             , stagedActions = []
             , mrTitle = ""
             , mergeRequests = Nothing
+            , exportTargets = [ "css", "tailwind" ]
             }
 
         cmds =
@@ -228,6 +232,8 @@ type Msg
     | CreateMergeRequest
     | GotBranches (Result Http.Error (List Branch))
     | GotMRResult (Result Http.Error MergeRequest)
+    | ToggleExportTarget String
+    | RunExportPipeline
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -301,7 +307,7 @@ update msg model =
         SelectProject project ->
             case model.token of
                 Just token ->
-                    ( { model | selectedProject = Just project, repositoryTree = Nothing, commitStatus = Nothing, originalTokens = Nothing, tokens = Nothing, themes = [], activeThemeName = Nothing, originalComponents = Nothing, components = Nothing, selectedComponentName = Nothing, screens = Nothing, selectedScreenName = Nothing, currentBranch = Just project.defaultBranch }
+                    ( { model | selectedProject = Just project, repositoryTree = Nothing, commitStatus = Nothing, originalTokens = Nothing, tokens = Nothing, themes = [], activeThemeName = Nothing, originalComponents = Nothing, components = Nothing, selectedComponentName = Nothing, screens = Nothing, selectedScreenName = Nothing, currentBranch = Just project.defaultBranch, exportTargets = [ "css", "tailwind" ] }
                     , Cmd.batch
                         [ GitLab.Files.listTree token project.id project.defaultBranch GotTree
                         , GitLab.Files.getFileRaw token project.id project.defaultBranch "tokens/tokens.json" GotTokensFile
@@ -1093,6 +1099,73 @@ update msg model =
                 Err _ ->
                     ( { model | commitStatus = Just "Failed to create Merge Request." }, Cmd.none )
 
+        ToggleExportTarget target ->
+            let
+                newTargets =
+                    if List.member target model.exportTargets then
+                        List.filter (\t -> t /= target) model.exportTargets
+                    else
+                        target :: model.exportTargets
+            in
+            ( { model | exportTargets = newTargets }, Cmd.none )
+
+        RunExportPipeline ->
+            case ( model.token, model.selectedProject, model.currentBranch ) of
+                ( Just token, Just project, Just currentBranch ) ->
+                    case model.tokens of
+                        Just tokensList ->
+                            let
+                                actions =
+                                    List.filterMap
+                                        (\target ->
+                                            if target == "css" then
+                                                Just
+                                                    { action = "update"
+                                                    , filePath = "exports/variables.css"
+                                                    , content = Just (Export.generateCssVariables tokensList)
+                                                    }
+                                            else if target == "tailwind" then
+                                                Just
+                                                    { action = "update"
+                                                    , filePath = "exports/tailwind.config.js"
+                                                    , content = Just (Export.generateTailwindConfig tokensList)
+                                                    }
+                                            else
+                                                Nothing
+                                        )
+                                        model.exportTargets
+                                
+                                finalActions =
+                                    List.map
+                                        (\act ->
+                                            let
+                                                exists =
+                                                    model.repositoryTree
+                                                        |> Maybe.withDefault []
+                                                        |> List.any (\item -> item.path == act.filePath)
+                                            in
+                                            { act | action = if exists then "update" else "create" }
+                                        )
+                                        actions
+
+                                payload =
+                                    { branch = currentBranch
+                                    , commitMessage = "Export Design Tokens pipeline"
+                                    , actions = finalActions
+                                    }
+                            in
+                            if List.isEmpty finalActions then
+                                ( model, Cmd.none )
+                            else
+                                ( { model | commitStatus = Just "Running export pipeline..." }
+                                , GitLab.Commits.createCommit token project.id payload GotCommitResult
+                                )
+                        
+                        Nothing ->
+                            ( { model | commitStatus = Just "Export failed: Tokens not loaded." }, Cmd.none )
+                _ ->
+                    ( { model | commitStatus = Just "Export failed: Project or branch not selected." }, Cmd.none )
+
 
 -- SUBSCRIPTIONS
 
@@ -1288,6 +1361,15 @@ viewProjectDetails model project =
                 , style "font-weight" (if model.activeTab == GitWorkflows then "bold" else "normal")
                 ]
                 [ text "Git Workflows" ]
+            , button
+                [ onClick (SwitchTab ExportPipeline)
+                , style "padding" "0.5rem 1rem"
+                , style "background" (if model.activeTab == ExportPipeline then "#e0f7fa" else "transparent")
+                , style "border" "none"
+                , style "cursor" "pointer"
+                , style "font-weight" (if model.activeTab == ExportPipeline then "bold" else "normal")
+                ]
+                [ text "Export Pipeline" ]
             ]
         , if model.activeTab == TokenStudio then
             viewTokenStudio model
@@ -1295,8 +1377,10 @@ viewProjectDetails model project =
             viewComponentRegistry model
           else if model.activeTab == ScreenComposer then
             viewScreenComposer model
-          else
+          else if model.activeTab == GitWorkflows then
             viewGitWorkflows model
+          else
+            viewExportPipeline model
         , h4 [ style "margin-top" "2rem" ] [ text ("Files in " ++ project.defaultBranch) ]
         , case model.repositoryTree of
             Nothing ->
@@ -1834,3 +1918,43 @@ viewTokenDiffs orig current =
                     , span [ style "color" "green" ] [ text newVal ]
                     ]
             ) diffs)
+
+viewExportPipeline : Model -> Html Msg
+viewExportPipeline model =
+    div [ style "padding" "2rem", style "background" "#fff", style "border-radius" "8px", style "box-shadow" "0 2px 4px rgba(0,0,0,0.1)" ]
+        [ h2 [] [ text "Export Pipeline" ]
+        , p [] [ text "Generate target formats from your tokens and commit them to the repository." ]
+        , div [ style "margin-top" "1rem", style "margin-bottom" "1rem" ]
+            [ div [ style "margin-bottom" "0.5rem" ]
+                [ input
+                    [ Html.Attributes.type_ "checkbox"
+                    , Html.Attributes.checked (List.member "css" model.exportTargets)
+                    , onClick (ToggleExportTarget "css")
+                    , style "margin-right" "0.5rem"
+                    ]
+                    []
+                , text "CSS Variables"
+                ]
+            , div [ style "margin-bottom" "0.5rem" ]
+                [ input
+                    [ Html.Attributes.type_ "checkbox"
+                    , Html.Attributes.checked (List.member "tailwind" model.exportTargets)
+                    , onClick (ToggleExportTarget "tailwind")
+                    , style "margin-right" "0.5rem"
+                    ]
+                    []
+                , text "Tailwind Config"
+                ]
+            ]
+        , button
+            [ onClick RunExportPipeline
+            , style "padding" "0.5rem 1rem"
+            , style "background" "#e91e63"
+            , style "color" "white"
+            , style "border" "none"
+            , style "border-radius" "4px"
+            , style "cursor" "pointer"
+            , style "font-size" "1em"
+            ]
+            [ text "Run Export Pipeline" ]
+        ]
