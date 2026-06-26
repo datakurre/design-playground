@@ -1,0 +1,12 @@
+{
+  "summary": "Defines generic devenv and nix skills for adding tools to the dev environment via devenv.nix, searching packages, and ad hoc execution using nix run.",
+  "createdAt": "2026-06-26T17:33:00Z",
+  "updatedAt": "2026-06-26T17:33:00Z",
+  "references": [
+    "https://devenv.sh",
+    "https://nix.dev"
+  ],
+  "artifactPaths": [
+    "artifacts/skill.md"
+  ]
+}

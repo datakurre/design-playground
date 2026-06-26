@@ -1,0 +1,16 @@
+.devcontainer/
+.devenv*
+.pre-commit-config.yaml
+devenv.local.nix
+devenv.local.yaml
+dist-newstyle/
+elm-app/elm-stuff/
+elm-app/.elm-tailwind/
+elm-app/node_modules/
+elm-app/packages
+elm-app/src/Data.elm
+elm-app/src/.data-nix-stamp
+.env
+node_modules
+node_modules/
+TODO*
