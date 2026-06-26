@@ -2,7 +2,6 @@ module ScreensTest exposing (suite)
 
 import Expect
 import Json.Decode as Decode
-import Json.Encode as Encode
 import Screens exposing (Screen, ScreenNode(..))
 import Test exposing (Test, describe, test)
 

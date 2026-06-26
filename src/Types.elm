@@ -3,20 +3,22 @@ module Types exposing (..)
 import Auth
 import Browser
 import Browser.Navigation as Nav
+import Components exposing (Component)
+import GitLab.Branches exposing (Branch)
 import GitLab.Commits
 import GitLab.Files exposing (TreeItem)
-import GitLab.Projects exposing (Project)
-import GitLab.Branches exposing (Branch)
 import GitLab.MergeRequests exposing (MergeRequest)
+import GitLab.Projects exposing (Project)
 import Http
+import Screens exposing (Screen)
 import Themes exposing (Theme)
 import Tokens
-import Components exposing (Component)
-import Screens exposing (Screen, ScreenNode)
 import Url exposing (Url)
+
 
 type alias Flags =
     Maybe String
+
 
 type Tab
     = TokenStudio
@@ -24,6 +26,7 @@ type Tab
     | ScreenComposer
     | GitWorkflows
     | ExportPipeline
+
 
 type alias Model =
     { key : Nav.Key
@@ -63,6 +66,7 @@ type alias Model =
     , mergeRequests : Maybe (List MergeRequest)
     , exportTargets : List String
     }
+
 
 type Msg
     = LinkClicked Browser.UrlRequest

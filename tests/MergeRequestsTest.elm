@@ -1,7 +1,7 @@
 module MergeRequestsTest exposing (suite)
 
 import Expect
-import GitLab.MergeRequests exposing (MergeRequest, decoder)
+import GitLab.MergeRequests exposing (decoder)
 import Json.Decode as Decode
 import Test exposing (Test, describe, test)
 

@@ -1,7 +1,6 @@
 module Export exposing (generateCssVariables, generateTailwindConfig)
 
-import Dict exposing (Dict)
-import Tokens exposing (FlatToken, resolveAlias)
+import Tokens exposing (FlatToken)
 
 
 generateCssVariables : List FlatToken -> String
@@ -37,10 +36,10 @@ generateTailwindConfig tokens =
                             -- remove "color" from path
                             keyPath =
                                 List.drop 1 path
-                            
+
                             key =
                                 String.join "-" keyPath
-                            
+
                             resolvedValue =
                                 Tokens.resolveAlias tokens token.value
                         in

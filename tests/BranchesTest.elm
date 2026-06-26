@@ -1,7 +1,7 @@
 module BranchesTest exposing (suite)
 
 import Expect
-import GitLab.Branches exposing (Branch, branchDecoder)
+import GitLab.Branches exposing (branchDecoder)
 import Json.Decode as Decode
 import Test exposing (Test, describe, test)
 
