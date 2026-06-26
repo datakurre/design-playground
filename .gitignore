@@ -14,3 +14,5 @@ elm-app/src/.data-nix-stamp
 node_modules
 node_modules/
 TODO*
+elm-stuff/
+public/elm.js

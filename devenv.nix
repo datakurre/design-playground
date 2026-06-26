@@ -10,6 +10,9 @@ in
     pkgs.git
     pkgs.nodejs_22
     pkgs.treefmt
+    pkgs.elmPackages.elm
+    pkgs.elmPackages.elm-format
+    pkgs.elmPackages.elm-test
     pkgs.elmPackages.elm-review
     pkgs.elmPackages.elm-json
     npmTools
