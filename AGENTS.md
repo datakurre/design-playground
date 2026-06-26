@@ -60,4 +60,4 @@ When tasked with implementing a `TODO-NN-xxxx.md` item:
 1. **Read** the TODO item and this `AGENTS.md` file.
 2. **Identify** the required Agent Roles (e.g., Codec Agent to fetch data, UI Agent to render it).
 3. **Execute** the **Red / Green TDD** cycle.
-4. **Verify** your work locally using `devenv shell -c "elm-test"` and `devenv shell -c "elm-review"`.
+4. **Verify** your work locally using `devenv shell -- elm-test` and `devenv shell -- elm-review`.
