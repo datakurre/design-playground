@@ -16,6 +16,8 @@ import Ports
 import Themes exposing (Theme)
 import Tokens
 import Components exposing (Component)
+import Dict
+import Screens exposing (Screen, ScreenNode(..))
 import Renderer
 import Url exposing (Url)
 
@@ -47,6 +49,7 @@ type alias Flags =
 type Tab
     = TokenStudio
     | ComponentRegistry
+    | ScreenComposer
 
 
 type alias Model =
@@ -73,6 +76,9 @@ type alias Model =
     , newComponentVariant : String
     , newComponentSlot : String
     , newComponentState : String
+    , screens : Maybe (List Screen)
+    , selectedScreenName : Maybe String
+    , newScreenName : String
     }
 
 
@@ -116,6 +122,9 @@ init flags url key =
             , newComponentVariant = ""
             , newComponentSlot = ""
             , newComponentState = ""
+            , screens = Nothing
+            , selectedScreenName = Nothing
+            , newScreenName = ""
             }
 
         cmds =
@@ -183,6 +192,13 @@ type Msg
     | UpdateLayoutPadding String
     | UpdateLayoutBackgroundColor String
     | AddLayoutText String
+    | GotScreensTree (Result Http.Error (List TreeItem))
+    | GotScreenFile String (Result Http.Error String)
+    | SelectScreen (Maybe String)
+    | UpdateNewScreenName String
+    | CreateScreen
+    | SaveScreen
+    | AddComponentToScreen String
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -233,7 +249,7 @@ update msg model =
                     )
 
         Logout ->
-            ( { model | token = Nothing, user = Nothing, error = Nothing, projects = Nothing, selectedProject = Nothing, repositoryTree = Nothing, commitStatus = Nothing, tokens = Nothing, themes = [], activeThemeName = Nothing, newThemeName = "", newTokenPath = "", newTokenType = "color", newTokenValue = "", activeTab = TokenStudio, components = Nothing, selectedComponentName = Nothing, newComponentName = "", newComponentVariant = "", newComponentSlot = "", newComponentState = "" }
+            ( { model | token = Nothing, user = Nothing, error = Nothing, projects = Nothing, selectedProject = Nothing, repositoryTree = Nothing, commitStatus = Nothing, tokens = Nothing, themes = [], activeThemeName = Nothing, newThemeName = "", newTokenPath = "", newTokenType = "color", newTokenValue = "", activeTab = TokenStudio, components = Nothing, selectedComponentName = Nothing, newComponentName = "", newComponentVariant = "", newComponentSlot = "", newComponentState = "", screens = Nothing, selectedScreenName = Nothing, newScreenName = "" }
             , Ports.clearToken ()
             )
 
@@ -256,12 +272,13 @@ update msg model =
         SelectProject project ->
             case model.token of
                 Just token ->
-                    ( { model | selectedProject = Just project, repositoryTree = Nothing, commitStatus = Nothing, tokens = Nothing, themes = [], activeThemeName = Nothing, components = Nothing, selectedComponentName = Nothing }
+                    ( { model | selectedProject = Just project, repositoryTree = Nothing, commitStatus = Nothing, tokens = Nothing, themes = [], activeThemeName = Nothing, components = Nothing, selectedComponentName = Nothing, screens = Nothing, selectedScreenName = Nothing }
                     , Cmd.batch
                         [ GitLab.Files.listTree token project.id project.defaultBranch GotTree
                         , GitLab.Files.getFileRaw token project.id project.defaultBranch "tokens/tokens.json" GotTokensFile
                         , GitLab.Files.listTreeAtPath token project.id project.defaultBranch "themes" GotThemesTree
                         , GitLab.Files.listTreeAtPath token project.id project.defaultBranch "components" GotComponentsTree
+                        , GitLab.Files.listTreeAtPath token project.id project.defaultBranch "layouts" GotScreensTree
                         ]
                     )
 
@@ -702,7 +719,7 @@ update msg model =
                                 else
                                     c
                         in
-                        ( { model | components = Just (List.map updateComponent currentComponents), newComponentState = "" }, Cmd.none )
+                        ( { model | components = Just (List.map updateComponent currentComponents), newComponentState = "", screens = Nothing, selectedScreenName = Nothing, newScreenName = "" }, Cmd.none )
 
                     Nothing ->
                         ( model, Cmd.none )
@@ -840,6 +857,134 @@ update msg model =
                 Nothing ->
                     ( model, Cmd.none )
 
+
+
+
+        GotScreensTree result ->
+            case result of
+                Ok tree ->
+                    let
+                        jsonFiles =
+                            List.filter (\item -> String.endsWith ".json" item.name) tree
+
+                        cmds =
+                            case ( model.token, model.selectedProject ) of
+                                ( Just token, Just project ) ->
+                                    List.map
+                                        (\file -> GitLab.Files.getFileRaw token project.id project.defaultBranch file.path (GotScreenFile file.name))
+                                        jsonFiles
+
+                                _ ->
+                                    []
+                    in
+                    ( { model | screens = Just [] }, Cmd.batch cmds )
+
+                Err _ ->
+                    ( { model | screens = Just [] }, Cmd.none )
+
+        GotScreenFile filename result ->
+            case result of
+                Ok content ->
+                    case Decode.decodeString Screens.decoder content of
+                        Ok screen ->
+                            let
+                                currentScreens =
+                                    model.screens |> Maybe.withDefault []
+
+                                newScreens =
+                                    screen :: List.filter (\s -> s.name /= screen.name) currentScreens
+                            in
+                            ( { model | screens = Just newScreens }, Cmd.none )
+
+                        Err _ ->
+                            ( model, Cmd.none )
+
+                Err _ ->
+                    ( model, Cmd.none )
+
+        SelectScreen name ->
+            ( { model | selectedScreenName = name }, Cmd.none )
+
+        UpdateNewScreenName name ->
+            ( { model | newScreenName = name }, Cmd.none )
+
+        CreateScreen ->
+            let
+                name =
+                    String.trim model.newScreenName
+
+                currentScreens =
+                    model.screens |> Maybe.withDefault []
+            in
+            if name /= "" && not (List.any (\s -> s.name == name) currentScreens) then
+                let
+                    newScreen =
+                        { name = name, path = "/" ++ (String.replace " " "-" (String.toLower name)), root = Container { direction = "column", padding = Just "2rem", gap = Just "1rem" } [] }
+                in
+                ( { model | screens = Just (newScreen :: currentScreens), selectedScreenName = Just name, newScreenName = "" }, Cmd.none )
+
+            else
+                ( model, Cmd.none )
+
+        SaveScreen ->
+            case ( model.token, model.selectedProject, model.selectedScreenName ) of
+                ( Just token, Just project, Just activeName ) ->
+                    let
+                        currentScreens =
+                            model.screens |> Maybe.withDefault []
+
+                        activeScreen =
+                            List.filter (\s -> s.name == activeName) currentScreens |> List.head
+                    in
+                    case activeScreen of
+                        Just screen ->
+                            let
+                                jsonString =
+                                    Encode.encode 2 (Screens.encoder screen)
+                                
+                                payload =
+                                    { branch = project.defaultBranch
+                                    , commitMessage = "Save screen " ++ screen.name
+                                    , actions =
+                                        [ { action = "create"
+                                          , filePath = "layouts/" ++ screen.name ++ ".json"
+                                          , content = Just jsonString
+                                          }
+                                        ]
+                                    }
+                            in
+                            ( { model | commitStatus = Just ("Saving screen " ++ screen.name ++ "...") }
+                            , GitLab.Commits.createCommit token project.id payload GotCommitResult
+                            )
+
+                        Nothing ->
+                            ( model, Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        AddComponentToScreen compName ->
+            case model.selectedScreenName of
+                Just activeName ->
+                    let
+                        currentScreens =
+                            model.screens |> Maybe.withDefault []
+                        
+                        updateScreen s =
+                            if s.name == activeName then
+                                case s.root of
+                                    Container props children ->
+                                        let
+                                            newNode = ComponentInstance { componentName = compName, variant = Nothing, state = Nothing, slots = [] }
+                                        in
+                                        { s | root = Container props (children ++ [newNode]) }
+                                    _ -> s
+                            else
+                                s
+                    in
+                    ( { model | screens = Just (List.map updateScreen currentScreens) }, Cmd.none )
+                Nothing ->
+                    ( model, Cmd.none )
 
 
 -- SUBSCRIPTIONS
@@ -1018,11 +1163,22 @@ viewProjectDetails model project =
                 , style "font-weight" (if model.activeTab == ComponentRegistry then "bold" else "normal")
                 ]
                 [ text "Component Registry" ]
+            , button
+                [ onClick (SwitchTab ScreenComposer)
+                , style "padding" "0.5rem 1rem"
+                , style "background" (if model.activeTab == ScreenComposer then "#e0f7fa" else "transparent")
+                , style "border" "none"
+                , style "cursor" "pointer"
+                , style "font-weight" (if model.activeTab == ScreenComposer then "bold" else "normal")
+                ]
+                [ text "Screen Composer" ]
             ]
         , if model.activeTab == TokenStudio then
             viewTokenStudio model
-          else
+          else if model.activeTab == ComponentRegistry then
             viewComponentRegistry model
+          else
+            viewScreenComposer model
         , h4 [ style "margin-top" "2rem" ] [ text ("Files in " ++ project.defaultBranch) ]
         , case model.repositoryTree of
             Nothing ->
@@ -1284,6 +1440,118 @@ viewComponentRegistry model =
                                     text "Component not found."
                     ]
                 ]
+
+
+
+viewScreenComposer : Model -> Html Msg
+viewScreenComposer model =
+    case model.screens of
+        Nothing ->
+            text "Loading screens..."
+        
+        Just screens ->
+            div [ style "display" "flex", style "gap" "2rem" ]
+                [ div [ style "flex" "1" ]
+                    [ h4 [] [ text "Screens / Layouts" ]
+                    , ul [ style "list-style" "none", style "padding" "0" ]
+                        (List.map
+                            (\s ->
+                                li
+                                    [ style "padding" "0.5rem"
+                                    , style "cursor" "pointer"
+                                    , style "border-bottom" "1px solid #eee"
+                                    , style "background"
+                                        (if model.selectedScreenName == Just s.name then
+                                            "#e0f7fa"
+
+                                         else
+                                            "transparent"
+                                        )
+                                    , onClick (SelectScreen (Just s.name))
+                                    ]
+                                    [ text s.name ]
+                            )
+                            screens
+                        )
+                    , div [ style "margin-top" "1rem", style "display" "flex", style "gap" "0.5rem" ]
+                        [ Html.input
+                            [ value model.newScreenName
+                            , onInput UpdateNewScreenName
+                            , Html.Attributes.placeholder "New Screen Name"
+                            , style "padding" "0.5rem"
+                            , style "width" "150px"
+                            ]
+                            []
+                        , button [ onClick CreateScreen, style "padding" "0.5rem" ] [ text "Create" ]
+                        ]
+                    ]
+                , div [ style "flex" "2" ]
+                    [ case model.selectedScreenName of
+                        Nothing ->
+                            text "Select a screen to edit."
+                        
+                        Just activeName ->
+                            let
+                                activeScreen = List.filter (\s -> s.name == activeName) screens |> List.head
+
+                                baseTokens =
+                                    model.tokens |> Maybe.withDefault []
+
+                                displayTokens =
+                                    case model.activeThemeName of
+                                        Nothing ->
+                                            baseTokens
+
+                                        Just activeThemeNameStr ->
+                                            let
+                                                activeTheme =
+                                                    List.filter (\t -> t.name == activeThemeNameStr) model.themes |> List.head
+                                            in
+                                            case activeTheme of
+                                                Just theme ->
+                                                    Themes.applyTheme baseTokens theme
+
+                                                Nothing ->
+                                                    baseTokens
+                                                    
+                                componentsDict =
+                                    model.components
+                                        |> Maybe.withDefault []
+                                        |> List.map (\c -> (c.name, c))
+                                        |> Dict.fromList
+                            in
+                            case activeScreen of
+                                Just screen ->
+                                    div [ style "display" "flex", style "gap" "1rem", style "flex-direction" "column" ]
+                                        [ div [ style "background" "#fff", style "padding" "1rem", style "border" "1px solid #ccc", style "border-radius" "8px" ]
+                                            [ div [ style "display" "flex", style "justify-content" "space-between", style "margin-bottom" "1rem" ]
+                                                [ h4 [ style "margin" "0" ] [ text ("Screen: " ++ screen.name ++ " (" ++ screen.path ++ ")") ]
+                                                , button [ onClick SaveScreen, style "padding" "0.5rem 1rem", style "background" "#28a745", style "color" "white", style "border" "none", style "border-radius" "4px", style "cursor" "pointer" ] [ text "Save Screen" ]
+                                                ]
+                                            , div [ style "margin-bottom" "1rem", style "border-top" "1px solid #eee", style "padding-top" "1rem" ]
+                                                [ h5 [] [ text "Insert Component into Root" ]
+                                                , ul [ style "list-style" "none", style "padding" "0", style "display" "flex", style "flex-wrap" "wrap", style "gap" "0.5rem" ]
+                                                    (List.map
+                                                        (\c ->
+                                                            li []
+                                                                [ button [ onClick (AddComponentToScreen c.name), style "padding" "0.5rem" ] [ text ("+ " ++ c.name) ]
+                                                                ]
+                                                        )
+                                                        (model.components |> Maybe.withDefault [])
+                                                    )
+                                                ]
+                                            ]
+                                        , div [ style "background" "#f9f9f9", style "padding" "1rem", style "border" "1px solid #ccc", style "border-radius" "8px" ]
+                                            [ h4 [ style "margin" "0 0 1rem 0" ] [ text "Live Screen Preview" ]
+                                            , div [ style "border" "1px dashed #aaa", style "padding" "1rem", style "min-height" "200px", style "background" "#fff" ]
+                                                [ Renderer.renderScreenNode componentsDict displayTokens screen.root ]
+                                            ]
+                                        ]
+                                Nothing ->
+                                    text "Screen not found."
+                    ]
+                ]
+
 
 
 viewTokenEditor : Tokens.TokenPath -> Tokens.DesignToken -> Maybe Theme -> List Tokens.FlatToken -> Html Msg
