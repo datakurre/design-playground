@@ -12,9 +12,26 @@
     <div id="app"></div>
     <script src="/elm.js"></script>
     <script>
+        // Retrieve token from LocalStorage
+        var storedToken = localStorage.getItem('gitlab_token');
+
         var app = Elm.Main.init({
-            node: document.getElementById('app')
+            node: document.getElementById('app'),
+            flags: storedToken
         });
+
+        // Listen for token updates from Elm
+        if (app.ports && app.ports.cacheToken) {
+            app.ports.cacheToken.subscribe(function(token) {
+                localStorage.setItem('gitlab_token', token);
+            });
+        }
+
+        if (app.ports && app.ports.clearToken) {
+            app.ports.clearToken.subscribe(function() {
+                localStorage.removeItem('gitlab_token');
+            });
+        }
     </script>
 </body>
 </html>
