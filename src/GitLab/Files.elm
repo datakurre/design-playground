@@ -1,4 +1,4 @@
-module GitLab.Files exposing (TreeItem, getFileRaw, listTree, treeItemDecoder)
+module GitLab.Files exposing (TreeItem, getFileRaw, listTree, listTreeAtPath, treeItemDecoder)
 
 import Http
 import Json.Decode as Decode exposing (Decoder)
@@ -30,6 +30,19 @@ listTree token projectId ref toMsg =
         { method = "GET"
         , headers = [ Http.header "Authorization" ("Bearer " ++ token) ]
         , url = "https://gitlab.com/api/v4/projects/" ++ String.fromInt projectId ++ "/repository/tree?ref=" ++ ref
+        , body = Http.emptyBody
+        , expect = Http.expectJson toMsg (Decode.list treeItemDecoder)
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
+listTreeAtPath : String -> Int -> String -> String -> (Result Http.Error (List TreeItem) -> msg) -> Cmd msg
+listTreeAtPath token projectId ref path toMsg =
+    Http.request
+        { method = "GET"
+        , headers = [ Http.header "Authorization" ("Bearer " ++ token) ]
+        , url = "https://gitlab.com/api/v4/projects/" ++ String.fromInt projectId ++ "/repository/tree?ref=" ++ ref ++ "&path=" ++ Url.percentEncode path
         , body = Http.emptyBody
         , expect = Http.expectJson toMsg (Decode.list treeItemDecoder)
         , timeout = Nothing
