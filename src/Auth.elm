@@ -34,7 +34,7 @@ loginUrl challenge =
         ++ Url.percentEncode redirectUri
         ++ "&response_type=code"
         ++ "&state=design-playground"
-        ++ "&scope=read_user+api"
+        ++ "&scope=read_user%20api"
         ++ "&code_challenge="
         ++ challenge
         ++ "&code_challenge_method=S256"
