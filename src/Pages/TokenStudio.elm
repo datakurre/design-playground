@@ -68,14 +68,21 @@ viewTokenStudio model =
                             , button [ onClick CreateTheme, style "padding" "0.5rem" ] [ text "Create Theme" ]
                             ]
                         ]
-                    , button [ onClick SaveTokens, style "padding" "0.5rem 1rem", style "background" "#28a745", style "color" "white", style "border" "none", style "border-radius" "4px", style "cursor" "pointer" ]
-                        [ text
-                            (if model.activeThemeName == Nothing then
-                                "Save Base Tokens"
-
-                             else
-                                "Save Theme"
-                            )
+                    , div [ style "display" "flex", style "gap" "0.5rem" ]
+                        [ button [ onClick SaveTokens, style "padding" "0.5rem 1rem", style "background" "#28a745", style "color" "white", style "border" "none", style "border-radius" "4px", style "cursor" "pointer" ]
+                            [ text
+                                (if model.activeThemeName == Nothing then
+                                    "Save Base Tokens"
+    
+                                 else
+                                    "Save Theme"
+                                )
+                            ]
+                        , if model.activeThemeName /= Nothing then
+                            button [ onClick (DeleteTheme (Maybe.withDefault "" model.activeThemeName)), style "padding" "0.5rem 1rem", style "background" "#dc3545", style "color" "white", style "border" "none", style "border-radius" "4px", style "cursor" "pointer" ]
+                                [ text "Delete Theme" ]
+                          else
+                            text ""
                         ]
                     ]
                 , if List.isEmpty displayTokens then
@@ -84,34 +91,38 @@ viewTokenStudio model =
                   else
                     ul [ style "list-style" "none", style "padding" "0" ]
                         (List.map (\( path, token ) -> viewTokenEditor path token activeThemeObj displayTokens) displayTokens)
-                , div [ style "margin-top" "2rem", style "padding-top" "1rem", style "border-top" "1px solid #eee" ]
-                    [ h4 [ style "margin" "0 0 1rem 0" ] [ text "Create New Token" ]
-                    , div [ style "display" "flex", style "gap" "1rem", style "align-items" "center" ]
-                        [ Html.input
-                            [ value model.newTokenPath
-                            , onInput UpdateNewTokenPath
-                            , Html.Attributes.placeholder "Path (e.g. color.primary)"
-                            , style "padding" "0.5rem"
+                , if model.activeThemeName == Nothing then
+                    div [ style "margin-top" "2rem", style "padding-top" "1rem", style "border-top" "1px solid #eee" ]
+                        [ h4 [ style "margin" "0 0 1rem 0" ] [ text "Create New Token" ]
+                        , div [ style "display" "flex", style "gap" "1rem", style "align-items" "center" ]
+                            [ Html.input
+                                [ value model.newTokenPath
+                                , onInput UpdateNewTokenPath
+                                , Html.Attributes.placeholder "Path (e.g. color.primary)"
+                                , style "padding" "0.5rem"
+                                ]
+                                []
+                            , Html.select
+                                [ onInput UpdateNewTokenType
+                                , style "padding" "0.5rem"
+                                ]
+                                [ Html.option [ value "color", Html.Attributes.selected (model.newTokenType == "color") ] [ text "Color" ]
+                                , Html.option [ value "dimension", Html.Attributes.selected (model.newTokenType == "dimension") ] [ text "Dimension" ]
+                                , Html.option [ value "typography", Html.Attributes.selected (model.newTokenType == "typography") ] [ text "Typography" ]
+                                ]
+                            , Html.input
+                                [ value model.newTokenValue
+                                , onInput UpdateNewTokenValue
+                                , Html.Attributes.placeholder "Value or {alias}"
+                                , style "padding" "0.5rem"
+                                ]
+                                []
+                            , button [ onClick CreateToken, style "padding" "0.5rem" ] [ text "Add Token" ]
                             ]
-                            []
-                        , Html.select
-                            [ onInput UpdateNewTokenType
-                            , style "padding" "0.5rem"
-                            ]
-                            [ Html.option [ value "color", Html.Attributes.selected (model.newTokenType == "color") ] [ text "Color" ]
-                            , Html.option [ value "dimension", Html.Attributes.selected (model.newTokenType == "dimension") ] [ text "Dimension" ]
-                            , Html.option [ value "typography", Html.Attributes.selected (model.newTokenType == "typography") ] [ text "Typography" ]
-                            ]
-                        , Html.input
-                            [ value model.newTokenValue
-                            , onInput UpdateNewTokenValue
-                            , Html.Attributes.placeholder "Value or {alias}"
-                            , style "padding" "0.5rem"
-                            ]
-                            []
-                        , button [ onClick CreateToken, style "padding" "0.5rem" ] [ text "Add Token" ]
                         ]
-                    ]
+                  else
+                    div [ style "margin-top" "2rem", style "padding-top" "1rem", style "border-top" "1px solid #eee", style "color" "#666", style "font-style" "italic" ]
+                        [ text "To define a new token, switch to the Base Theme first." ]
                 ]
 
 
@@ -158,4 +169,5 @@ viewTokenEditor path token activeThemeObj displayTokens =
 
           else
             text ""
+        , button [ onClick (DeleteToken path), style "margin-left" "1rem", style "padding" "0.2rem 0.5rem", style "background" "transparent", style "border" "none", style "color" "#dc3545", style "cursor" "pointer", style "font-size" "1.2rem" ] [ text "×" ]
         ]

@@ -135,6 +135,10 @@ type Msg
     | GotCreateBranchResult (Result Http.Error Branch)
     | UpdateMRTitle String
     | CreateMergeRequest
+    | DeleteToken Tokens.TokenPath
+    | DeleteTheme String
+    | DeleteComponent String
+    | DeleteScreen String
     | GotBranches (Result Http.Error (List Branch))
     | GotMRResult (Result Http.Error MergeRequest)
     | ToggleExportTarget String

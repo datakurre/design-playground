@@ -914,7 +914,97 @@ update msg model =
 
                 Nothing ->
                     ( model, Cmd.none )
+        DeleteToken path ->
+            case model.activeThemeName of
+                Nothing ->
+                    let
+                        newTokens =
+                            Maybe.map (List.filter (\( p, _ ) -> p /= path)) model.tokens
+                    in
+                    ( { model | tokens = newTokens }, Cmd.none )
 
+                Just activeName ->
+                    let
+                        updateTheme theme =
+                            if theme.name == activeName then
+                                { theme | overrides = List.filter (\( p, _ ) -> p /= path) theme.overrides }
+
+                            else
+                                theme
+                    in
+                    ( { model | themes = List.map updateTheme model.themes }, Cmd.none )
+
+        DeleteTheme name ->
+            case ( model.token, model.selectedProject ) of
+                ( Just token, Just project ) ->
+                    let
+                        payload =
+                            { branch = Maybe.withDefault project.defaultBranch model.currentBranch
+                            , commitMessage = "Delete theme " ++ name
+                            , actions =
+                                [ { action = "delete"
+                                  , filePath = "themes/" ++ name ++ ".json"
+                                  , content = Nothing
+                                  }
+                                ]
+                            }
+                    in
+                    ( { model | themes = List.filter (\t -> t.name /= name) model.themes, activeThemeName = Nothing, commitStatus = Just ("Deleting theme " ++ name ++ "...") }
+                    , GitLab.Commits.createCommit token project.id payload GotCommitResult
+                    )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        DeleteComponent name ->
+            case ( model.token, model.selectedProject ) of
+                ( Just token, Just project ) ->
+                    let
+                        payload =
+                            { branch = Maybe.withDefault project.defaultBranch model.currentBranch
+                            , commitMessage = "Delete component " ++ name
+                            , actions =
+                                [ { action = "delete"
+                                  , filePath = "components/" ++ name ++ ".json"
+                                  , content = Nothing
+                                  }
+                                ]
+                            }
+                        
+                        currentComponents =
+                            model.components |> Maybe.withDefault []
+                    in
+                    ( { model | components = Just (List.filter (\c -> c.name /= name) currentComponents), selectedComponentName = Nothing, commitStatus = Just ("Deleting component " ++ name ++ "...") }
+                    , GitLab.Commits.createCommit token project.id payload GotCommitResult
+                    )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        DeleteScreen name ->
+            case ( model.token, model.selectedProject ) of
+                ( Just token, Just project ) ->
+                    let
+                        payload =
+                            { branch = Maybe.withDefault project.defaultBranch model.currentBranch
+                            , commitMessage = "Delete screen " ++ name
+                            , actions =
+                                [ { action = "delete"
+                                  , filePath = "layouts/" ++ name ++ ".json"
+                                  , content = Nothing
+                                  }
+                                ]
+                            }
+                        
+                        currentScreens =
+                            model.screens |> Maybe.withDefault []
+                    in
+                    ( { model | screens = Just (List.filter (\s -> s.name /= name) currentScreens), selectedScreenName = Nothing, commitStatus = Just ("Deleting screen " ++ name ++ "...") }
+                    , GitLab.Commits.createCommit token project.id payload GotCommitResult
+                    )
+
+                _ ->
+                    ( model, Cmd.none )
         GotBranches result ->
             case result of
                 Ok branchList ->
