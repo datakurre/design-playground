@@ -32,22 +32,25 @@ update msg model =
                     ( model, Nav.load hrefString )
 
         UrlChanged url ->
-            let
-                urlToken =
-                    Auth.parseToken url
-            in
-            case urlToken of
-                Just t ->
-                    ( { model | url = url, token = Just t }
+            ( { model | url = url }, Cmd.none )
+
+        GotTokenResult result ->
+            case result of
+                Ok token ->
+                    let
+                        currentUrl = model.url
+                        newUrl = { currentUrl | query = Nothing }
+                    in
+                    ( { model | token = Just token, error = Nothing }
                     , Cmd.batch
-                        [ Nav.replaceUrl model.key (Url.toString { url | fragment = Nothing })
-                        , Ports.cacheToken t
-                        , Auth.fetchProfile t GotProfile
+                        [ Ports.cacheToken token
+                        , Auth.fetchProfile token GotProfile
+                        , Nav.replaceUrl model.key (Url.toString newUrl)
                         ]
                     )
 
-                Nothing ->
-                    ( { model | url = url }, Cmd.none )
+                Err _ ->
+                    ( { model | error = Just "Failed to exchange authorization code for token." }, Cmd.none )
 
         GotProfile result ->
             case result of

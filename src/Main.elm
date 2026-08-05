@@ -41,18 +41,13 @@ main =
 init : Flags -> Url -> Nav.Key -> ( Model, Cmd Msg )
 init flags url key =
     let
-        -- Check if the URL has an access token
-        urlToken =
-            Auth.parseToken url
+        -- Check if the URL has an authorization code
+        urlCode =
+            Auth.parseCode url
 
         -- Determine the final token
         finalToken =
-            case urlToken of
-                Just t ->
-                    Just t
-
-                Nothing ->
-                    flags
+            flags.token
 
         initialModel =
             { key = key
@@ -91,16 +86,14 @@ init flags url key =
             , mrTitle = ""
             , mergeRequests = Nothing
             , exportTargets = [ "css", "tailwind" ]
+            , pkceChallenge = flags.pkceChallenge
+            , pkceVerifier = flags.pkceVerifier
             }
 
         cmds =
-            case urlToken of
-                Just t ->
-                    -- If we got the token from the URL, clear the hash and cache it
-                    [ Nav.replaceUrl key (Url.toString { url | fragment = Nothing })
-                    , Ports.cacheToken t
-                    , Auth.fetchProfile t GotProfile
-                    ]
+            case urlCode of
+                Just code ->
+                    [ Auth.exchangeToken code flags.pkceVerifier GotTokenResult ]
 
                 Nothing ->
                     case finalToken of
@@ -158,7 +151,7 @@ viewAuth model =
         , case model.token of
             Nothing ->
                 a
-                    [ href Auth.loginUrl
+                    [ href (Auth.loginUrl model.pkceChallenge)
                     , style "display" "inline-block"
                     , style "padding" "0.5rem 1rem"
                     , style "background" "#fc6d26"

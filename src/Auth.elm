@@ -1,4 +1,4 @@
-module Auth exposing (User, fetchProfile, loginUrl, parseToken, userDecoder)
+module Auth exposing (User, exchangeToken, fetchProfile, loginUrl, parseCode, userDecoder)
 
 import Http
 import Json.Decode as Decode exposing (Decoder)
@@ -25,16 +25,19 @@ gitlabAuthorizeUrl =
     "https://gitlab.com/oauth/authorize"
 
 
-loginUrl : String
-loginUrl =
+loginUrl : String -> String
+loginUrl challenge =
     gitlabAuthorizeUrl
         ++ "?client_id="
         ++ clientId
         ++ "&redirect_uri="
         ++ Url.percentEncode redirectUri
-        ++ "&response_type=token"
+        ++ "&response_type=code"
         ++ "&state=design-playground"
         ++ "&scope=read_user+api"
+        ++ "&code_challenge="
+        ++ challenge
+        ++ "&code_challenge_method=S256"
 
 
 
@@ -45,17 +48,14 @@ loginUrl =
 OAuth implicit grant returns the token in the format:
 #access\_token=xyz&token\_type=bearer&expires\_in=...
 -}
-parseToken : Url -> Maybe String
-parseToken url =
-    case url.fragment of
-        Just fragment ->
-            fragment
-                -- Split by '&' to get key-value pairs
+parseCode : Url -> Maybe String
+parseCode url =
+    case url.query of
+        Just query ->
+            query
                 |> String.split "&"
-                -- Find the one starting with "access_token="
-                |> List.filter (String.startsWith "access_token=")
+                |> List.filter (String.startsWith "code=")
                 |> List.head
-                -- Extract the value after '='
                 |> Maybe.andThen (String.split "=" >> List.drop 1 >> List.head)
 
         Nothing ->
@@ -99,4 +99,27 @@ fetchProfile token toMsg =
         , expect = Http.expectJson toMsg userDecoder
         , timeout = Nothing
         , tracker = Nothing
+        }
+
+
+{-| Exchanges an authorization code for an access token.
+-}
+exchangeToken : String -> String -> (Result Http.Error String -> msg) -> Cmd msg
+exchangeToken code verifier toMsg =
+    let
+        body =
+            "client_id="
+                ++ clientId
+                ++ "&code="
+                ++ code
+                ++ "&grant_type=authorization_code"
+                ++ "&redirect_uri="
+                ++ Url.percentEncode redirectUri
+                ++ "&code_verifier="
+                ++ verifier
+    in
+    Http.post
+        { url = "https://gitlab.com/oauth/token"
+        , body = Http.stringBody "application/x-www-form-urlencoded" body
+        , expect = Http.expectJson toMsg (Decode.field "access_token" Decode.string)
         }

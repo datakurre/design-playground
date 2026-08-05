@@ -17,7 +17,10 @@ import Url exposing (Url)
 
 
 type alias Flags =
-    Maybe String
+    { token : Maybe String
+    , pkceChallenge : String
+    , pkceVerifier : String
+    }
 
 
 type Tab
@@ -65,6 +68,8 @@ type alias Model =
     , mrTitle : String
     , mergeRequests : Maybe (List MergeRequest)
     , exportTargets : List String
+    , pkceChallenge : String
+    , pkceVerifier : String
     }
 
 
@@ -72,6 +77,7 @@ type Msg
     = LinkClicked Browser.UrlRequest
     | UrlChanged Url
     | GotProfile (Result Http.Error Auth.User)
+    | GotTokenResult (Result Http.Error String)
     | Logout
     | FetchProjects
     | GotProjects (Result Http.Error (List Project))
