@@ -21,12 +21,12 @@ projectDecoder =
         (Decode.field "default_branch" Decode.string)
 
 
-listProjects : String -> (Result Http.Error (List Project) -> msg) -> Cmd msg
-listProjects token toMsg =
+listProjects : String -> Int -> (Result Http.Error (List Project) -> msg) -> Cmd msg
+listProjects token page toMsg =
     Http.request
         { method = "GET"
         , headers = [ Http.header "Authorization" ("Bearer " ++ token) ]
-        , url = "https://gitlab.com/api/v4/projects?membership=true&simple=true&order_by=updated_at"
+        , url = "https://gitlab.com/api/v4/projects?membership=true&order_by=id&sort=desc&per_page=20&page=" ++ String.fromInt page
         , body = Http.emptyBody
         , expect = Http.expectJson toMsg (Decode.list projectDecoder)
         , timeout = Nothing

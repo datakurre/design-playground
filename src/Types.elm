@@ -38,6 +38,7 @@ type alias Model =
     , user : Maybe Auth.User
     , error : Maybe String
     , projects : Maybe (List Project)
+    , projectsPage : Int
     , selectedProject : Maybe Project
     , repositoryTree : Maybe (List TreeItem)
     , commitStatus : Maybe String
@@ -81,6 +82,8 @@ type Msg
     | Logout
     | FetchProjects
     | GotProjects (Result Http.Error (List Project))
+    | LoadMoreProjects
+    | GotMoreProjects (Result Http.Error (List Project))
     | SelectProject Project
     | GotTree (Result Http.Error (List TreeItem))
     | WriteTestFile

@@ -55,6 +55,7 @@ init flags url key =
             , user = Nothing
             , error = Nothing
             , projects = Nothing
+            , projectsPage = 1
             , selectedProject = Nothing
             , repositoryTree = Nothing
             , commitStatus = Nothing
@@ -221,6 +222,13 @@ viewProjects model =
                                         )
                                         projects
                                     )
+                                , button
+                                    [ onClick LoadMoreProjects
+                                    , style "margin-top" "1rem"
+                                    , style "padding" "0.5rem 1rem"
+                                    , style "cursor" "pointer"
+                                    ]
+                                    [ text "Load More" ]
                                 ]
                             , div [ style "flex" "2" ]
                                 [ case model.selectedProject of

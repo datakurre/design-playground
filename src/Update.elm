@@ -58,7 +58,7 @@ update msg model =
                     ( { model | user = Just user, error = Nothing }
                     , case model.token of
                         Just t ->
-                            GitLab.Projects.listProjects t GotProjects
+                            GitLab.Projects.listProjects t 1 GotProjects
 
                         Nothing ->
                             Cmd.none
@@ -71,14 +71,14 @@ update msg model =
                     )
 
         Logout ->
-            ( { model | token = Nothing, user = Nothing, error = Nothing, projects = Nothing, selectedProject = Nothing, repositoryTree = Nothing, commitStatus = Nothing, tokens = Nothing, themes = [], activeThemeName = Nothing, newThemeName = "", newTokenPath = "", newTokenType = "color", newTokenValue = "", activeTab = TokenStudio, components = Nothing, selectedComponentName = Nothing, newComponentName = "", newComponentVariant = "", newComponentSlot = "", newComponentState = "", screens = Nothing, selectedScreenName = Nothing, newScreenName = "" }
+            ( { model | token = Nothing, user = Nothing, error = Nothing, projects = Nothing, projectsPage = 1, selectedProject = Nothing, repositoryTree = Nothing, commitStatus = Nothing, tokens = Nothing, themes = [], activeThemeName = Nothing, newThemeName = "", newTokenPath = "", newTokenType = "color", newTokenValue = "", activeTab = TokenStudio, components = Nothing, selectedComponentName = Nothing, newComponentName = "", newComponentVariant = "", newComponentSlot = "", newComponentState = "", screens = Nothing, selectedScreenName = Nothing, newScreenName = "" }
             , Ports.clearToken ()
             )
 
         FetchProjects ->
             case model.token of
                 Just token ->
-                    ( model, GitLab.Projects.listProjects token GotProjects )
+                    ( model, GitLab.Projects.listProjects token 1 GotProjects )
 
                 Nothing ->
                     ( model, Cmd.none )
@@ -86,10 +86,30 @@ update msg model =
         GotProjects result ->
             case result of
                 Ok projects ->
-                    ( { model | projects = Just projects }, Cmd.none )
+                    ( { model | projects = Just projects, projectsPage = 1 }, Cmd.none )
 
                 Err _ ->
                     ( { model | error = Just "Failed to fetch projects." }, Cmd.none )
+
+        LoadMoreProjects ->
+            case ( model.token, model.projectsPage ) of
+                ( Just token, page ) ->
+                    ( model, GitLab.Projects.listProjects token (page + 1) GotMoreProjects )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        GotMoreProjects result ->
+            case result of
+                Ok newProjects ->
+                    let
+                        currentProjects =
+                            model.projects |> Maybe.withDefault []
+                    in
+                    ( { model | projects = Just (currentProjects ++ newProjects), projectsPage = model.projectsPage + 1 }, Cmd.none )
+
+                Err _ ->
+                    ( { model | error = Just "Failed to load more projects." }, Cmd.none )
 
         SelectProject project ->
             case model.token of
