@@ -1,7 +1,8 @@
 module Pages.ComponentRegistry exposing (viewComponentRegistry)
 
 import Components
-import Html exposing (Html, button, div, h4, h5, li, text, ul)
+import Dict
+import Html exposing (Html, button, div, h4, h5, h6, li, text, ul)
 import Html.Attributes exposing (style, value)
 import Html.Events exposing (onClick, onInput)
 import Renderer
@@ -122,15 +123,51 @@ viewComponentRegistry model =
                                                     Nothing ->
                                                         button [ onClick InitComponentLayout, style "padding" "0.5rem" ] [ text "Initialize Layout (Stack)" ]
 
-                                                    Just (Components.Stack props _) ->
+                                                    Just (Components.Stack props children) ->
                                                         div []
-                                                            [ div [ style "display" "flex", style "flex-direction" "column", style "gap" "0.5rem", style "margin-bottom" "1rem" ]
-                                                                [ Html.input [ value (Maybe.withDefault "" props.padding), onInput UpdateLayoutPadding, Html.Attributes.placeholder "Padding (e.g. spacing.md)", style "padding" "0.5rem" ] []
-                                                                , Html.input [ value (Maybe.withDefault "" props.backgroundColor), onInput UpdateLayoutBackgroundColor, Html.Attributes.placeholder "Background (e.g. color.primary)", style "padding" "0.5rem" ] []
+                                                            [ div [ style "margin-bottom" "1rem" ]
+                                                                [ h6 [] [ text "Applied Styles" ]
+                                                                , ul [ style "list-style" "none", style "padding" "0" ]
+                                                                    (List.map (\(key, val) -> 
+                                                                        li [ style "display" "flex", style "gap" "0.5rem", style "margin-bottom" "0.5rem" ] 
+                                                                            [ text (key ++ ": ")
+                                                                            , Html.input [ value val, onInput (UpdateLayoutProperty key), style "padding" "0.5rem", style "flex" "1" ] []
+                                                                            , button [ onClick (RemoveLayoutProperty key), style "padding" "0.5rem", style "background" "#ffdddd" ] [ text "X" ] 
+                                                                            ]
+                                                                    ) (Dict.toList props.styles))
+                                                                , div [ style "display" "flex", style "gap" "0.5rem" ]
+                                                                    [ Html.input [ value model.newLayoutPropertyName, onInput UpdateNewLayoutPropertyName, Html.Attributes.placeholder "CSS Property", style "padding" "0.5rem", style "flex" "1" ] []
+                                                                    , Html.input [ value model.newLayoutPropertyValue, onInput UpdateNewLayoutPropertyValue, Html.Attributes.placeholder "Token", style "padding" "0.5rem", style "flex" "1" ] []
+                                                                    , button [ onClick (UpdateLayoutProperty model.newLayoutPropertyName model.newLayoutPropertyValue), style "padding" "0.5rem" ] [ text "Add Style" ]
+                                                                    ]
                                                                 ]
-                                                            , div [ style "display" "flex", style "gap" "0.5rem" ]
-                                                                [ button [ onClick (AddLayoutText "New Text Node"), style "padding" "0.5rem" ] [ text "Add Text Node" ]
+                                                            , div [ style "margin-top" "1rem" ]
+                                                                [ h6 [] [ text "Children Nodes" ]
+                                                                , ul [ style "list-style" "none", style "padding" "0" ]
+                                                                    (List.indexedMap
+                                                                        (\index child ->
+                                                                            case child of
+                                                                                Components.Element _ content ->
+                                                                                    li [ style "display" "flex", style "gap" "0.5rem", style "margin-bottom" "0.5rem" ]
+                                                                                        [ Html.input 
+                                                                                            [ value content
+                                                                                            , onInput (UpdateLayoutText index)
+                                                                                            , style "padding" "0.5rem"
+                                                                                            , style "flex" "1" 
+                                                                                            ] []
+                                                                                        , button 
+                                                                                            [ onClick (DeleteLayoutNode index)
+                                                                                            , style "padding" "0.5rem"
+                                                                                            , style "background" "#ffdddd"
+                                                                                            ] [ text "Delete" ]
+                                                                                        ]
+                                                                                _ ->
+                                                                                    li [] [ text "Nested layouts not yet editable" ]
+                                                                        )
+                                                                        children
+                                                                    )
                                                                 ]
+                                                            , button [ onClick (AddLayoutText "New Text Node"), style "padding" "0.5rem", style "margin-top" "1rem" ] [ text "Add Text Node" ]
                                                             ]
 
                                                     Just _ ->
@@ -138,7 +175,24 @@ viewComponentRegistry model =
                                                 ]
                                             ]
                                         , div [ style "flex" "1", style "background" "#f9f9f9", style "padding" "1rem", style "border" "1px solid #ccc", style "border-radius" "8px", style "display" "flex", style "flex-direction" "column" ]
-                                            [ h4 [ style "margin" "0 0 1rem 0" ] [ text "Live Preview" ]
+                                            [ div [ style "display" "flex", style "justify-content" "space-between", style "align-items" "center", style "margin-bottom" "1rem" ]
+                                                [ h4 [ style "margin" "0" ] [ text "Live Preview" ]
+                                                , Html.select
+                                                    [ onInput
+                                                        (\val ->
+                                                            SelectTheme
+                                                                (if val == "" then
+                                                                    Nothing
+                                                                 else
+                                                                    Just val
+                                                                )
+                                                        )
+                                                    , style "padding" "0.5rem"
+                                                    ]
+                                                    (Html.option [ value "" ] [ text "Base Theme" ]
+                                                        :: List.map (\t -> Html.option [ value t.name, Html.Attributes.selected (model.activeThemeName == Just t.name) ] [ text t.name ]) model.themes
+                                                    )
+                                                ]
                                             , case comp.layout of
                                                 Just l ->
                                                     div [ style "border" "1px dashed #aaa", style "padding" "1rem", style "min-height" "100px", style "background" "#fff" ]

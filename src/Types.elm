@@ -62,6 +62,8 @@ type alias Model =
     , newComponentVariant : String
     , newComponentSlot : String
     , newComponentState : String
+    , newLayoutPropertyName : String
+    , newLayoutPropertyValue : String
     , screens : Maybe (List Screen)
     , selectedScreenName : Maybe String
     , newScreenName : String
@@ -120,9 +122,13 @@ type Msg
     | AddComponentState
     | SaveComponent
     | InitComponentLayout
-    | UpdateLayoutPadding String
-    | UpdateLayoutBackgroundColor String
+    | UpdateLayoutProperty String String
+    | RemoveLayoutProperty String
+    | UpdateLayoutText Int String
+    | DeleteLayoutNode Int
     | AddLayoutText String
+    | UpdateNewLayoutPropertyName String
+    | UpdateNewLayoutPropertyValue String
     | GotScreensTree (Result Http.Error (List TreeItem))
     | GotScreenFile String (Result Http.Error String)
     | SelectScreen (Maybe String)

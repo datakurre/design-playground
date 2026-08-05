@@ -112,7 +112,24 @@ viewScreenComposer model =
                                                 ]
                                             ]
                                         , div [ style "background" "#f9f9f9", style "padding" "1rem", style "border" "1px solid #ccc", style "border-radius" "8px" ]
-                                            [ h4 [ style "margin" "0 0 1rem 0" ] [ text "Live Screen Preview" ]
+                                            [ div [ style "display" "flex", style "justify-content" "space-between", style "align-items" "center", style "margin-bottom" "1rem" ]
+                                                [ h4 [ style "margin" "0" ] [ text "Live Screen Preview" ]
+                                                , Html.select
+                                                    [ onInput
+                                                        (\val ->
+                                                            SelectTheme
+                                                                (if val == "" then
+                                                                    Nothing
+                                                                 else
+                                                                    Just val
+                                                                )
+                                                        )
+                                                    , style "padding" "0.5rem"
+                                                    ]
+                                                    (Html.option [ value "" ] [ text "Base Theme" ]
+                                                        :: List.map (\t -> Html.option [ value t.name, Html.Attributes.selected (model.activeThemeName == Just t.name) ] [ text t.name ]) model.themes
+                                                    )
+                                                ]
                                             , div [ style "border" "1px dashed #aaa", style "padding" "1rem", style "min-height" "200px", style "background" "#fff" ]
                                                 [ Renderer.renderScreenNode componentsDict displayTokens screen.root ]
                                             ]

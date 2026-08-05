@@ -4,6 +4,7 @@ import Auth
 import Browser
 import Browser.Navigation as Nav
 import Components
+import Dict
 import Export
 import GitLab.Branches
 import GitLab.Commits
@@ -673,7 +674,7 @@ update msg model =
 
                         updateComponent c =
                             if c.name == name then
-                                { c | layout = Just (Components.Stack { direction = "column", padding = Nothing, gap = Nothing, backgroundColor = Nothing } []) }
+                                { c | layout = Just (Components.Stack { direction = "column", styles = Dict.empty } []) }
 
                             else
                                 c
@@ -683,7 +684,7 @@ update msg model =
                 Nothing ->
                     ( model, Cmd.none )
 
-        UpdateLayoutPadding p ->
+        UpdateLayoutProperty prop value ->
             case model.selectedComponentName of
                 Just name ->
                     let
@@ -694,34 +695,19 @@ update msg model =
                             if c.name == name then
                                 case c.layout of
                                     Just (Components.Stack props children) ->
-                                        { c
-                                            | layout =
-                                                Just
-                                                    (Components.Stack
-                                                        { props
-                                                            | padding =
-                                                                if p == "" then
-                                                                    Nothing
-
-                                                                else
-                                                                    Just p
-                                                        }
-                                                        children
-                                                    )
-                                        }
+                                        { c | layout = Just (Components.Stack { props | styles = Dict.insert prop value props.styles } children) }
 
                                     _ ->
                                         c
-
                             else
                                 c
                     in
-                    ( { model | components = Just (List.map updateComponent currentComponents) }, Cmd.none )
+                    ( { model | components = Just (List.map updateComponent currentComponents), newLayoutPropertyName = "", newLayoutPropertyValue = "" }, Cmd.none )
 
                 Nothing ->
                     ( model, Cmd.none )
 
-        UpdateLayoutBackgroundColor bg ->
+        RemoveLayoutProperty prop ->
             case model.selectedComponentName of
                 Just name ->
                     let
@@ -732,25 +718,10 @@ update msg model =
                             if c.name == name then
                                 case c.layout of
                                     Just (Components.Stack props children) ->
-                                        { c
-                                            | layout =
-                                                Just
-                                                    (Components.Stack
-                                                        { props
-                                                            | backgroundColor =
-                                                                if bg == "" then
-                                                                    Nothing
-
-                                                                else
-                                                                    Just bg
-                                                        }
-                                                        children
-                                                    )
-                                        }
+                                        { c | layout = Just (Components.Stack { props | styles = Dict.remove prop props.styles } children) }
 
                                     _ ->
                                         c
-
                             else
                                 c
                     in
@@ -758,6 +729,12 @@ update msg model =
 
                 Nothing ->
                     ( model, Cmd.none )
+
+        UpdateNewLayoutPropertyName name ->
+            ( { model | newLayoutPropertyName = name }, Cmd.none )
+
+        UpdateNewLayoutPropertyValue value ->
+            ( { model | newLayoutPropertyValue = value }, Cmd.none )
 
         AddLayoutText content ->
             case model.selectedComponentName of
@@ -770,11 +747,79 @@ update msg model =
                             if c.name == name then
                                 case c.layout of
                                     Just (Components.Stack props children) ->
-                                        { c | layout = Just (Components.Stack props (children ++ [ Components.Element { isSlot = False, color = Nothing, typography = Nothing } content ])) }
+                                        { c | layout = Just (Components.Stack props (children ++ [ Components.Element { isSlot = False, styles = Dict.empty } content ])) }
 
                                     _ ->
                                         c
 
+                            else
+                                c
+                    in
+                    ( { model | components = Just (List.map updateComponent currentComponents) }, Cmd.none )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        UpdateLayoutText index newContent ->
+            case model.selectedComponentName of
+                Just name ->
+                    let
+                        currentComponents =
+                            model.components |> Maybe.withDefault []
+
+                        updateComponent c =
+                            if c.name == name then
+                                case c.layout of
+                                    Just (Components.Stack props children) ->
+                                        let
+                                            newChildren =
+                                                List.indexedMap
+                                                    (\i child ->
+                                                        if i == index then
+                                                            case child of
+                                                                Components.Element elProps _ ->
+                                                                    Components.Element elProps newContent
+
+                                                                _ ->
+                                                                    child
+                                                        else
+                                                            child
+                                                    )
+                                                    children
+                                        in
+                                        { c | layout = Just (Components.Stack props newChildren) }
+
+                                    _ ->
+                                        c
+                            else
+                                c
+                    in
+                    ( { model | components = Just (List.map updateComponent currentComponents) }, Cmd.none )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        DeleteLayoutNode index ->
+            case model.selectedComponentName of
+                Just name ->
+                    let
+                        currentComponents =
+                            model.components |> Maybe.withDefault []
+
+                        updateComponent c =
+                            if c.name == name then
+                                case c.layout of
+                                    Just (Components.Stack props children) ->
+                                        let
+                                            newChildren =
+                                                List.indexedMap Tuple.pair children
+                                                    |> List.filter (\( i, _ ) -> i /= index)
+                                                    |> List.map Tuple.second
+                                        in
+                                        { c | layout = Just (Components.Stack props newChildren) }
+
+                                    _ ->
+                                        c
                             else
                                 c
                     in
@@ -845,7 +890,7 @@ update msg model =
             if name /= "" && not (List.any (\s -> s.name == name) currentScreens) then
                 let
                     newScreen =
-                        { name = name, path = "/" ++ String.replace " " "-" (String.toLower name), root = Container { direction = "column", padding = Just "2rem", gap = Just "1rem" } [] }
+                        { name = name, path = "/" ++ String.replace " " "-" (String.toLower name), root = Container { direction = "column", styles = Dict.fromList [ ( "padding", "2rem" ), ( "gap", "1rem" ) ] } [] }
                 in
                 ( { model | screens = Just (newScreen :: currentScreens), selectedScreenName = Just name, newScreenName = "" }, Cmd.none )
 

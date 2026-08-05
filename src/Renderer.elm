@@ -26,6 +26,10 @@ resolveToken path tokens =
         Nothing ->
             path -- fallback to raw value if token not found (could be a valid css value like "16px")
 
+renderStyles : List FlatToken -> Dict String String -> List (Html.Attribute msg)
+renderStyles tokens stylesDict =
+    Dict.toList stylesDict
+        |> List.map (\( prop, tokenPath ) -> style prop (resolveToken tokenPath tokens))
 
 renderScreenNode : Dict String Component -> List FlatToken -> ScreenNode -> Html msg
 renderScreenNode components tokens node =
@@ -51,11 +55,10 @@ renderScreenNode components tokens node =
 
         Container props children ->
             div
-                [ style "display" "flex"
-                , style "flex-direction" props.direction
-                , style "padding" (Maybe.withDefault "0" (Maybe.map (\p -> resolveToken p tokens) props.padding))
-                , style "gap" (Maybe.withDefault "0" (Maybe.map (\g -> resolveToken g tokens) props.gap))
-                ]
+                ( [ style "display" "flex"
+                  , style "flex-direction" props.direction
+                  ] ++ renderStyles tokens props.styles
+                )
                 (List.map (renderScreenNode components tokens) children)
 
         TextNode content ->
@@ -67,21 +70,18 @@ renderLayoutWithSlots components tokens slots layout =
     case layout of
         Stack props children ->
             div
-                [ style "display" "flex"
-                , style "flex-direction" props.direction
-                , style "padding" (Maybe.withDefault "0" (Maybe.map (\p -> resolveToken p tokens) props.padding))
-                , style "gap" (Maybe.withDefault "0" (Maybe.map (\g -> resolveToken g tokens) props.gap))
-                , style "background-color" (Maybe.withDefault "transparent" (Maybe.map (\bg -> resolveToken bg tokens) props.backgroundColor))
-                ]
+                ( [ style "display" "flex"
+                  , style "flex-direction" props.direction
+                  ] ++ renderStyles tokens props.styles
+                )
                 (List.map (renderLayoutWithSlots components tokens slots) children)
 
         Grid props children ->
             div
-                [ style "display" "grid"
-                , style "grid-template-columns" ("repeat(" ++ String.fromInt props.columns ++ ", 1fr)")
-                , style "gap" (Maybe.withDefault "0" (Maybe.map (\g -> resolveToken g tokens) props.gap))
-                , style "background-color" (Maybe.withDefault "transparent" (Maybe.map (\bg -> resolveToken bg tokens) props.backgroundColor))
-                ]
+                ( [ style "display" "grid"
+                  , style "grid-template-columns" ("repeat(" ++ String.fromInt props.columns ++ ", 1fr)")
+                  ] ++ renderStyles tokens props.styles
+                )
                 (List.map (renderLayoutWithSlots components tokens slots) children)
 
         Element props content ->
@@ -94,19 +94,16 @@ renderLayoutWithSlots components tokens slots layout =
 
                     Nothing ->
                         div
-                            [ style "border" "1px dashed #ccc"
-                            , style "padding" "0.5rem"
-                            , style "color" (Maybe.withDefault "inherit" (Maybe.map (\c -> resolveToken c tokens) props.color))
-                            , style "font-family" (Maybe.withDefault "inherit" (Maybe.map (\t -> resolveToken t tokens) props.typography))
-                            ]
-                            [ text ("{ " ++ content ++ " }") ]
+                            ( [ style "border" "1px dashed #ccc"
+                              , style "padding" "0.5rem"
+                              ] ++ renderStyles tokens props.styles
+                            )
+                            [ text ("Slot: " ++ content) ]
+
             else
                 span
-                    [ style "color" (Maybe.withDefault "inherit" (Maybe.map (\c -> resolveToken c tokens) props.color))
-                    , style "font-family" (Maybe.withDefault "inherit" (Maybe.map (\t -> resolveToken t tokens) props.typography))
-                    ]
+                    (renderStyles tokens props.styles)
                     [ text content ]
-
 
 render : List FlatToken -> Layout -> Html msg
 render tokens layout =

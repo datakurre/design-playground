@@ -1,5 +1,6 @@
 module Screens exposing (Screen, ScreenNode(..), ComponentInstanceProps, ContainerProps, decoder, encoder, screenNodeDecoder, screenNodeEncoder)
 
+import Dict exposing (Dict)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
 
@@ -27,10 +28,12 @@ type alias ComponentInstanceProps =
 
 type alias ContainerProps =
     { direction : String
-    , padding : Maybe String
-    , gap : Maybe String
+    , styles : Dict String String
     }
 
+orElse : Decoder a -> Decoder a -> Decoder a
+orElse fallback decoder2 =
+    Decode.oneOf [ decoder2, fallback ]
 
 screenNodeDecoder : Decoder ScreenNode
 screenNodeDecoder =
@@ -56,10 +59,9 @@ screenNodeDecoder =
 
                     "container" ->
                         Decode.map2 Container
-                            (Decode.map3 ContainerProps
+                            (Decode.map2 ContainerProps
                                 (Decode.field "direction" Decode.string)
-                                (Decode.maybe (Decode.field "padding" Decode.string))
-                                (Decode.maybe (Decode.field "gap" Decode.string))
+                                (Decode.field "styles" (Decode.dict Decode.string) |> Decode.map (\d -> d) |> orElse (Decode.succeed Dict.empty))
                             )
                             (Decode.field "children" (Decode.list (Decode.lazy (\_ -> screenNodeDecoder))))
 
@@ -97,8 +99,7 @@ screenNodeEncoder node =
             Encode.object
                 [ ( "type", Encode.string "container" )
                 , ( "direction", Encode.string props.direction )
-                , ( "padding", Maybe.withDefault Encode.null (Maybe.map Encode.string props.padding) )
-                , ( "gap", Maybe.withDefault Encode.null (Maybe.map Encode.string props.gap) )
+                , ( "styles", Encode.dict identity Encode.string props.styles )
                 , ( "children", Encode.list screenNodeEncoder children )
                 ]
 

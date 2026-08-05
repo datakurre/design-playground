@@ -1,5 +1,6 @@
 module Components exposing (Component, decoder, encoder, Layout(..), StackProps, GridProps, ElementProps, layoutDecoder, layoutEncoder)
 
+import Dict exposing (Dict)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
 
@@ -11,21 +12,17 @@ type Layout
 
 type alias StackProps =
     { direction : String
-    , padding : Maybe String
-    , gap : Maybe String
-    , backgroundColor : Maybe String
+    , styles : Dict String String
     }
 
 type alias GridProps =
     { columns : Int
-    , gap : Maybe String
-    , backgroundColor : Maybe String
+    , styles : Dict String String
     }
 
 type alias ElementProps =
     { isSlot : Bool
-    , color : Maybe String
-    , typography : Maybe String
+    , styles : Dict String String
     }
 
 type alias Component =
@@ -45,35 +42,35 @@ layoutDecoder =
                 case type_ of
                     "stack" ->
                         Decode.map2 Stack
-                            (Decode.map4 StackProps
+                            (Decode.map2 StackProps
                                 (Decode.field "direction" Decode.string)
-                                (Decode.maybe (Decode.field "padding" Decode.string))
-                                (Decode.maybe (Decode.field "gap" Decode.string))
-                                (Decode.maybe (Decode.field "backgroundColor" Decode.string))
+                                (Decode.field "styles" (Decode.dict Decode.string) |> Decode.map (\d -> d) |> orElse (Decode.succeed Dict.empty))
                             )
                             (Decode.field "children" (Decode.list (Decode.lazy (\_ -> layoutDecoder))))
 
                     "grid" ->
                         Decode.map2 Grid
-                            (Decode.map3 GridProps
+                            (Decode.map2 GridProps
                                 (Decode.field "columns" Decode.int)
-                                (Decode.maybe (Decode.field "gap" Decode.string))
-                                (Decode.maybe (Decode.field "backgroundColor" Decode.string))
+                                (Decode.field "styles" (Decode.dict Decode.string) |> Decode.map (\d -> d) |> orElse (Decode.succeed Dict.empty))
                             )
                             (Decode.field "children" (Decode.list (Decode.lazy (\_ -> layoutDecoder))))
 
                     "element" ->
                         Decode.map2 Element
-                            (Decode.map3 ElementProps
+                            (Decode.map2 ElementProps
                                 (Decode.field "isSlot" Decode.bool)
-                                (Decode.maybe (Decode.field "color" Decode.string))
-                                (Decode.maybe (Decode.field "typography" Decode.string))
+                                (Decode.field "styles" (Decode.dict Decode.string) |> Decode.map (\d -> d) |> orElse (Decode.succeed Dict.empty))
                             )
                             (Decode.field "content" Decode.string)
 
                     _ ->
                         Decode.fail ("Unknown layout type: " ++ type_)
             )
+
+orElse : Decoder a -> Decoder a -> Decoder a
+orElse fallback decoder2 =
+    Decode.oneOf [ decoder2, fallback ]
 
 layoutEncoder : Layout -> Value
 layoutEncoder layout =
@@ -82,15 +79,7 @@ layoutEncoder layout =
             Encode.object
                 [ ( "type", Encode.string "stack" )
                 , ( "direction", Encode.string props.direction )
-                , ( "padding", case props.padding of
-                                    Just p -> Encode.string p
-                                    Nothing -> Encode.null )
-                , ( "gap", case props.gap of
-                                    Just g -> Encode.string g
-                                    Nothing -> Encode.null )
-                , ( "backgroundColor", case props.backgroundColor of
-                                    Just bg -> Encode.string bg
-                                    Nothing -> Encode.null )
+                , ( "styles", Encode.dict identity Encode.string props.styles )
                 , ( "children", Encode.list layoutEncoder children )
                 ]
 
@@ -98,12 +87,7 @@ layoutEncoder layout =
             Encode.object
                 [ ( "type", Encode.string "grid" )
                 , ( "columns", Encode.int props.columns )
-                , ( "gap", case props.gap of
-                                    Just g -> Encode.string g
-                                    Nothing -> Encode.null )
-                , ( "backgroundColor", case props.backgroundColor of
-                                    Just bg -> Encode.string bg
-                                    Nothing -> Encode.null )
+                , ( "styles", Encode.dict identity Encode.string props.styles )
                 , ( "children", Encode.list layoutEncoder children )
                 ]
 
@@ -111,12 +95,7 @@ layoutEncoder layout =
             Encode.object
                 [ ( "type", Encode.string "element" )
                 , ( "isSlot", Encode.bool props.isSlot )
-                , ( "color", case props.color of
-                                    Just c -> Encode.string c
-                                    Nothing -> Encode.null )
-                , ( "typography", case props.typography of
-                                    Just t -> Encode.string t
-                                    Nothing -> Encode.null )
+                , ( "styles", Encode.dict identity Encode.string props.styles )
                 , ( "content", Encode.string content )
                 ]
 

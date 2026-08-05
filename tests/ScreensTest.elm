@@ -1,6 +1,7 @@
 module ScreensTest exposing (suite)
 
 import Expect
+import Dict
 import Json.Decode as Decode
 import Screens exposing (Screen, ScreenNode(..))
 import Test exposing (Test, describe, test)
@@ -19,8 +20,7 @@ suite =
                         , root =
                             Container
                                 { direction = "column"
-                                , padding = Just "1rem"
-                                , gap = Nothing
+                                , styles = Dict.fromList [ ( "padding", "1rem" ) ]
                                 }
                                 [ ComponentInstance
                                     { componentName = "Header"
