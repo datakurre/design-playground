@@ -128,6 +128,9 @@ update msg model =
                 Nothing ->
                     ( model, Cmd.none )
 
+        UnselectProject ->
+            ( { model | selectedProject = Nothing, repositoryTree = Nothing, tokens = Nothing, themes = [], components = Nothing, screens = Nothing, activeThemeName = Nothing, selectedComponentName = Nothing, selectedScreenName = Nothing, commitStatus = Nothing }, Cmd.none )
+
         GotTree result ->
             case result of
                 Ok tree ->

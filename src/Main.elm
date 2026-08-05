@@ -203,46 +203,34 @@ viewProjects model =
                         button [ onClick FetchProjects ] [ text "Load My Projects" ]
 
                     Just projects ->
-                        div [ style "display" "flex", style "gap" "2rem" ]
-                            [ div [ style "flex" "1" ]
-                                [ h3 [] [ text "Select a Repository" ]
-                                , ul [ style "list-style" "none", style "padding" "0" ]
-                                    (List.map
-                                        (\p ->
-                                            li
-                                                [ style "padding" "0.5rem"
-                                                , style "cursor" "pointer"
-                                                , style "border-bottom" "1px solid #eee"
-                                                , style "background"
-                                                    (if model.selectedProject == Just p then
-                                                        "#e0f7fa"
-
-                                                     else
-                                                        "transparent"
-                                                    )
-                                                , onClick (SelectProject p)
-                                                ]
-                                                [ text p.pathWithNamespace ]
+                        case model.selectedProject of
+                            Nothing ->
+                                div [ style "max-width" "600px", style "margin" "0 auto" ]
+                                    [ h3 [] [ text "Select a Repository" ]
+                                    , ul [ style "list-style" "none", style "padding" "0" ]
+                                        (List.map
+                                            (\p ->
+                                                li
+                                                    [ style "padding" "0.5rem"
+                                                    , style "cursor" "pointer"
+                                                    , style "border-bottom" "1px solid #eee"
+                                                    , onClick (SelectProject p)
+                                                    ]
+                                                    [ text p.pathWithNamespace ]
+                                            )
+                                            projects
                                         )
-                                        projects
-                                    )
-                                , button
-                                    [ onClick LoadMoreProjects
-                                    , style "margin-top" "1rem"
-                                    , style "padding" "0.5rem 1rem"
-                                    , style "cursor" "pointer"
+                                    , button
+                                        [ onClick LoadMoreProjects
+                                        , style "margin-top" "1rem"
+                                        , style "padding" "0.5rem 1rem"
+                                        , style "cursor" "pointer"
+                                        ]
+                                        [ text "Load More" ]
                                     ]
-                                    [ text "Load More" ]
-                                ]
-                            , div [ style "flex" "2" ]
-                                [ case model.selectedProject of
-                                    Nothing ->
-                                        text "Select a project to view its repository."
 
-                                    Just project ->
-                                        viewProjectDetails model project
-                                ]
-                            ]
+                            Just project ->
+                                viewProjectDetails model project
                 ]
 
         _ ->
@@ -252,7 +240,18 @@ viewProjects model =
 viewProjectDetails : Model -> Project -> Html Msg
 viewProjectDetails model project =
     div []
-        [ h3 [] [ text ("Repository: " ++ project.name) ]
+        [ div [ style "display" "flex", style "justify-content" "space-between", style "align-items" "center", style "margin-bottom" "1rem" ]
+            [ h3 [ style "margin" "0" ] [ text ("Repository: " ++ project.pathWithNamespace) ]
+            , button
+                [ onClick UnselectProject
+                , style "padding" "0.5rem 1rem"
+                , style "cursor" "pointer"
+                , style "background" "#f4f4f4"
+                , style "border" "1px solid #ccc"
+                , style "border-radius" "4px"
+                ]
+                [ text "Change Repository" ]
+            ]
         , div [ style "margin-bottom" "1rem" ]
             [ button [ onClick WriteTestFile ] [ text "Test Write Operation" ]
             , case model.commitStatus of

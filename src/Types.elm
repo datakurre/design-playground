@@ -89,6 +89,7 @@ type Msg
     | LoadMoreProjects
     | GotMoreProjects (Result Http.Error (List Project))
     | SelectProject Project
+    | UnselectProject
     | GotTree (Result Http.Error (List TreeItem))
     | WriteTestFile
     | GotCommitResult (Result Http.Error ())
