@@ -12,7 +12,6 @@ import Pages.ExportPipeline exposing (viewExportPipeline)
 import Pages.GitWorkflows exposing (viewGitWorkflows)
 import Pages.ScreenComposer exposing (viewScreenComposer)
 import Pages.TokenStudio exposing (viewTokenStudio)
-import Ports
 import Types exposing (..)
 import Update exposing (update)
 import Url exposing (Url)
