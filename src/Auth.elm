@@ -11,13 +11,13 @@ import Url exposing (Url)
 
 clientId : String
 clientId =
-    "YOUR_GITLAB_CLIENT_ID"
+    "920996e8589eec6aa245fbdb099e346fa3aefd56c3b9795f94ea9ea9b61018bd"
 
 
 redirectUri : String
 redirectUri =
     -- Replace with your actual development server or production URL
-    "http://localhost:5173/"
+    "http://datakurre.github.io/design-playground/"
 
 
 gitlabAuthorizeUrl : String
