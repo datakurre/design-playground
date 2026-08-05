@@ -17,7 +17,7 @@ clientId =
 redirectUri : String
 redirectUri =
     -- Replace with your actual development server or production URL
-    "http://datakurre.github.io/design-playground/"
+    "http://datakurre.github.io/design-playground"
 
 
 gitlabAuthorizeUrl : String
