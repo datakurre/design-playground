@@ -632,9 +632,11 @@ update msg model =
                                 -- I will use "create" for now, or maybe the Commits API has a force push?
                                 -- No. Let's just do `create`. Wait, if we use `update` and it doesn't exist, it fails.
                                 actionType =
-                                    "create"
+                                    if List.member activeName model.existingComponents then
+                                        "update"
+                                    else
+                                        "create"
 
-                                -- This might fail if updating. Let's see if we can just use create.
                                 payload =
                                     { branch = Maybe.withDefault project.defaultBranch model.currentBranch
                                     , commitMessage = "Save component " ++ comp.name
@@ -645,8 +647,14 @@ update msg model =
                                           }
                                         ]
                                     }
+
+                                newExistingComponents =
+                                    if not (List.member activeName model.existingComponents) then
+                                        activeName :: model.existingComponents
+                                    else
+                                        model.existingComponents
                             in
-                            ( { model | commitStatus = Just ("Saving component " ++ comp.name ++ "...") }
+                            ( { model | commitStatus = Just ("Saving component " ++ comp.name ++ "..."), existingComponents = newExistingComponents }
                             , GitLab.Commits.createCommit token project.id payload GotCommitResult
                             )
 
