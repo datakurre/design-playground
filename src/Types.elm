@@ -43,6 +43,7 @@ type alias Model =
     , repositoryTree : Maybe (List TreeItem)
     , commitStatus : Maybe String
     , originalTokens : Maybe (List Tokens.FlatToken)
+    , tokensFileExists : Bool
     , tokens : Maybe (List Tokens.FlatToken)
     , themes : List Theme
     , existingThemes : List String

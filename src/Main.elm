@@ -60,6 +60,7 @@ init flags url key =
             , repositoryTree = Nothing
             , commitStatus = Nothing
             , originalTokens = Nothing
+            , tokensFileExists = False
             , tokens = Nothing
             , themes = []
             , existingThemes = []

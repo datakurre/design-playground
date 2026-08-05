@@ -71,7 +71,7 @@ update msg model =
                     )
 
         Logout ->
-            ( { model | token = Nothing, user = Nothing, error = Nothing, projects = Nothing, projectsPage = 1, selectedProject = Nothing, repositoryTree = Nothing, commitStatus = Nothing, tokens = Nothing, themes = [], existingThemes = [], existingComponents = [], existingScreens = [], activeThemeName = Nothing, newThemeName = "", newTokenPath = "", newTokenType = "color", newTokenValue = "", activeTab = TokenStudio, components = Nothing, selectedComponentName = Nothing, newComponentName = "", newComponentVariant = "", newComponentSlot = "", newComponentState = "", screens = Nothing, selectedScreenName = Nothing, newScreenName = "" }
+            ( { model | token = Nothing, user = Nothing, error = Nothing, projects = Nothing, projectsPage = 1, selectedProject = Nothing, repositoryTree = Nothing, commitStatus = Nothing, originalTokens = Nothing, tokensFileExists = False, tokens = Nothing, themes = [], existingThemes = [], existingComponents = [], existingScreens = [], activeThemeName = Nothing, newThemeName = "", newTokenPath = "", newTokenType = "color", newTokenValue = "", activeTab = TokenStudio, components = Nothing, selectedComponentName = Nothing, newComponentName = "", newComponentVariant = "", newComponentSlot = "", newComponentState = "", screens = Nothing, selectedScreenName = Nothing, newScreenName = "" }
             , Ports.clearToken ()
             )
 
@@ -114,7 +114,7 @@ update msg model =
         SelectProject project ->
             case model.token of
                 Just token ->
-                    ( { model | selectedProject = Just project, repositoryTree = Nothing, commitStatus = Nothing, originalTokens = Nothing, tokens = Nothing, themes = [], existingThemes = [], existingComponents = [], existingScreens = [], activeThemeName = Nothing, originalComponents = Nothing, components = Nothing, selectedComponentName = Nothing, screens = Nothing, selectedScreenName = Nothing, currentBranch = Just project.defaultBranch, exportTargets = [ "css", "tailwind" ] }
+                    ( { model | selectedProject = Just project, repositoryTree = Nothing, commitStatus = Nothing, originalTokens = Nothing, tokensFileExists = False, tokens = Nothing, themes = [], existingThemes = [], existingComponents = [], existingScreens = [], activeThemeName = Nothing, originalComponents = Nothing, components = Nothing, selectedComponentName = Nothing, screens = Nothing, selectedScreenName = Nothing, currentBranch = Just project.defaultBranch, exportTargets = [ "css", "tailwind" ] }
                     , Cmd.batch
                         [ GitLab.Files.listTree token project.id project.defaultBranch GotTree
                         , GitLab.Files.getFileRaw token project.id project.defaultBranch "tokens/tokens.json" GotTokensFile
@@ -192,13 +192,13 @@ update msg model =
                 Ok content ->
                     case Decode.decodeString Tokens.decoder content of
                         Ok tokensList ->
-                            ( { model | tokens = Just tokensList, originalTokens = Just tokensList, error = Nothing }, Cmd.none )
+                            ( { model | tokens = Just tokensList, originalTokens = Just tokensList, tokensFileExists = True, error = Nothing }, Cmd.none )
 
                         Err err ->
                             ( { model | error = Just ("Failed to parse tokens: " ++ Decode.errorToString err) }, Cmd.none )
 
                 Err _ ->
-                    ( { model | tokens = Just [], originalTokens = Just [], error = Just "No tokens found or failed to fetch. Start fresh!" }, Cmd.none )
+                    ( { model | tokens = Just [], originalTokens = Just [], tokensFileExists = False, error = Just "No tokens found or failed to fetch. Start fresh!" }, Cmd.none )
 
         GotThemesTree result ->
             case result of
@@ -379,14 +379,18 @@ update msg model =
                                             { branch = Maybe.withDefault project.defaultBranch model.currentBranch
                                             , commitMessage = "Update base design tokens"
                                             , actions =
-                                                [ { action = "update"
+                                                [ { action =
+                                                        if model.tokensFileExists then
+                                                            "update"
+                                                        else
+                                                            "create"
                                                   , filePath = "tokens/tokens.json"
                                                   , content = Just jsonString
                                                   }
                                                 ]
                                             }
                                     in
-                                    ( { model | commitStatus = Just "Saving base tokens..." }
+                                    ( { model | commitStatus = Just "Saving base tokens...", tokensFileExists = True }
                                     , GitLab.Commits.createCommit token project.id payload GotCommitResult
                                     )
 
