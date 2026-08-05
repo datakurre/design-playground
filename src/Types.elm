@@ -45,6 +45,9 @@ type alias Model =
     , originalTokens : Maybe (List Tokens.FlatToken)
     , tokens : Maybe (List Tokens.FlatToken)
     , themes : List Theme
+    , existingThemes : List String
+    , existingComponents : List String
+    , existingScreens : List String
     , activeThemeName : Maybe String
     , newThemeName : String
     , newTokenPath : String

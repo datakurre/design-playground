@@ -71,7 +71,7 @@ update msg model =
                     )
 
         Logout ->
-            ( { model | token = Nothing, user = Nothing, error = Nothing, projects = Nothing, projectsPage = 1, selectedProject = Nothing, repositoryTree = Nothing, commitStatus = Nothing, tokens = Nothing, themes = [], activeThemeName = Nothing, newThemeName = "", newTokenPath = "", newTokenType = "color", newTokenValue = "", activeTab = TokenStudio, components = Nothing, selectedComponentName = Nothing, newComponentName = "", newComponentVariant = "", newComponentSlot = "", newComponentState = "", screens = Nothing, selectedScreenName = Nothing, newScreenName = "" }
+            ( { model | token = Nothing, user = Nothing, error = Nothing, projects = Nothing, projectsPage = 1, selectedProject = Nothing, repositoryTree = Nothing, commitStatus = Nothing, tokens = Nothing, themes = [], existingThemes = [], existingComponents = [], existingScreens = [], activeThemeName = Nothing, newThemeName = "", newTokenPath = "", newTokenType = "color", newTokenValue = "", activeTab = TokenStudio, components = Nothing, selectedComponentName = Nothing, newComponentName = "", newComponentVariant = "", newComponentSlot = "", newComponentState = "", screens = Nothing, selectedScreenName = Nothing, newScreenName = "" }
             , Ports.clearToken ()
             )
 
@@ -114,7 +114,7 @@ update msg model =
         SelectProject project ->
             case model.token of
                 Just token ->
-                    ( { model | selectedProject = Just project, repositoryTree = Nothing, commitStatus = Nothing, originalTokens = Nothing, tokens = Nothing, themes = [], activeThemeName = Nothing, originalComponents = Nothing, components = Nothing, selectedComponentName = Nothing, screens = Nothing, selectedScreenName = Nothing, currentBranch = Just project.defaultBranch, exportTargets = [ "css", "tailwind" ] }
+                    ( { model | selectedProject = Just project, repositoryTree = Nothing, commitStatus = Nothing, originalTokens = Nothing, tokens = Nothing, themes = [], existingThemes = [], existingComponents = [], existingScreens = [], activeThemeName = Nothing, originalComponents = Nothing, components = Nothing, selectedComponentName = Nothing, screens = Nothing, selectedScreenName = Nothing, currentBranch = Just project.defaultBranch, exportTargets = [ "css", "tailwind" ] }
                     , Cmd.batch
                         [ GitLab.Files.listTree token project.id project.defaultBranch GotTree
                         , GitLab.Files.getFileRaw token project.id project.defaultBranch "tokens/tokens.json" GotTokensFile
@@ -140,11 +140,22 @@ update msg model =
             case ( model.token, model.selectedProject ) of
                 ( Just token, Just project ) ->
                     let
+                        actionType =
+                            case model.repositoryTree of
+                                Just tree ->
+                                    if List.any (\item -> item.path == "test-commit.txt") tree then
+                                        "update"
+                                    else
+                                        "create"
+
+                                Nothing ->
+                                    "create"
+
                         payload =
                             { branch = project.defaultBranch
                             , commitMessage = "Test commit from Design Playground"
                             , actions =
-                                [ { action = "create"
+                                [ { action = actionType
                                   , filePath = "test-commit.txt"
                                   , content = Just "This is a test commit."
                                   }
@@ -196,6 +207,9 @@ update msg model =
                         jsonFiles =
                             List.filter (\item -> String.endsWith ".json" item.name) tree
 
+                        themeNames =
+                            List.map (\item -> String.replace ".json" "" item.name) jsonFiles
+
                         cmds =
                             case ( model.token, model.selectedProject ) of
                                 ( Just token, Just project ) ->
@@ -206,7 +220,7 @@ update msg model =
                                 _ ->
                                     []
                     in
-                    ( model, Cmd.batch cmds )
+                    ( { model | existingThemes = themeNames }, Cmd.batch cmds )
 
                 Err _ ->
                     ( model, Cmd.none )
@@ -394,14 +408,23 @@ update msg model =
                                             { branch = Maybe.withDefault project.defaultBranch model.currentBranch
                                             , commitMessage = "Update " ++ activeName ++ " theme"
                                             , actions =
-                                                [ { action = "update"
+                                                [ { action =
+                                                        if List.member activeName model.existingThemes then
+                                                            "update"
+                                                        else
+                                                            "create"
                                                   , filePath = "themes/" ++ activeName ++ ".json"
                                                   , content = Just jsonString
                                                   }
                                                 ]
                                             }
+                                        newExistingThemes =
+                                            if not (List.member activeName model.existingThemes) then
+                                                activeName :: model.existingThemes
+                                            else
+                                                model.existingThemes
                                     in
-                                    ( { model | commitStatus = Just "Saving theme..." }
+                                    ( { model | commitStatus = Just "Saving theme...", existingThemes = newExistingThemes }
                                     , GitLab.Commits.createCommit token project.id payload GotCommitResult
                                     )
 
@@ -421,6 +444,9 @@ update msg model =
                         jsonFiles =
                             List.filter (\item -> String.endsWith ".json" item.name) tree
 
+                        componentNames =
+                            List.map (\item -> String.replace ".json" "" item.name) jsonFiles
+
                         cmds =
                             case ( model.token, model.selectedProject ) of
                                 ( Just token, Just project ) ->
@@ -431,7 +457,7 @@ update msg model =
                                 _ ->
                                     []
                     in
-                    ( { model | components = Just [] }, Cmd.batch cmds )
+                    ( { model | components = Just [], existingComponents = componentNames }, Cmd.batch cmds )
 
                 Err _ ->
                     ( { model | components = Just [] }, Cmd.none )
@@ -749,6 +775,9 @@ update msg model =
                         jsonFiles =
                             List.filter (\item -> String.endsWith ".json" item.name) tree
 
+                        screenNames =
+                            List.map (\item -> String.replace ".json" "" item.name) jsonFiles
+
                         cmds =
                             case ( model.token, model.selectedProject ) of
                                 ( Just token, Just project ) ->
@@ -759,7 +788,7 @@ update msg model =
                                 _ ->
                                     []
                     in
-                    ( { model | screens = Just [] }, Cmd.batch cmds )
+                    ( { model | screens = Just [], existingScreens = screenNames }, Cmd.batch cmds )
 
                 Err _ ->
                     ( { model | screens = Just [] }, Cmd.none )
@@ -828,14 +857,23 @@ update msg model =
                                     { branch = Maybe.withDefault project.defaultBranch model.currentBranch
                                     , commitMessage = "Save screen " ++ screen.name
                                     , actions =
-                                        [ { action = "create"
+                                        [ { action =
+                                                if List.member activeName model.existingScreens then
+                                                    "update"
+                                                else
+                                                    "create"
                                           , filePath = "layouts/" ++ screen.name ++ ".json"
                                           , content = Just jsonString
                                           }
                                         ]
                                     }
+                                newExistingScreens =
+                                    if not (List.member activeName model.existingScreens) then
+                                        activeName :: model.existingScreens
+                                    else
+                                        model.existingScreens
                             in
-                            ( { model | commitStatus = Just ("Saving screen " ++ screen.name ++ "...") }
+                            ( { model | commitStatus = Just ("Saving screen " ++ screen.name ++ "..."), existingScreens = newExistingScreens }
                             , GitLab.Commits.createCommit token project.id payload GotCommitResult
                             )
 
