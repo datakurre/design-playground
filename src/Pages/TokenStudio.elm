@@ -118,6 +118,21 @@ viewTokenStudio model =
                                 , style "padding" "0.5rem"
                                 ]
                                 []
+                            , if model.newTokenType == "color" then
+                                Html.input
+                                    [ Html.Attributes.type_ "color"
+                                    , value (if String.startsWith "#" model.newTokenValue then String.left 7 model.newTokenValue else "#000000")
+                                    , onInput UpdateNewTokenValue
+                                    , style "margin-left" "0.5rem"
+                                    , style "padding" "0"
+                                    , style "border" "none"
+                                    , style "width" "32px"
+                                    , style "height" "32px"
+                                    , style "cursor" "pointer"
+                                    ]
+                                    []
+                              else
+                                text ""
                             , button [ onClick CreateToken, style "padding" "0.5rem" ] [ text "Add Token" ]
                             ]
                         ]
