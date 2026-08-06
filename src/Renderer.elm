@@ -24,8 +24,17 @@ camelToKebab str =
 resolveToken : String -> List FlatToken -> Tokens.TokenValue
 resolveToken path tokens =
     let
+        cleanPath =
+            String.trim path
+
+        aliasPath =
+            if String.startsWith "{" cleanPath && String.endsWith "}" cleanPath then
+                String.slice 1 -1 cleanPath |> String.trim
+            else
+                cleanPath
+
         parsedPath =
-            String.split "." path |> List.map String.trim |> List.filter (\s -> s /= "")
+            String.split "." aliasPath |> List.map String.trim |> List.filter (\s -> s /= "")
 
         tokenValue =
             List.filter (\( p, _ ) -> p == parsedPath) tokens
@@ -37,7 +46,9 @@ resolveToken path tokens =
             v
 
         Nothing ->
-            Tokens.StringValue path -- fallback to raw value if token not found (could be a valid css value like "16px")
+            -- If it's not a single direct token match, resolve any embedded aliases
+            -- e.g., "1px solid {color.primary}" -> "1px solid #ff0000"
+            Tokens.StringValue (Tokens.resolveAlias tokens path)
 
 renderStyles : List FlatToken -> Dict String String -> List (Html.Attribute msg)
 renderStyles tokens stylesDict =
