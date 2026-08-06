@@ -99,15 +99,24 @@ viewTokenDiffs orig current =
         getVal path tokens =
             List.filter (\(p, _) -> p == path) tokens |> List.head |> Maybe.map (Tuple.second >> .value)
         
+        tokenValueToString tv =
+            case tv of
+                Tokens.StringValue s -> s
+                Tokens.CompositeValue _ -> "{Composite}"
+
         diffs =
             List.filterMap (\(path, tok) ->
                 let
-                    origVal = getVal path orig |> Maybe.withDefault "(new)"
+                    origValOpt = getVal path orig
                 in
-                if origVal /= tok.value then
-                    Just (path, origVal, tok.value)
-                else
-                    Nothing
+                case origValOpt of
+                    Just origVal ->
+                        if origVal /= tok.value then
+                            Just (path, tokenValueToString origVal, tokenValueToString tok.value)
+                        else
+                            Nothing
+                    Nothing ->
+                        Just (path, "(new)", tokenValueToString tok.value)
             ) current
     in
     if List.isEmpty diffs then

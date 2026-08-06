@@ -38,6 +38,89 @@ updateLayoutNode path updateFn layout =
                 Components.Element _ _ ->
                     layout
 
+updateTokenPathLogic : Model -> Msg -> Tokens.TokenPath -> ( Model, Cmd Msg )
+updateTokenPathLogic model msg path =
+    let
+        modifyTokenValue currentMsg currentVal =
+            case ( currentMsg, currentVal ) of
+                ( UpdateToken _ newVal, _ ) ->
+                    Tokens.StringValue newVal
+
+                ( UpdateCompositeToken _ prop newVal, Tokens.CompositeValue dict ) ->
+                    Tokens.CompositeValue (Dict.insert prop newVal dict)
+
+                ( AddCompositeProperty _ prop, Tokens.CompositeValue dict ) ->
+                    Tokens.CompositeValue (Dict.insert prop "" dict)
+
+                ( AddCompositeProperty _ prop, Tokens.StringValue str ) ->
+                    Tokens.CompositeValue (Dict.fromList [ ( "value", str ), ( prop, "" ) ])
+
+                ( DeleteCompositeProperty _ prop, Tokens.CompositeValue dict ) ->
+                    Tokens.CompositeValue (Dict.remove prop dict)
+
+                _ ->
+                    currentVal
+
+        applyMsgToToken t =
+            { t | value = modifyTokenValue msg t.value }
+    in
+    case model.activeThemeName of
+        Nothing ->
+            let
+                updateToken ( p, t ) =
+                    if p == path then
+                        ( p, applyMsgToToken t )
+
+                    else
+                        ( p, t )
+
+                newTokens =
+                    Maybe.map (List.map updateToken) model.tokens
+            in
+            ( { model | tokens = newTokens }, Cmd.none )
+
+        Just activeName ->
+            let
+                updateTheme theme =
+                    if theme.name == activeName then
+                        let
+                            hasOverride =
+                                List.any (\( p, _ ) -> p == path) theme.overrides
+
+                            newOverrides =
+                                if hasOverride then
+                                    List.map
+                                        (\( p, t ) ->
+                                            if p == path then
+                                                ( p, applyMsgToToken t )
+
+                                            else
+                                                ( p, t )
+                                        )
+                                        theme.overrides
+
+                                else
+                                    let
+                                        baseToken =
+                                            model.tokens
+                                                |> Maybe.andThen (\ts -> List.filter (\( p, _ ) -> p == path) ts |> List.head)
+                                                |> Maybe.map Tuple.second
+                                    in
+                                    case baseToken of
+                                        Just bt ->
+                                            theme.overrides ++ [ ( path, applyMsgToToken bt ) ]
+
+                                        Nothing ->
+                                            theme.overrides
+                        in
+                        { theme | overrides = newOverrides }
+
+                    else
+                        theme
+            in
+            ( { model | themes = List.map updateTheme model.themes }, Cmd.none )
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
@@ -323,62 +406,23 @@ update msg model =
             else
                 ( model, Cmd.none )
 
-        UpdateToken path newValue ->
-            case model.activeThemeName of
-                Nothing ->
-                    let
-                        updateToken ( p, t ) =
-                            if p == path then
-                                ( p, { t | value = newValue } )
+        UpdateToken path _ ->
+            updateTokenPathLogic model msg path
 
-                            else
-                                ( p, t )
+        UpdateCompositeToken path _ _ ->
+            updateTokenPathLogic model msg path
 
-                        newTokens =
-                            Maybe.map (List.map updateToken) model.tokens
-                    in
-                    ( { model | tokens = newTokens }, Cmd.none )
+        AddCompositeProperty path _ ->
+            updateTokenPathLogic model msg path
 
-                Just activeName ->
-                    let
-                        updateTheme theme =
-                            if theme.name == activeName then
-                                let
-                                    hasOverride =
-                                        List.any (\( p, _ ) -> p == path) theme.overrides
+        DeleteCompositeProperty path _ ->
+            updateTokenPathLogic model msg path
 
-                                    newOverrides =
-                                        if hasOverride then
-                                            List.map
-                                                (\( p, t ) ->
-                                                    if p == path then
-                                                        ( p, { t | value = newValue } )
+        UpdateNewCompositePropertyName name ->
+            ( { model | newCompositePropertyName = name }, Cmd.none )
 
-                                                    else
-                                                        ( p, t )
-                                                )
-                                                theme.overrides
-
-                                        else
-                                            let
-                                                baseToken =
-                                                    model.tokens
-                                                        |> Maybe.andThen (\ts -> List.filter (\( p, _ ) -> p == path) ts |> List.head)
-                                                        |> Maybe.map Tuple.second
-                                            in
-                                            case baseToken of
-                                                Just bt ->
-                                                    theme.overrides ++ [ ( path, { bt | value = newValue } ) ]
-
-                                                Nothing ->
-                                                    theme.overrides
-                                in
-                                { theme | overrides = newOverrides }
-
-                            else
-                                theme
-                    in
-                    ( { model | themes = List.map updateTheme model.themes }, Cmd.none )
+        UpdateNewCompositePropertyValue value ->
+            ( { model | newCompositePropertyValue = value }, Cmd.none )
 
         UpdateNewTokenPath path ->
             ( { model | newTokenPath = path }, Cmd.none )
@@ -397,7 +441,7 @@ update msg model =
                             String.split "." model.newTokenPath |> List.map String.trim |> List.filter (\s -> s /= "")
 
                         newToken =
-                            { value = model.newTokenValue
+                            { value = Tokens.StringValue model.newTokenValue
                             , type_ = model.newTokenType
                             , description = Nothing
                             }

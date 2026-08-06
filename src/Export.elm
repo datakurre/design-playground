@@ -1,22 +1,27 @@
 module Export exposing (generateCssVariables, generateTailwindConfig)
 
 import Tokens exposing (FlatToken)
+import Dict
 
 
 generateCssVariables : List FlatToken -> String
 generateCssVariables tokens =
     let
         variables =
-            List.map
+            List.concatMap
                 (\( path, token ) ->
                     let
                         varName =
                             "--" ++ String.join "-" path
-
-                        resolvedValue =
-                            Tokens.resolveAlias tokens token.value
                     in
-                    "  " ++ varName ++ ": " ++ resolvedValue ++ ";"
+                    case Tokens.resolveAliasValue tokens token.value of
+                        Tokens.StringValue s ->
+                            [ "  " ++ varName ++ ": " ++ s ++ ";" ]
+                        Tokens.CompositeValue dict ->
+                            Dict.toList dict
+                                |> List.map (\(subProp, subVal) -> 
+                                    "  " ++ varName ++ "-" ++ subProp ++ ": " ++ subVal ++ ";"
+                                )
                 )
                 tokens
     in
@@ -30,20 +35,20 @@ generateTailwindConfig tokens =
         -- Assuming top-level categories like "color", "font", "spacing" map to tailwind theme keys.
         colors =
             List.filter (\( path, _ ) -> List.head path == Just "color") tokens
-                |> List.map
+                |> List.concatMap
                     (\( path, token ) ->
                         let
-                            -- remove "color" from path
                             keyPath =
                                 List.drop 1 path
 
                             key =
                                 String.join "-" keyPath
-
-                            resolvedValue =
-                                Tokens.resolveAlias tokens token.value
                         in
-                        "        '" ++ key ++ "': '" ++ resolvedValue ++ "'"
+                        case Tokens.resolveAliasValue tokens token.value of
+                            Tokens.StringValue s ->
+                                [ "        '" ++ key ++ "': '" ++ s ++ "'" ]
+                            Tokens.CompositeValue _ ->
+                                []
                     )
     in
     """module.exports = {

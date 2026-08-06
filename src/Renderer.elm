@@ -8,7 +8,20 @@ import Screens exposing (ScreenNode(..))
 import Tokens exposing (FlatToken)
 
 
-resolveToken : String -> List FlatToken -> String
+camelToKebab : String -> String
+camelToKebab str =
+    String.toList str
+        |> List.concatMap
+            (\c ->
+                if Char.isUpper c then
+                    [ '-', Char.toLower c ]
+                else
+                    [ c ]
+            )
+        |> String.fromList
+
+
+resolveToken : String -> List FlatToken -> Tokens.TokenValue
 resolveToken path tokens =
     let
         parsedPath =
@@ -17,19 +30,26 @@ resolveToken path tokens =
         tokenValue =
             List.filter (\( p, _ ) -> p == parsedPath) tokens
                 |> List.head
-                |> Maybe.map (\( _, t ) -> Tokens.resolveAlias tokens t.value)
+                |> Maybe.map (\( _, t ) -> Tokens.resolveAliasValue tokens t.value)
     in
     case tokenValue of
         Just v ->
             v
 
         Nothing ->
-            path -- fallback to raw value if token not found (could be a valid css value like "16px")
+            Tokens.StringValue path -- fallback to raw value if token not found (could be a valid css value like "16px")
 
 renderStyles : List FlatToken -> Dict String String -> List (Html.Attribute msg)
 renderStyles tokens stylesDict =
     Dict.toList stylesDict
-        |> List.map (\( prop, tokenPath ) -> style prop (resolveToken tokenPath tokens))
+        |> List.concatMap (\( prop, tokenPath ) -> 
+            case resolveToken tokenPath tokens of
+                Tokens.StringValue s ->
+                    [ style (camelToKebab prop) s ]
+                Tokens.CompositeValue dict ->
+                    Dict.toList dict
+                        |> List.map (\( subProp, subVal ) -> style (camelToKebab subProp) subVal)
+        )
 
 renderScreenNode : Dict String Component -> List FlatToken -> ScreenNode -> Html msg
 renderScreenNode components tokens node =

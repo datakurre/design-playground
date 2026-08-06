@@ -9,8 +9,13 @@ type alias TokenPath =
     List String
 
 
+type TokenValue
+    = StringValue String
+    | CompositeValue (Dict String String)
+
+
 type alias DesignToken =
-    { value : String
+    { value : TokenValue
     , type_ : String
     , description : Maybe String
     }
@@ -29,12 +34,22 @@ type AstNode
 -- DECODER
 
 
+tokenValueDecoder : Decoder TokenValue
+tokenValueDecoder =
+    Decode.oneOf
+        [ Decode.string |> Decode.map StringValue
+        , Decode.int |> Decode.map (String.fromInt >> StringValue)
+        , Decode.float |> Decode.map (String.fromFloat >> StringValue)
+        , Decode.dict (Decode.oneOf [ Decode.string, Decode.map String.fromInt Decode.int, Decode.map String.fromFloat Decode.float ]) |> Decode.map CompositeValue
+        ]
+
+
 astDecoder : Decoder AstNode
 astDecoder =
     Decode.oneOf
         [ Decode.map TokenNode
             (Decode.map3 DesignToken
-                (Decode.field "$value" Decode.string)
+                (Decode.field "$value" tokenValueDecoder)
                 (Decode.oneOf [ Decode.field "$type" Decode.string, Decode.succeed "unknown" ])
                 (Decode.maybe (Decode.field "$description" Decode.string))
             )
@@ -93,7 +108,11 @@ resolveAliasHelp tokens value depth =
                             resolvedAlias =
                                 List.filter (\( p, _ ) -> p == aliasPath) tokens
                                     |> List.head
-                                    |> Maybe.map (\( _, t ) -> resolveAliasHelp tokens t.value (depth - 1))
+                                    |> Maybe.map (\( _, t ) -> 
+                                        case t.value of
+                                            StringValue s -> resolveAliasHelp tokens s (depth - 1)
+                                            CompositeValue _ -> "{[Composite: " ++ aliasPathStr ++ "]}"
+                                    )
                                     |> Maybe.withDefault ("{" ++ aliasPathStr ++ "}")
 
                             before =
@@ -150,13 +169,33 @@ insertIntoAst ( path, token ) ast =
                     ast
 
 
+resolveAliasValue : List FlatToken -> TokenValue -> TokenValue
+resolveAliasValue tokens tv =
+    case tv of
+        StringValue s ->
+            StringValue (resolveAlias tokens s)
+
+        CompositeValue dict ->
+            CompositeValue (Dict.map (\_ v -> resolveAlias tokens v) dict)
+
+
+tokenValueEncoder : TokenValue -> Value
+tokenValueEncoder tv =
+    case tv of
+        StringValue s ->
+            Encode.string s
+
+        CompositeValue dict ->
+            Encode.dict identity Encode.string dict
+
+
 astEncoder : AstNode -> Value
 astEncoder node =
     case node of
         TokenNode token ->
             let
                 base =
-                    [ ( "$value", Encode.string token.value )
+                    [ ( "$value", tokenValueEncoder token.value )
                     , ( "$type", Encode.string token.type_ )
                     ]
 

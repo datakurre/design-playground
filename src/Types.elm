@@ -54,6 +54,8 @@ type alias Model =
     , newTokenPath : String
     , newTokenType : String
     , newTokenValue : String
+    , newCompositePropertyName : String
+    , newCompositePropertyValue : String
     , activeTab : Tab
     , originalComponents : Maybe (List Component)
     , components : Maybe (List Component)
@@ -115,6 +117,11 @@ type Msg
     | UpdateNewThemeName String
     | CreateTheme
     | UpdateToken Tokens.TokenPath String
+    | UpdateCompositeToken Tokens.TokenPath String String
+    | AddCompositeProperty Tokens.TokenPath String
+    | DeleteCompositeProperty Tokens.TokenPath String
+    | UpdateNewCompositePropertyName String
+    | UpdateNewCompositePropertyValue String
     | SaveTokens
     | UpdateNewTokenPath String
     | UpdateNewTokenType String
