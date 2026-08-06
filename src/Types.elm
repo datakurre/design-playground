@@ -80,6 +80,18 @@ type alias Model =
     }
 
 
+type CommitContext
+    = CommitTokens
+    | CommitTheme String
+    | CommitComponent String
+    | CommitScreen String
+    | DeleteTheme String
+    | DeleteComponent String
+    | DeleteScreen String
+    | CommitTestFile
+    | CommitOther
+
+
 type Msg
     = LinkClicked Browser.UrlRequest
     | UrlChanged Url
@@ -94,7 +106,7 @@ type Msg
     | UnselectProject
     | GotTree (Result Http.Error (List TreeItem))
     | WriteTestFile
-    | GotCommitResult (Result Http.Error ())
+    | GotCommitResult CommitContext (Result Http.Error ())
     | FetchTokens
     | GotTokensFile (Result Http.Error String)
     | GotThemesTree (Result Http.Error (List TreeItem))

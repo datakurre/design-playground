@@ -167,16 +167,49 @@ update msg model =
                             }
                     in
                     ( { model | commitStatus = Just "Writing..." }
-                    , GitLab.Commits.createCommit token project.id payload GotCommitResult
+                    , GitLab.Commits.createCommit token project.id payload (GotCommitResult CommitTestFile)
                     )
 
                 _ ->
                     ( model, Cmd.none )
 
-        GotCommitResult result ->
+        GotCommitResult context result ->
             case result of
                 Ok () ->
-                    ( { model | commitStatus = Just "Success!" }, Cmd.none )
+                    let
+                        addUnique item lst =
+                            if not (List.member item lst) then
+                                item :: lst
+                            else
+                                lst
+
+                        newModel =
+                            case context of
+                                CommitTokens ->
+                                    { model | tokensFileExists = True }
+
+                                CommitTheme name ->
+                                    { model | existingThemes = addUnique name model.existingThemes }
+
+                                CommitComponent name ->
+                                    { model | existingComponents = addUnique name model.existingComponents }
+
+                                CommitScreen name ->
+                                    { model | existingScreens = addUnique name model.existingScreens }
+
+                                DeleteTheme name ->
+                                    { model | existingThemes = List.filter ((/=) name) model.existingThemes }
+
+                                DeleteComponent name ->
+                                    { model | existingComponents = List.filter ((/=) name) model.existingComponents }
+
+                                DeleteScreen name ->
+                                    { model | existingScreens = List.filter ((/=) name) model.existingScreens }
+
+                                _ ->
+                                    model
+                    in
+                    ( { newModel | commitStatus = Just "Success!" }, Cmd.none )
 
                 Err _ ->
                     ( { model | commitStatus = Just "Failed to commit." }, Cmd.none )
@@ -227,7 +260,7 @@ update msg model =
                     ( { model | existingThemes = themeNames }, Cmd.batch cmds )
 
                 Err _ ->
-                    ( model, Cmd.none )
+                    ( { model | existingThemes = [] }, Cmd.none )
 
         GotThemeFile filename result ->
             case result of
@@ -394,8 +427,8 @@ update msg model =
                                                 ]
                                             }
                                     in
-                                    ( { model | commitStatus = Just "Saving base tokens...", tokensFileExists = True }
-                                    , GitLab.Commits.createCommit token project.id payload GotCommitResult
+                                    ( { model | commitStatus = Just "Saving base tokens..." }
+                                    , GitLab.Commits.createCommit token project.id payload (GotCommitResult CommitTokens)
                                     )
 
                                 Nothing ->
@@ -426,14 +459,9 @@ update msg model =
                                                   }
                                                 ]
                                             }
-                                        newExistingThemes =
-                                            if not (List.member activeName model.existingThemes) then
-                                                activeName :: model.existingThemes
-                                            else
-                                                model.existingThemes
                                     in
-                                    ( { model | commitStatus = Just "Saving theme...", existingThemes = newExistingThemes }
-                                    , GitLab.Commits.createCommit token project.id payload GotCommitResult
+                                    ( { model | commitStatus = Just "Saving theme..." }
+                                    , GitLab.Commits.createCommit token project.id payload (GotCommitResult (CommitTheme activeName))
                                     )
 
                                 Nothing ->
@@ -649,14 +677,9 @@ update msg model =
                                         ]
                                     }
 
-                                newExistingComponents =
-                                    if not (List.member activeName model.existingComponents) then
-                                        activeName :: model.existingComponents
-                                    else
-                                        model.existingComponents
                             in
-                            ( { model | commitStatus = Just ("Saving component " ++ comp.name ++ "..."), existingComponents = newExistingComponents }
-                            , GitLab.Commits.createCommit token project.id payload GotCommitResult
+                            ( { model | commitStatus = Just ("Saving component " ++ comp.name ++ "...") }
+                            , GitLab.Commits.createCommit token project.id payload (GotCommitResult (CommitComponent comp.name))
                             )
 
                         Nothing ->
@@ -851,7 +874,7 @@ update msg model =
                     ( { model | screens = Just [], existingScreens = screenNames }, Cmd.batch cmds )
 
                 Err _ ->
-                    ( { model | screens = Just [] }, Cmd.none )
+                    ( { model | screens = Just [], existingScreens = [] }, Cmd.none )
 
         GotScreenFile filename result ->
             case result of
@@ -927,14 +950,9 @@ update msg model =
                                           }
                                         ]
                                     }
-                                newExistingScreens =
-                                    if not (List.member activeName model.existingScreens) then
-                                        activeName :: model.existingScreens
-                                    else
-                                        model.existingScreens
                             in
-                            ( { model | commitStatus = Just ("Saving screen " ++ screen.name ++ "..."), existingScreens = newExistingScreens }
-                            , GitLab.Commits.createCommit token project.id payload GotCommitResult
+                            ( { model | commitStatus = Just ("Saving screen " ++ screen.name ++ "...") }
+                            , GitLab.Commits.createCommit token project.id payload (GotCommitResult (CommitScreen screen.name))
                             )
 
                         Nothing ->
@@ -1006,7 +1024,7 @@ update msg model =
                             }
                     in
                     ( { model | themes = List.filter (\t -> t.name /= name) model.themes, activeThemeName = Nothing, commitStatus = Just ("Deleting theme " ++ name ++ "...") }
-                    , GitLab.Commits.createCommit token project.id payload GotCommitResult
+                    , GitLab.Commits.createCommit token project.id payload (GotCommitResult (DeleteTheme name))
                     )
 
                 _ ->
@@ -1031,7 +1049,7 @@ update msg model =
                             model.components |> Maybe.withDefault []
                     in
                     ( { model | components = Just (List.filter (\c -> c.name /= name) currentComponents), selectedComponentName = Nothing, commitStatus = Just ("Deleting component " ++ name ++ "...") }
-                    , GitLab.Commits.createCommit token project.id payload GotCommitResult
+                    , GitLab.Commits.createCommit token project.id payload (GotCommitResult (DeleteComponent name))
                     )
 
                 _ ->
@@ -1056,7 +1074,7 @@ update msg model =
                             model.screens |> Maybe.withDefault []
                     in
                     ( { model | screens = Just (List.filter (\s -> s.name /= name) currentScreens), selectedScreenName = Nothing, commitStatus = Just ("Deleting screen " ++ name ++ "...") }
-                    , GitLab.Commits.createCommit token project.id payload GotCommitResult
+                    , GitLab.Commits.createCommit token project.id payload (GotCommitResult (DeleteScreen name))
                     )
 
                 _ ->
@@ -1072,7 +1090,7 @@ update msg model =
         SwitchBranch branchName ->
             case ( model.token, model.selectedProject ) of
                 ( Just token, Just project ) ->
-                    ( { model | currentBranch = Just branchName, repositoryTree = Nothing, originalComponents = Nothing, components = Nothing, originalTokens = Nothing, tokens = Nothing, themes = [], screens = Nothing, commitStatus = Just ("Switched to branch " ++ branchName) }
+                    ( { model | currentBranch = Just branchName, repositoryTree = Nothing, originalComponents = Nothing, components = Nothing, originalTokens = Nothing, tokens = Nothing, themes = [], screens = Nothing, existingComponents = [], existingThemes = [], existingScreens = [], tokensFileExists = False, commitStatus = Just ("Switched to branch " ++ branchName) }
                     , Cmd.batch
                         [ GitLab.Files.listTree token project.id branchName GotTree
                         , GitLab.Files.getFileRaw token project.id branchName "tokens/tokens.json" GotTokensFile
