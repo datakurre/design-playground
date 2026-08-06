@@ -3,6 +3,7 @@ module ExportTest exposing (suite)
 import Expect
 import Export exposing (generateCssVariables, generateTailwindConfig)
 import Test exposing (Test, describe, test)
+import Tokens exposing (TokenValue(..))
 
 
 suite : Test
@@ -12,9 +13,9 @@ suite =
             \_ ->
                 let
                     tokens =
-                        [ ( [ "color", "primary" ], { value = "#ff0000", type_ = "color", description = Nothing } )
-                        , ( [ "spacing", "small" ], { value = "8px", type_ = "spacing", description = Nothing } )
-                        , ( [ "color", "alias" ], { value = "{color.primary}", type_ = "color", description = Nothing } )
+                        [ ( [ "color", "primary" ], { value = StringValue "#ff0000", type_ = "color", description = Nothing } )
+                        , ( [ "spacing", "small" ], { value = StringValue "8px", type_ = "spacing", description = Nothing } )
+                        , ( [ "color", "alias" ], { value = StringValue "{color.primary}", type_ = "color", description = Nothing } )
                         ]
 
                     expected =
@@ -31,9 +32,9 @@ suite =
             \_ ->
                 let
                     tokens =
-                        [ ( [ "color", "primary" ], { value = "#ff0000", type_ = "color", description = Nothing } )
-                        , ( [ "color", "secondary", "light" ], { value = "#00ff00", type_ = "color", description = Nothing } )
-                        , ( [ "spacing", "small" ], { value = "8px", type_ = "spacing", description = Nothing } )
+                        [ ( [ "color", "primary" ], { value = StringValue "#ff0000", type_ = "color", description = Nothing } )
+                        , ( [ "color", "secondary", "light" ], { value = StringValue "#00ff00", type_ = "color", description = Nothing } )
+                        , ( [ "spacing", "small" ], { value = StringValue "8px", type_ = "spacing", description = Nothing } )
                         ]
 
                     expected =

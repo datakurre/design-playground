@@ -3,7 +3,7 @@ module TokensTest2 exposing (..)
 import Expect
 import Json.Encode as Encode
 import Test exposing (..)
-import Tokens
+import Tokens exposing (TokenValue(..))
 
 testEncoder : Test
 testEncoder =
@@ -11,8 +11,8 @@ testEncoder =
         \_ ->
             let
                 tokens =
-                    [ ( [ "color", "primary" ], { value = "red", type_ = "color", description = Nothing } )
-                    , ( [ "color", "secondary" ], { value = "blue", type_ = "color", description = Nothing } )
+                    [ ( [ "color", "primary" ], { value = StringValue "red", type_ = "color", description = Nothing } )
+                    , ( [ "color", "secondary" ], { value = StringValue "blue", type_ = "color", description = Nothing } )
                     ]
 
                 encoded =

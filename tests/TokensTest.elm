@@ -5,7 +5,7 @@ import Expect
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Test exposing (..)
-import Tokens exposing (AstNode(..))
+import Tokens exposing (AstNode(..), TokenValue(..))
 
 
 astTests : Test
@@ -20,7 +20,7 @@ astTests =
                                 [ ( "color"
                                   , GroupNode
                                         (Dict.fromList
-                                            [ ( "primary", TokenNode { value = "#ff0000", type_ = "color", description = Nothing } )
+                                            [ ( "primary", TokenNode { value = StringValue "#ff0000", type_ = "color", description = Nothing } )
                                             ]
                                         )
                                   )
@@ -28,14 +28,14 @@ astTests =
                             )
 
                     expected =
-                        [ ( [ "color", "primary" ], { value = "#ff0000", type_ = "color", description = Nothing } ) ]
+                        [ ( [ "color", "primary" ], { value = StringValue "#ff0000", type_ = "color", description = Nothing } ) ]
                 in
                 Expect.equal expected (Tokens.flattenAst ast)
         , test "buildAst converts List FlatToken back to AstNode" <|
             \_ ->
                 let
                     flatTokens =
-                        [ ( [ "spacing", "small" ], { value = "8px", type_ = "dimension", description = Just "Small spacing" } ) ]
+                        [ ( [ "spacing", "small" ], { value = StringValue "8px", type_ = "dimension", description = Just "Small spacing" } ) ]
 
                     expected =
                         GroupNode
@@ -43,7 +43,7 @@ astTests =
                                 [ ( "spacing"
                                   , GroupNode
                                         (Dict.fromList
-                                            [ ( "small", TokenNode { value = "8px", type_ = "dimension", description = Just "Small spacing" } )
+                                            [ ( "small", TokenNode { value = StringValue "8px", type_ = "dimension", description = Just "Small spacing" } )
                                             ]
                                         )
                                   )
@@ -73,7 +73,7 @@ decoderTests =
                         """
 
                     expected =
-                        Ok [ ( [ "color", "background" ], { value = "#ffffff", type_ = "color", description = Nothing } ) ]
+                        Ok [ ( [ "color", "background" ], { value = StringValue "#ffffff", type_ = "color", description = Nothing } ) ]
                 in
                 Expect.equal expected (Decode.decodeString Tokens.decoder json)
         , test "decodes token with description" <|
@@ -93,14 +93,14 @@ decoderTests =
                         """
 
                     expected =
-                        Ok [ ( [ "font", "base" ], { value = "16px", type_ = "dimension", description = Just "Base font size" } ) ]
+                        Ok [ ( [ "font", "base" ], { value = StringValue "16px", type_ = "dimension", description = Just "Base font size" } ) ]
                 in
                 Expect.equal expected (Decode.decodeString Tokens.decoder json)
         , test "encodes flat tokens back to W3C token JSON" <|
             \_ ->
                 let
                     tokens =
-                        [ ( [ "color", "text" ], { value = "#333333", type_ = "color", description = Nothing } ) ]
+                        [ ( [ "color", "text" ], { value = StringValue "#333333", type_ = "color", description = Nothing } ) ]
 
                     encoded =
                         Encode.encode 0 (Tokens.encoder tokens)
@@ -119,8 +119,8 @@ aliasTests =
             \_ ->
                 let
                     tokens =
-                        [ ( [ "color", "primary" ], { value = "#ff0000", type_ = "color", description = Nothing } )
-                        , ( [ "button", "bg" ], { value = "{color.primary}", type_ = "color", description = Nothing } )
+                        [ ( [ "color", "primary" ], { value = StringValue "#ff0000", type_ = "color", description = Nothing } )
+                        , ( [ "button", "bg" ], { value = StringValue "{color.primary}", type_ = "color", description = Nothing } )
                         ]
                 in
                 Expect.equal "#ff0000" (Tokens.resolveAlias tokens "{color.primary}")
@@ -128,9 +128,9 @@ aliasTests =
             \_ ->
                 let
                     tokens =
-                        [ ( [ "color", "red", "500" ], { value = "#ff0000", type_ = "color", description = Nothing } )
-                        , ( [ "color", "primary" ], { value = "{color.red.500}", type_ = "color", description = Nothing } )
-                        , ( [ "button", "bg" ], { value = "{color.primary}", type_ = "color", description = Nothing } )
+                        [ ( [ "color", "red", "500" ], { value = StringValue "#ff0000", type_ = "color", description = Nothing } )
+                        , ( [ "color", "primary" ], { value = StringValue "{color.red.500}", type_ = "color", description = Nothing } )
+                        , ( [ "button", "bg" ], { value = StringValue "{color.primary}", type_ = "color", description = Nothing } )
                         ]
                 in
                 Expect.equal "#ff0000" (Tokens.resolveAlias tokens "{button.bg}")
@@ -138,7 +138,7 @@ aliasTests =
             \_ ->
                 let
                     tokens =
-                        [ ( [ "color", "primary" ], { value = "#ff0000", type_ = "color", description = Nothing } ) ]
+                        [ ( [ "color", "primary" ], { value = StringValue "#ff0000", type_ = "color", description = Nothing } ) ]
                 in
                 Expect.equal "{color.secondary}" (Tokens.resolveAlias tokens "{color.secondary}")
         ]
