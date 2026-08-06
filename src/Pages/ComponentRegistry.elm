@@ -108,6 +108,15 @@ viewComponentRegistry model =
                             , style "width" "150px"
                             ]
                             []
+                        , Html.select
+                            [ Html.Events.onInput UpdateNewComponentTemplate
+                            , value model.newComponentTemplate
+                            , style "padding" "0.5rem"
+                            ]
+                            [ Html.option [ value "Empty" ] [ text "Empty" ]
+                            , Html.option [ value "Button" ] [ text "Button" ]
+                            , Html.option [ value "Card" ] [ text "Card" ]
+                            ]
                         , button [ onClick CreateComponent, style "padding" "0.5rem" ] [ text "Create" ]
                         ]
                     ]

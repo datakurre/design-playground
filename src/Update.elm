@@ -585,6 +585,9 @@ update msg model =
         UpdateNewComponentName name ->
             ( { model | newComponentName = name }, Cmd.none )
 
+        UpdateNewComponentTemplate template ->
+            ( { model | newComponentTemplate = template }, Cmd.none )
+
         CreateComponent ->
             let
                 name =
@@ -596,7 +599,29 @@ update msg model =
             if name /= "" && not (List.any (\c -> c.name == name) currentComponents) then
                 let
                     newComponent =
-                        { name = name, description = Nothing, variants = [], slots = [], states = [], layout = Nothing }
+                        case model.newComponentTemplate of
+                            "Button" ->
+                                { name = name
+                                , description = Just "A basic button component"
+                                , variants = [ "primary", "secondary", "success", "danger" ]
+                                , slots = [ "default" ]
+                                , states = [ "hover", "active", "disabled" ]
+                                , layout = Just (Components.Element { isSlot = True, styles = Dict.fromList [("padding", "0.5rem 1rem"), ("border-radius", "0.25rem"), ("cursor", "pointer")] } "Button text")
+                                }
+                            "Card" ->
+                                { name = name
+                                , description = Just "A basic card component"
+                                , variants = []
+                                , slots = [ "header", "body", "footer" ]
+                                , states = []
+                                , layout = Just (Components.Stack { direction = "column", styles = Dict.fromList [("border", "1px solid #ccc"), ("border-radius", "0.25rem"), ("overflow", "hidden")] } 
+                                    [ Components.Element { isSlot = True, styles = Dict.fromList [("padding", "1rem"), ("background-color", "#f8f9fa"), ("border-bottom", "1px solid #ccc")] } "Header Slot"
+                                    , Components.Element { isSlot = True, styles = Dict.fromList [("padding", "1rem")] } "Body Slot"
+                                    , Components.Element { isSlot = True, styles = Dict.fromList [("padding", "1rem"), ("background-color", "#f8f9fa"), ("border-top", "1px solid #ccc")] } "Footer Slot"
+                                    ])
+                                }
+                            _ -> -- "Empty"
+                                { name = name, description = Nothing, variants = [], slots = [], states = [], layout = Nothing }
                 in
                 ( { model | components = Just (newComponent :: currentComponents), selectedComponentName = Just name, newComponentName = "" }, Cmd.none )
 

@@ -78,6 +78,7 @@ init flags url key =
             , components = Nothing
             , selectedComponentName = Nothing
             , newComponentName = ""
+            , newComponentTemplate = "Empty"
             , newComponentVariant = ""
             , newComponentSlot = ""
             , newComponentState = ""

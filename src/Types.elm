@@ -61,6 +61,7 @@ type alias Model =
     , components : Maybe (List Component)
     , selectedComponentName : Maybe String
     , newComponentName : String
+    , newComponentTemplate : String
     , newComponentVariant : String
     , newComponentSlot : String
     , newComponentState : String
@@ -132,6 +133,7 @@ type Msg
     | GotComponentFile String (Result Http.Error String)
     | SelectComponent (Maybe String)
     | UpdateNewComponentName String
+    | UpdateNewComponentTemplate String
     | CreateComponent
     | UpdateNewComponentVariant String
     | AddComponentVariant
