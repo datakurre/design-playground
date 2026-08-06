@@ -197,13 +197,13 @@ update msg model =
                                 CommitScreen name ->
                                     { model | existingScreens = addUnique name model.existingScreens }
 
-                                DeleteTheme name ->
+                                CommitDeleteTheme name ->
                                     { model | existingThemes = List.filter ((/=) name) model.existingThemes }
 
-                                DeleteComponent name ->
+                                CommitDeleteComponent name ->
                                     { model | existingComponents = List.filter ((/=) name) model.existingComponents }
 
-                                DeleteScreen name ->
+                                CommitDeleteScreen name ->
                                     { model | existingScreens = List.filter ((/=) name) model.existingScreens }
 
                                 _ ->
@@ -1024,7 +1024,7 @@ update msg model =
                             }
                     in
                     ( { model | themes = List.filter (\t -> t.name /= name) model.themes, activeThemeName = Nothing, commitStatus = Just ("Deleting theme " ++ name ++ "...") }
-                    , GitLab.Commits.createCommit token project.id payload (GotCommitResult (DeleteTheme name))
+                    , GitLab.Commits.createCommit token project.id payload (GotCommitResult (CommitDeleteTheme name))
                     )
 
                 _ ->
@@ -1049,7 +1049,7 @@ update msg model =
                             model.components |> Maybe.withDefault []
                     in
                     ( { model | components = Just (List.filter (\c -> c.name /= name) currentComponents), selectedComponentName = Nothing, commitStatus = Just ("Deleting component " ++ name ++ "...") }
-                    , GitLab.Commits.createCommit token project.id payload (GotCommitResult (DeleteComponent name))
+                    , GitLab.Commits.createCommit token project.id payload (GotCommitResult (CommitDeleteComponent name))
                     )
 
                 _ ->
@@ -1074,7 +1074,7 @@ update msg model =
                             model.screens |> Maybe.withDefault []
                     in
                     ( { model | screens = Just (List.filter (\s -> s.name /= name) currentScreens), selectedScreenName = Nothing, commitStatus = Just ("Deleting screen " ++ name ++ "...") }
-                    , GitLab.Commits.createCommit token project.id payload (GotCommitResult (DeleteScreen name))
+                    , GitLab.Commits.createCommit token project.id payload (GotCommitResult (CommitDeleteScreen name))
                     )
 
                 _ ->
@@ -1235,7 +1235,7 @@ update msg model =
 
                             else
                                 ( { model | commitStatus = Just "Running export pipeline..." }
-                                , GitLab.Commits.createCommit token project.id payload GotCommitResult
+                                , GitLab.Commits.createCommit token project.id payload (GotCommitResult CommitOther)
                                 )
 
                         Nothing ->

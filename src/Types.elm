@@ -85,9 +85,9 @@ type CommitContext
     | CommitTheme String
     | CommitComponent String
     | CommitScreen String
-    | DeleteTheme String
-    | DeleteComponent String
-    | DeleteScreen String
+    | CommitDeleteTheme String
+    | CommitDeleteComponent String
+    | CommitDeleteScreen String
     | CommitTestFile
     | CommitOther
 
