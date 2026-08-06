@@ -14,6 +14,7 @@ type alias Screen =
 
 type ScreenNode
     = ComponentInstance ComponentInstanceProps
+    | ScreenInstance { screenName : String }
     | Container ContainerProps (List ScreenNode)
     | TextNode String
 
@@ -57,6 +58,10 @@ screenNodeDecoder =
                                 )
                             )
 
+                    "screen" ->
+                        Decode.map (\name -> ScreenInstance { screenName = name })
+                            (Decode.field "screenName" Decode.string)
+
                     "container" ->
                         Decode.map2 Container
                             (Decode.map2 ContainerProps
@@ -93,6 +98,12 @@ screenNodeEncoder node =
                         )
                         props.slots
                   )
+                ]
+
+        ScreenInstance props ->
+            Encode.object
+                [ ( "type", Encode.string "screen" )
+                , ( "screenName", Encode.string props.screenName )
                 ]
 
         Container props children ->

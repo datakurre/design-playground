@@ -1113,6 +1113,34 @@ update msg model =
 
                 Nothing ->
                     ( model, Cmd.none )
+
+        AddScreenToScreen screenName ->
+            case model.selectedScreenName of
+                Just activeName ->
+                    let
+                        currentScreens =
+                            model.screens |> Maybe.withDefault []
+
+                        updateScreen s =
+                            if s.name == activeName then
+                                case s.root of
+                                    Container props children ->
+                                        let
+                                            newNode =
+                                                ScreenInstance { screenName = screenName }
+                                        in
+                                        { s | root = Container props (children ++ [ newNode ]) }
+
+                                    _ ->
+                                        s
+
+                            else
+                                s
+                    in
+                    ( { model | screens = Just (List.map updateScreen currentScreens) }, Cmd.none )
+
+                Nothing ->
+                    ( model, Cmd.none )
         DeleteToken path ->
             case model.activeThemeName of
                 Nothing ->

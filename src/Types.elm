@@ -157,6 +157,7 @@ type Msg
     | CreateScreen
     | SaveScreen
     | AddComponentToScreen String
+    | AddScreenToScreen String
     | SwitchBranch String
     | UpdateNewBranchName String
     | CreateBranch

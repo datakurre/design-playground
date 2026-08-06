@@ -86,6 +86,11 @@ viewScreenComposer model =
                                         |> Maybe.withDefault []
                                         |> List.map (\c -> ( c.name, c ))
                                         |> Dict.fromList
+
+                                screensDict =
+                                    screens
+                                        |> List.map (\s -> ( s.name, s ))
+                                        |> Dict.fromList
                             in
                             case activeScreen of
                                 Just screen ->
@@ -110,6 +115,18 @@ viewScreenComposer model =
                                                         (model.components |> Maybe.withDefault [])
                                                     )
                                                 ]
+                                            , div [ style "margin-bottom" "1rem", style "border-top" "1px solid #eee", style "padding-top" "1rem" ]
+                                                [ h5 [] [ text "Insert Screen into Root" ]
+                                                , ul [ style "list-style" "none", style "padding" "0", style "display" "flex", style "flex-wrap" "wrap", style "gap" "0.5rem" ]
+                                                    (List.map
+                                                        (\s ->
+                                                            li []
+                                                                [ button [ onClick (AddScreenToScreen s.name), style "padding" "0.5rem" ] [ text ("+ " ++ s.name) ]
+                                                                ]
+                                                        )
+                                                        (List.filter (\s -> s.name /= screen.name) screens)
+                                                    )
+                                                ]
                                             ]
                                         , div [ style "background" "#f9f9f9", style "padding" "1rem", style "border" "1px solid #ccc", style "border-radius" "8px" ]
                                             [ div [ style "display" "flex", style "justify-content" "space-between", style "align-items" "center", style "margin-bottom" "1rem" ]
@@ -131,7 +148,7 @@ viewScreenComposer model =
                                                     )
                                                 ]
                                             , div [ style "border" "1px dashed #aaa", style "padding" "1rem", style "min-height" "200px", style "background" "#fff" ]
-                                                [ Renderer.renderScreenNode componentsDict displayTokens screen.root ]
+                                                [ Renderer.renderScreenNode componentsDict screensDict [ screen.name ] displayTokens screen.root ]
                                             ]
                                         ]
 

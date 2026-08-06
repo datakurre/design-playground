@@ -4,7 +4,7 @@ import Components exposing (Component, Layout(..))
 import Dict exposing (Dict)
 import Html exposing (Html, div, span, text)
 import Html.Attributes exposing (style)
-import Screens exposing (ScreenNode(..))
+import Screens exposing (Screen, ScreenNode(..))
 import Tokens exposing (FlatToken)
 
 
@@ -62,8 +62,8 @@ renderStyles tokens stylesDict =
                         |> List.map (\( subProp, subVal ) -> style (camelToKebab subProp) subVal)
         )
 
-renderScreenNode : Dict String Component -> List FlatToken -> ScreenNode -> Html msg
-renderScreenNode components tokens node =
+renderScreenNode : Dict String Component -> Dict String Screen -> List String -> List FlatToken -> ScreenNode -> Html msg
+renderScreenNode components screens visited tokens node =
     case node of
         ComponentInstance props ->
             case Dict.get props.componentName components of
@@ -74,7 +74,7 @@ renderScreenNode components tokens node =
                                 slotDict =
                                     Dict.fromList props.slots
                             in
-                            renderLayoutWithSlots components tokens slotDict layout
+                            renderLayoutWithSlots components screens visited tokens slotDict layout
 
                         Nothing ->
                             div [ style "color" "red", style "border" "1px solid red", style "padding" "0.5rem" ]
@@ -84,20 +84,32 @@ renderScreenNode components tokens node =
                     div [ style "color" "red", style "border" "1px solid red", style "padding" "0.5rem" ]
                         [ text ("Component not found: " ++ props.componentName) ]
 
+        ScreenInstance props ->
+            if List.member props.screenName visited then
+                div [ style "color" "red", style "border" "1px solid red", style "padding" "0.5rem" ]
+                    [ text ("Infinite recursion detected for screen: " ++ props.screenName) ]
+            else
+                case Dict.get props.screenName screens of
+                    Just screen ->
+                        renderScreenNode components screens (props.screenName :: visited) tokens screen.root
+                    Nothing ->
+                        div [ style "color" "red", style "border" "1px solid red", style "padding" "0.5rem" ]
+                            [ text ("Screen not found: " ++ props.screenName) ]
+
         Container props children ->
             div
                 ( [ style "display" "flex"
                   , style "flex-direction" props.direction
                   ] ++ renderStyles tokens props.styles
                 )
-                (List.map (renderScreenNode components tokens) children)
+                (List.map (renderScreenNode components screens visited tokens) children)
 
         TextNode content ->
             text content
 
 
-renderLayoutWithSlots : Dict String Component -> List FlatToken -> Dict String (List ScreenNode) -> Layout -> Html msg
-renderLayoutWithSlots components tokens slots layout =
+renderLayoutWithSlots : Dict String Component -> Dict String Screen -> List String -> List FlatToken -> Dict String (List ScreenNode) -> Layout -> Html msg
+renderLayoutWithSlots components screens visited tokens slots layout =
     case layout of
         Stack props children ->
             div
@@ -105,7 +117,7 @@ renderLayoutWithSlots components tokens slots layout =
                   , style "flex-direction" props.direction
                   ] ++ renderStyles tokens props.styles
                 )
-                (List.map (renderLayoutWithSlots components tokens slots) children)
+                (List.map (renderLayoutWithSlots components screens visited tokens slots) children)
 
         Grid props children ->
             div
@@ -113,7 +125,7 @@ renderLayoutWithSlots components tokens slots layout =
                   , style "grid-template-columns" ("repeat(" ++ String.fromInt props.columns ++ ", 1fr)")
                   ] ++ renderStyles tokens props.styles
                 )
-                (List.map (renderLayoutWithSlots components tokens slots) children)
+                (List.map (renderLayoutWithSlots components screens visited tokens slots) children)
 
         Element props content ->
             if props.isSlot then
@@ -121,7 +133,7 @@ renderLayoutWithSlots components tokens slots layout =
                     Just slotChildren ->
                         div
                             [ style "display" "contents" ]
-                            (List.map (renderScreenNode components tokens) slotChildren)
+                            (List.map (renderScreenNode components screens visited tokens) slotChildren)
 
                     Nothing ->
                         div
@@ -138,4 +150,4 @@ renderLayoutWithSlots components tokens slots layout =
 
 render : List FlatToken -> Layout -> Html msg
 render tokens layout =
-    renderLayoutWithSlots Dict.empty tokens Dict.empty layout
+    renderLayoutWithSlots Dict.empty Dict.empty [] tokens Dict.empty layout
