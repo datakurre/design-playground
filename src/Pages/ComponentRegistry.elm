@@ -1,6 +1,7 @@
 module Pages.ComponentRegistry exposing (viewComponentRegistry)
 
 import Components
+import CssProperties
 import Dict
 import Html exposing (Html, button, div, h4, h5, h6, li, text, ul)
 import Html.Attributes exposing (style, value)
@@ -38,7 +39,7 @@ viewLayoutEditorNode model path layout =
                         ]
                 ) (Dict.toList styles))
             , div [ style "display" "flex", style "gap" "0.5rem", style "align-items" "center" ]
-                [ Html.input [ value model.newLayoutPropertyName, onInput UpdateNewLayoutPropertyName, Html.Attributes.placeholder "CSS Property", style "padding" "0.2rem", style "width" "100px" ] []
+                [ Html.input [ value model.newLayoutPropertyName, onInput UpdateNewLayoutPropertyName, Html.Attributes.placeholder "CSS Property", style "padding" "0.2rem", style "width" "100px", Html.Attributes.attribute "list" "css-properties-list" ] []
                 , Html.input [ value model.newLayoutPropertyValue, onInput UpdateNewLayoutPropertyValue, Html.Attributes.placeholder "Token", style "padding" "0.2rem", style "flex" "1", Html.Attributes.attribute "list" "tokensList" ] []
                 , button [ onClick (UpdateLayoutProperty path model.newLayoutPropertyName model.newLayoutPropertyValue), style "padding" "0.2rem" ] [ text "Add Style" ]
                 ]
@@ -179,6 +180,8 @@ viewComponentRegistry model =
                                                 [ h5 [] [ text "Visual Layout Editor" ]
                                                 , Html.datalist [ Html.Attributes.id "tokensList" ]
                                                     (List.map (\( p, _ ) -> Html.option [ value ("{" ++ String.join "." p ++ "}") ] []) displayTokens)
+                                                , Html.datalist [ Html.Attributes.id "css-properties-list" ]
+                                                    (List.map (\prop -> Html.option [ value prop ] []) CssProperties.allProperties)
                                                 , case comp.layout of
                                                     Nothing ->
                                                         button [ onClick InitComponentLayout, style "padding" "0.5rem" ] [ text "Initialize Layout (Stack)" ]
