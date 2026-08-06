@@ -21,6 +21,23 @@ import Types exposing (..)
 import Url
 
 
+updateLayoutNode : List Int -> (Components.Layout -> Components.Layout) -> Components.Layout -> Components.Layout
+updateLayoutNode path updateFn layout =
+    case path of
+        [] ->
+            updateFn layout
+
+        index :: rest ->
+            case layout of
+                Components.Stack props children ->
+                    Components.Stack props (List.indexedMap (\i c -> if i == index then updateLayoutNode rest updateFn c else c) children)
+
+                Components.Grid props children ->
+                    Components.Grid props (List.indexedMap (\i c -> if i == index then updateLayoutNode rest updateFn c else c) children)
+
+                Components.Element _ _ ->
+                    layout
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
@@ -186,13 +203,13 @@ update msg model =
                         newModel =
                             case context of
                                 CommitTokens ->
-                                    { model | tokensFileExists = True }
+                                    { model | tokensFileExists = True, originalTokens = model.tokens }
 
                                 CommitTheme name ->
                                     { model | existingThemes = addUnique name model.existingThemes }
 
                                 CommitComponent name ->
-                                    { model | existingComponents = addUnique name model.existingComponents }
+                                    { model | existingComponents = addUnique name model.existingComponents, originalComponents = model.components }
 
                                 CommitScreen name ->
                                     { model | existingScreens = addUnique name model.existingScreens }
@@ -707,7 +724,7 @@ update msg model =
                 Nothing ->
                     ( model, Cmd.none )
 
-        UpdateLayoutProperty prop value ->
+        UpdateLayoutProperty path prop value ->
             case model.selectedComponentName of
                 Just name ->
                     let
@@ -717,10 +734,14 @@ update msg model =
                         updateComponent c =
                             if c.name == name then
                                 case c.layout of
-                                    Just (Components.Stack props children) ->
-                                        { c | layout = Just (Components.Stack { props | styles = Dict.insert prop value props.styles } children) }
-
-                                    _ ->
+                                    Just l ->
+                                        { c | layout = Just (updateLayoutNode path (\node -> 
+                                            case node of
+                                                Components.Stack p children -> Components.Stack { p | styles = Dict.insert prop value p.styles } children
+                                                Components.Grid p children -> Components.Grid { p | styles = Dict.insert prop value p.styles } children
+                                                _ -> node
+                                        ) l) }
+                                    Nothing ->
                                         c
                             else
                                 c
@@ -730,7 +751,7 @@ update msg model =
                 Nothing ->
                     ( model, Cmd.none )
 
-        RemoveLayoutProperty prop ->
+        RemoveLayoutProperty path prop ->
             case model.selectedComponentName of
                 Just name ->
                     let
@@ -740,10 +761,14 @@ update msg model =
                         updateComponent c =
                             if c.name == name then
                                 case c.layout of
-                                    Just (Components.Stack props children) ->
-                                        { c | layout = Just (Components.Stack { props | styles = Dict.remove prop props.styles } children) }
-
-                                    _ ->
+                                    Just l ->
+                                        { c | layout = Just (updateLayoutNode path (\node -> 
+                                            case node of
+                                                Components.Stack p children -> Components.Stack { p | styles = Dict.remove prop p.styles } children
+                                                Components.Grid p children -> Components.Grid { p | styles = Dict.remove prop p.styles } children
+                                                _ -> node
+                                        ) l) }
+                                    Nothing ->
                                         c
                             else
                                 c
@@ -759,7 +784,7 @@ update msg model =
         UpdateNewLayoutPropertyValue value ->
             ( { model | newLayoutPropertyValue = value }, Cmd.none )
 
-        AddLayoutText content ->
+        AddLayoutText path content ->
             case model.selectedComponentName of
                 Just name ->
                     let
@@ -769,50 +794,14 @@ update msg model =
                         updateComponent c =
                             if c.name == name then
                                 case c.layout of
-                                    Just (Components.Stack props children) ->
-                                        { c | layout = Just (Components.Stack props (children ++ [ Components.Element { isSlot = False, styles = Dict.empty } content ])) }
-
-                                    _ ->
-                                        c
-
-                            else
-                                c
-                    in
-                    ( { model | components = Just (List.map updateComponent currentComponents) }, Cmd.none )
-
-                Nothing ->
-                    ( model, Cmd.none )
-
-        UpdateLayoutText index newContent ->
-            case model.selectedComponentName of
-                Just name ->
-                    let
-                        currentComponents =
-                            model.components |> Maybe.withDefault []
-
-                        updateComponent c =
-                            if c.name == name then
-                                case c.layout of
-                                    Just (Components.Stack props children) ->
-                                        let
-                                            newChildren =
-                                                List.indexedMap
-                                                    (\i child ->
-                                                        if i == index then
-                                                            case child of
-                                                                Components.Element elProps _ ->
-                                                                    Components.Element elProps newContent
-
-                                                                _ ->
-                                                                    child
-                                                        else
-                                                            child
-                                                    )
-                                                    children
-                                        in
-                                        { c | layout = Just (Components.Stack props newChildren) }
-
-                                    _ ->
+                                    Just l ->
+                                        { c | layout = Just (updateLayoutNode path (\node -> 
+                                            case node of
+                                                Components.Stack p children -> Components.Stack p (children ++ [ Components.Element { isSlot = False, styles = Dict.empty } content ])
+                                                Components.Grid p children -> Components.Grid p (children ++ [ Components.Element { isSlot = False, styles = Dict.empty } content ])
+                                                _ -> node
+                                        ) l) }
+                                    Nothing ->
                                         c
                             else
                                 c
@@ -822,7 +811,7 @@ update msg model =
                 Nothing ->
                     ( model, Cmd.none )
 
-        DeleteLayoutNode index ->
+        AddLayoutStack path ->
             case model.selectedComponentName of
                 Just name ->
                     let
@@ -832,16 +821,108 @@ update msg model =
                         updateComponent c =
                             if c.name == name then
                                 case c.layout of
-                                    Just (Components.Stack props children) ->
-                                        let
-                                            newChildren =
-                                                List.indexedMap Tuple.pair children
-                                                    |> List.filter (\( i, _ ) -> i /= index)
-                                                    |> List.map Tuple.second
-                                        in
-                                        { c | layout = Just (Components.Stack props newChildren) }
+                                    Just l ->
+                                        { c | layout = Just (updateLayoutNode path (\node -> 
+                                            case node of
+                                                Components.Stack p children -> Components.Stack p (children ++ [ Components.Stack { direction = "column", styles = Dict.empty } [] ])
+                                                Components.Grid p children -> Components.Grid p (children ++ [ Components.Stack { direction = "column", styles = Dict.empty } [] ])
+                                                _ -> node
+                                        ) l) }
+                                    Nothing ->
+                                        c
+                            else
+                                c
+                    in
+                    ( { model | components = Just (List.map updateComponent currentComponents) }, Cmd.none )
 
-                                    _ ->
+                Nothing ->
+                    ( model, Cmd.none )
+
+        AddLayoutGrid path ->
+            case model.selectedComponentName of
+                Just name ->
+                    let
+                        currentComponents =
+                            model.components |> Maybe.withDefault []
+
+                        updateComponent c =
+                            if c.name == name then
+                                case c.layout of
+                                    Just l ->
+                                        { c | layout = Just (updateLayoutNode path (\node -> 
+                                            case node of
+                                                Components.Stack p children -> Components.Stack p (children ++ [ Components.Grid { columns = 2, styles = Dict.empty } [] ])
+                                                Components.Grid p children -> Components.Grid p (children ++ [ Components.Grid { columns = 2, styles = Dict.empty } [] ])
+                                                _ -> node
+                                        ) l) }
+                                    Nothing ->
+                                        c
+                            else
+                                c
+                    in
+                    ( { model | components = Just (List.map updateComponent currentComponents) }, Cmd.none )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        UpdateLayoutText path newContent ->
+            case model.selectedComponentName of
+                Just name ->
+                    let
+                        currentComponents =
+                            model.components |> Maybe.withDefault []
+
+                        updateComponent c =
+                            if c.name == name then
+                                case c.layout of
+                                    Just l ->
+                                        { c | layout = Just (updateLayoutNode path (\node -> 
+                                            case node of
+                                                Components.Element p _ -> Components.Element p newContent
+                                                _ -> node
+                                        ) l) }
+                                    Nothing ->
+                                        c
+                            else
+                                c
+                    in
+                    ( { model | components = Just (List.map updateComponent currentComponents) }, Cmd.none )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        DeleteLayoutNode path ->
+            case model.selectedComponentName of
+                Just name ->
+                    let
+                        currentComponents =
+                            model.components |> Maybe.withDefault []
+
+                        parentPath = List.take (List.length path - 1) path
+                        indexToRemove = List.drop (List.length path - 1) path |> List.head |> Maybe.withDefault -1
+
+                        updateComponent c =
+                            if c.name == name then
+                                case c.layout of
+                                    Just l ->
+                                        if indexToRemove >= 0 then
+                                            { c | layout = Just (updateLayoutNode parentPath (\node -> 
+                                                case node of
+                                                    Components.Stack p children -> 
+                                                        let
+                                                            newChildren = List.indexedMap Tuple.pair children |> List.filter (\(i, _) -> i /= indexToRemove) |> List.map Tuple.second
+                                                        in
+                                                        Components.Stack p newChildren
+                                                    Components.Grid p children -> 
+                                                        let
+                                                            newChildren = List.indexedMap Tuple.pair children |> List.filter (\(i, _) -> i /= indexToRemove) |> List.map Tuple.second
+                                                        in
+                                                        Components.Grid p newChildren
+                                                    _ -> node
+                                            ) l) }
+                                        else
+                                            c -- Cannot remove root this way
+                                    Nothing ->
                                         c
                             else
                                 c

@@ -10,6 +10,64 @@ import Themes
 import Types exposing (..)
 
 
+viewLayoutEditorNode : Model -> List Int -> Components.Layout -> Html Msg
+viewLayoutEditorNode model path layout =
+    let
+        (nodeType, styles, childrenNodes) =
+            case layout of
+                Components.Stack props children ->
+                    ("Stack", props.styles, children)
+                Components.Grid props children ->
+                    ("Grid", props.styles, children)
+                Components.Element props content ->
+                    ("Element (" ++ content ++ ")", props.styles, [])
+    in
+    div [ style "margin-bottom" "1rem", style "border" "1px solid #ddd", style "padding" "0.5rem", style "border-radius" "4px" ]
+        [ div [ style "display" "flex", style "justify-content" "space-between", style "align-items" "center", style "margin-bottom" "0.5rem", style "background" "#f0f0f0", style "padding" "0.2rem 0.5rem" ]
+            [ Html.strong [] [ text nodeType ]
+            , button [ onClick (DeleteLayoutNode path), style "padding" "0.2rem 0.5rem", style "background" "#ffdddd", style "border" "none", style "cursor" "pointer" ] [ text "Delete Node" ]
+            ]
+        , div [ style "margin-bottom" "0.5rem", style "padding-left" "1rem" ]
+            [ h6 [ style "margin" "0 0 0.5rem 0" ] [ text "Styles" ]
+            , ul [ style "list-style" "none", style "padding" "0", style "margin" "0 0 0.5rem 0" ]
+                (List.map (\(key, val) -> 
+                    li [ style "display" "flex", style "gap" "0.5rem", style "margin-bottom" "0.2rem" ] 
+                        [ text (key ++ ": ")
+                        , Html.input [ value val, onInput (UpdateLayoutProperty path key), style "padding" "0.2rem", style "flex" "1", Html.Attributes.attribute "list" "tokensList" ] []
+                        , button [ onClick (RemoveLayoutProperty path key), style "padding" "0.2rem", style "background" "#ffdddd", style "border" "none" ] [ text "X" ] 
+                        ]
+                ) (Dict.toList styles))
+            , div [ style "display" "flex", style "gap" "0.5rem", style "align-items" "center" ]
+                [ Html.input [ value model.newLayoutPropertyName, onInput UpdateNewLayoutPropertyName, Html.Attributes.placeholder "CSS Property", style "padding" "0.2rem", style "width" "100px" ] []
+                , Html.input [ value model.newLayoutPropertyValue, onInput UpdateNewLayoutPropertyValue, Html.Attributes.placeholder "Token", style "padding" "0.2rem", style "flex" "1", Html.Attributes.attribute "list" "tokensList" ] []
+                , button [ onClick (UpdateLayoutProperty path model.newLayoutPropertyName model.newLayoutPropertyValue), style "padding" "0.2rem" ] [ text "Add Style" ]
+                ]
+            ]
+        , case layout of
+            Components.Element _ content ->
+                div [ style "padding-left" "1rem" ]
+                    [ h6 [ style "margin" "0 0 0.5rem 0" ] [ text "Content" ]
+                    , Html.input 
+                        [ value content
+                        , onInput (UpdateLayoutText path)
+                        , style "padding" "0.2rem"
+                        , style "width" "100%" 
+                        ] []
+                    ]
+            _ ->
+                div [ style "padding-left" "1rem", style "border-left" "2px solid #eee" ]
+                    [ h6 [ style "margin" "0 0 0.5rem 0" ] [ text "Children" ]
+                    , div []
+                        (List.indexedMap (\i child -> viewLayoutEditorNode model (path ++ [i]) child) childrenNodes)
+                    , div [ style "display" "flex", style "gap" "0.5rem", style "margin-top" "0.5rem" ]
+                        [ button [ onClick (AddLayoutStack path), style "padding" "0.2rem" ] [ text "+ Stack" ]
+                        , button [ onClick (AddLayoutGrid path), style "padding" "0.2rem" ] [ text "+ Grid" ]
+                        , button [ onClick (AddLayoutText path "New Text"), style "padding" "0.2rem" ] [ text "+ Text" ]
+                        ]
+                    ]
+        ]
+
+
 viewComponentRegistry : Model -> Html Msg
 viewComponentRegistry model =
     case model.components of
@@ -119,59 +177,14 @@ viewComponentRegistry model =
                                                 ]
                                             , div [ style "margin-bottom" "1rem", style "border-top" "1px solid #eee", style "padding-top" "1rem" ]
                                                 [ h5 [] [ text "Visual Layout Editor" ]
+                                                , Html.datalist [ Html.Attributes.id "tokensList" ]
+                                                    (List.map (\( p, _ ) -> Html.option [ value ("{" ++ String.join "." p ++ "}") ] []) displayTokens)
                                                 , case comp.layout of
                                                     Nothing ->
                                                         button [ onClick InitComponentLayout, style "padding" "0.5rem" ] [ text "Initialize Layout (Stack)" ]
 
-                                                    Just (Components.Stack props children) ->
-                                                        div []
-                                                            [ div [ style "margin-bottom" "1rem" ]
-                                                                [ h6 [] [ text "Applied Styles" ]
-                                                                , ul [ style "list-style" "none", style "padding" "0" ]
-                                                                    (List.map (\(key, val) -> 
-                                                                        li [ style "display" "flex", style "gap" "0.5rem", style "margin-bottom" "0.5rem" ] 
-                                                                            [ text (key ++ ": ")
-                                                                            , Html.input [ value val, onInput (UpdateLayoutProperty key), style "padding" "0.5rem", style "flex" "1" ] []
-                                                                            , button [ onClick (RemoveLayoutProperty key), style "padding" "0.5rem", style "background" "#ffdddd" ] [ text "X" ] 
-                                                                            ]
-                                                                    ) (Dict.toList props.styles))
-                                                                , div [ style "display" "flex", style "gap" "0.5rem" ]
-                                                                    [ Html.input [ value model.newLayoutPropertyName, onInput UpdateNewLayoutPropertyName, Html.Attributes.placeholder "CSS Property", style "padding" "0.5rem", style "flex" "1" ] []
-                                                                    , Html.input [ value model.newLayoutPropertyValue, onInput UpdateNewLayoutPropertyValue, Html.Attributes.placeholder "Token", style "padding" "0.5rem", style "flex" "1" ] []
-                                                                    , button [ onClick (UpdateLayoutProperty model.newLayoutPropertyName model.newLayoutPropertyValue), style "padding" "0.5rem" ] [ text "Add Style" ]
-                                                                    ]
-                                                                ]
-                                                            , div [ style "margin-top" "1rem" ]
-                                                                [ h6 [] [ text "Children Nodes" ]
-                                                                , ul [ style "list-style" "none", style "padding" "0" ]
-                                                                    (List.indexedMap
-                                                                        (\index child ->
-                                                                            case child of
-                                                                                Components.Element _ content ->
-                                                                                    li [ style "display" "flex", style "gap" "0.5rem", style "margin-bottom" "0.5rem" ]
-                                                                                        [ Html.input 
-                                                                                            [ value content
-                                                                                            , onInput (UpdateLayoutText index)
-                                                                                            , style "padding" "0.5rem"
-                                                                                            , style "flex" "1" 
-                                                                                            ] []
-                                                                                        , button 
-                                                                                            [ onClick (DeleteLayoutNode index)
-                                                                                            , style "padding" "0.5rem"
-                                                                                            , style "background" "#ffdddd"
-                                                                                            ] [ text "Delete" ]
-                                                                                        ]
-                                                                                _ ->
-                                                                                    li [] [ text "Nested layouts not yet editable" ]
-                                                                        )
-                                                                        children
-                                                                    )
-                                                                ]
-                                                            , button [ onClick (AddLayoutText "New Text Node"), style "padding" "0.5rem", style "margin-top" "1rem" ] [ text "Add Text Node" ]
-                                                            ]
-
-                                                    Just _ ->
-                                                        text "Advanced layout editing not supported yet."
+                                                    Just layoutRoot ->
+                                                        viewLayoutEditorNode model [] layoutRoot
                                                 ]
                                             ]
                                         , div [ style "flex" "1", style "background" "#f9f9f9", style "padding" "1rem", style "border" "1px solid #ccc", style "border-radius" "8px", style "display" "flex", style "flex-direction" "column" ]

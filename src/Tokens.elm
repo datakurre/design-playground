@@ -66,27 +66,49 @@ decoder =
 
 resolveAlias : List FlatToken -> String -> String
 resolveAlias tokens value =
-    if String.startsWith "{" value && String.endsWith "}" value then
-        let
-            aliasPathStr =
-                String.dropLeft 1 value |> String.dropRight 1
+    resolveAliasHelp tokens value 10
 
-            aliasPath =
-                String.split "." aliasPathStr
 
-            maybeToken =
-                List.filter (\( p, _ ) -> p == aliasPath) tokens |> List.head
-        in
-        case maybeToken of
-            Just ( _, token ) ->
-                -- Recursively resolve in case the alias points to another alias
-                resolveAlias tokens token.value
+resolveAliasHelp : List FlatToken -> String -> Int -> String
+resolveAliasHelp tokens value depth =
+    if depth <= 0 then
+        value
+
+    else
+        case String.indexes "{" value |> List.head of
+            Just startIdx ->
+                let
+                    afterBrace =
+                        String.dropLeft (startIdx + 1) value
+                in
+                case String.indexes "}" afterBrace |> List.head of
+                    Just endOffset ->
+                        let
+                            aliasPathStr =
+                                String.left endOffset afterBrace
+
+                            aliasPath =
+                                String.split "." aliasPathStr
+
+                            resolvedAlias =
+                                List.filter (\( p, _ ) -> p == aliasPath) tokens
+                                    |> List.head
+                                    |> Maybe.map (\( _, t ) -> resolveAliasHelp tokens t.value (depth - 1))
+                                    |> Maybe.withDefault ("{" ++ aliasPathStr ++ "}")
+
+                            before =
+                                String.left startIdx value
+
+                            after =
+                                String.dropLeft (endOffset + 1) afterBrace
+                        in
+                        before ++ resolvedAlias ++ resolveAliasHelp tokens after depth
+
+                    Nothing ->
+                        value
 
             Nothing ->
                 value
-
-    else
-        value
 
 
 

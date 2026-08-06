@@ -163,6 +163,31 @@ viewTokenEditor path token activeThemeObj displayTokens =
             , style "border-radius" "4px"
             ]
             []
+        , if token.type_ == "color" then
+            Html.input
+                [ Html.Attributes.type_ "color"
+                , value (if String.startsWith "#" resolvedColor then String.left 7 resolvedColor else "#000000")
+                , onInput (UpdateToken path)
+                , style "margin-left" "0.5rem"
+                , style "padding" "0"
+                , style "border" "none"
+                , style "width" "32px"
+                , style "height" "32px"
+                , style "cursor" "pointer"
+                ]
+                []
+          else
+            text ""
+        , Html.select
+            [ onInput (\v -> if v /= "" then UpdateToken path ("{" ++ v ++ "}") else UpdateToken path token.value)
+            , style "margin-left" "0.5rem"
+            , style "padding" "0.5rem"
+            , style "border" "1px solid #ccc"
+            , style "border-radius" "4px"
+            ]
+            (Html.option [ value "" ] [ text "Reference..." ]
+                :: List.map (\( p, _ ) -> Html.option [ value (String.join "." p) ] [ text (String.join "." p) ]) displayTokens
+            )
         , div [ style "width" "100px", style "margin-left" "1rem", style "color" "#666", style "font-size" "0.9em" ] [ text token.type_ ]
         , if isOverridden then
             span [ style "margin-left" "1rem", style "background" "#ffeeba", style "padding" "0.2rem 0.5rem", style "border-radius" "4px", style "font-size" "0.8em" ] [ text "Overridden" ]

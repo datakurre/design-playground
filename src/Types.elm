@@ -134,11 +134,13 @@ type Msg
     | AddComponentState
     | SaveComponent
     | InitComponentLayout
-    | UpdateLayoutProperty String String
-    | RemoveLayoutProperty String
-    | UpdateLayoutText Int String
-    | DeleteLayoutNode Int
-    | AddLayoutText String
+    | UpdateLayoutProperty (List Int) String String
+    | RemoveLayoutProperty (List Int) String
+    | UpdateLayoutText (List Int) String
+    | DeleteLayoutNode (List Int)
+    | AddLayoutText (List Int) String
+    | AddLayoutStack (List Int)
+    | AddLayoutGrid (List Int)
     | UpdateNewLayoutPropertyName String
     | UpdateNewLayoutPropertyValue String
     | GotScreensTree (Result Http.Error (List TreeItem))
