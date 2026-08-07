@@ -240,39 +240,6 @@ update msg model =
                 Err _ ->
                     ( { model | error = Just "Failed to fetch repository tree." }, Cmd.none )
 
-        WriteTestFile ->
-            case ( model.token, model.selectedProject ) of
-                ( Just token, Just project ) ->
-                    let
-                        actionType =
-                            case model.repositoryTree of
-                                Just tree ->
-                                    if List.any (\item -> item.path == "test-commit.txt") tree then
-                                        "update"
-                                    else
-                                        "create"
-
-                                Nothing ->
-                                    "create"
-
-                        payload =
-                            { branch = project.defaultBranch
-                            , commitMessage = "Test commit from Design Playground"
-                            , actions =
-                                [ { action = actionType
-                                  , filePath = "test-commit.txt"
-                                  , content = Just "This is a test commit."
-                                  }
-                                ]
-                            }
-                    in
-                    ( { model | commitStatus = Just "Writing..." }
-                    , GitLab.Commits.createCommit token project.id payload (GotCommitResult CommitTestFile)
-                    )
-
-                _ ->
-                    ( model, Cmd.none )
-
         GotCommitResult context result ->
             case result of
                 Ok () ->
@@ -309,10 +276,10 @@ update msg model =
                                 _ ->
                                     model
                     in
-                    ( { newModel | commitStatus = Just "Success!" }, Cmd.none )
+                    ( { newModel | commitStatus = Just ( Done, "Saved" ) }, Cmd.none )
 
                 Err _ ->
-                    ( { model | commitStatus = Just "Failed to commit." }, Cmd.none )
+                    ( { model | commitStatus = Just ( Failed, "Couldn't save to GitLab" ) }, Cmd.none )
 
         FetchTokens ->
             case ( model.token, model.selectedProject ) of
@@ -331,11 +298,13 @@ update msg model =
                         Ok tokensList ->
                             ( { model | tokens = Just tokensList, originalTokens = Just tokensList, tokensFileExists = True, error = Nothing }, Cmd.none )
 
-                        Err err ->
-                            ( { model | error = Just ("Failed to parse tokens: " ++ Decode.errorToString err) }, Cmd.none )
+                        Err _ ->
+                            ( { model | error = Just "Couldn't read tokens/tokens.json — the file may be malformed." }, Cmd.none )
 
+                -- No tokens file yet is the normal state of a fresh repository,
+                -- not an error. The Tokens page shows an empty state for it.
                 Err _ ->
-                    ( { model | tokens = Just [], originalTokens = Just [], tokensFileExists = False, error = Just "No tokens found or failed to fetch. Start fresh!" }, Cmd.none )
+                    ( { model | tokens = Just [], originalTokens = Just [], tokensFileExists = False, error = Nothing }, Cmd.none )
 
         GotThemesTree result ->
             case result of
@@ -488,7 +457,7 @@ update msg model =
                                                 ]
                                             }
                                     in
-                                    ( { model | commitStatus = Just "Saving base tokens..." }
+                                    ( { model | commitStatus = Just ( Working, "Saving tokens..." ) }
                                     , GitLab.Commits.createCommit token project.id payload (GotCommitResult CommitTokens)
                                     )
 
@@ -521,7 +490,7 @@ update msg model =
                                                 ]
                                             }
                                     in
-                                    ( { model | commitStatus = Just "Saving theme..." }
+                                    ( { model | commitStatus = Just ( Working, "Saving theme..." ) }
                                     , GitLab.Commits.createCommit token project.id payload (GotCommitResult (CommitTheme activeName))
                                     )
 
@@ -764,7 +733,7 @@ update msg model =
                                     }
 
                             in
-                            ( { model | commitStatus = Just ("Saving component " ++ comp.name ++ "...") }
+                            ( { model | commitStatus = Just ( Working, "Saving " ++ comp.name ++ "..." ) }
                             , GitLab.Commits.createCommit token project.id payload (GotCommitResult (CommitComponent comp.name))
                             )
 
@@ -1101,7 +1070,7 @@ update msg model =
                                         ]
                                     }
                             in
-                            ( { model | commitStatus = Just ("Saving screen " ++ screen.name ++ "...") }
+                            ( { model | commitStatus = Just ( Working, "Saving " ++ screen.name ++ "..." ) }
                             , GitLab.Commits.createCommit token project.id payload (GotCommitResult (CommitScreen screen.name))
                             )
 
@@ -1201,7 +1170,7 @@ update msg model =
                                 ]
                             }
                     in
-                    ( { model | themes = List.filter (\t -> t.name /= name) model.themes, activeThemeName = Nothing, commitStatus = Just ("Deleting theme " ++ name ++ "...") }
+                    ( { model | themes = List.filter (\t -> t.name /= name) model.themes, activeThemeName = Nothing, commitStatus = Just ( Working, "Deleting " ++ name ++ "..." ) }
                     , GitLab.Commits.createCommit token project.id payload (GotCommitResult (CommitDeleteTheme name))
                     )
 
@@ -1226,7 +1195,7 @@ update msg model =
                         currentComponents =
                             model.components |> Maybe.withDefault []
                     in
-                    ( { model | components = Just (List.filter (\c -> c.name /= name) currentComponents), selectedComponentName = Nothing, commitStatus = Just ("Deleting component " ++ name ++ "...") }
+                    ( { model | components = Just (List.filter (\c -> c.name /= name) currentComponents), selectedComponentName = Nothing, commitStatus = Just ( Working, "Deleting " ++ name ++ "..." ) }
                     , GitLab.Commits.createCommit token project.id payload (GotCommitResult (CommitDeleteComponent name))
                     )
 
@@ -1251,7 +1220,7 @@ update msg model =
                         currentScreens =
                             model.screens |> Maybe.withDefault []
                     in
-                    ( { model | screens = Just (List.filter (\s -> s.name /= name) currentScreens), selectedScreenName = Nothing, commitStatus = Just ("Deleting screen " ++ name ++ "...") }
+                    ( { model | screens = Just (List.filter (\s -> s.name /= name) currentScreens), selectedScreenName = Nothing, commitStatus = Just ( Working, "Deleting " ++ name ++ "..." ) }
                     , GitLab.Commits.createCommit token project.id payload (GotCommitResult (CommitDeleteScreen name))
                     )
 
@@ -1268,7 +1237,7 @@ update msg model =
         SwitchBranch branchName ->
             case ( model.token, model.selectedProject ) of
                 ( Just token, Just project ) ->
-                    ( { model | currentBranch = Just branchName, repositoryTree = Nothing, originalComponents = Nothing, components = Nothing, originalTokens = Nothing, tokens = Nothing, themes = [], screens = Nothing, existingComponents = [], existingThemes = [], existingScreens = [], tokensFileExists = False, commitStatus = Just ("Switched to branch " ++ branchName) }
+                    ( { model | currentBranch = Just branchName, repositoryTree = Nothing, originalComponents = Nothing, components = Nothing, originalTokens = Nothing, tokens = Nothing, themes = [], screens = Nothing, existingComponents = [], existingThemes = [], existingScreens = [], tokensFileExists = False, commitStatus = Just ( Done, "On branch " ++ branchName ) }
                     , Cmd.batch
                         [ GitLab.Files.listTree token project.id branchName GotTree
                         , GitLab.Files.getFileRaw token project.id branchName "tokens/tokens.json" GotTokensFile
@@ -1292,7 +1261,7 @@ update msg model =
                             String.trim model.newBranchName
                     in
                     if branchName /= "" then
-                        ( { model | commitStatus = Just "Creating branch..." }
+                        ( { model | commitStatus = Just ( Working, "Creating branch..." ) }
                         , GitLab.Branches.createBranch token project.id branchName currentBranch GotCreateBranchResult
                         )
 
@@ -1309,10 +1278,10 @@ update msg model =
                         currentBranches =
                             model.branches |> Maybe.withDefault []
                     in
-                    ( { model | branches = Just (branch :: currentBranches), commitStatus = Just "Branch created!", newBranchName = "", currentBranch = Just branch.name }, Cmd.none )
+                    ( { model | branches = Just (branch :: currentBranches), commitStatus = Just ( Done, "Branch created" ), newBranchName = "", currentBranch = Just branch.name }, Cmd.none )
 
                 Err _ ->
-                    ( { model | commitStatus = Just "Failed to create branch." }, Cmd.none )
+                    ( { model | commitStatus = Just ( Failed, "Couldn't create the branch" ) }, Cmd.none )
 
         UpdateMRTitle title ->
             ( { model | mrTitle = title }, Cmd.none )
@@ -1321,7 +1290,7 @@ update msg model =
             case ( model.token, model.selectedProject, model.currentBranch ) of
                 ( Just token, Just project, Just currentBranch ) ->
                     if currentBranch /= project.defaultBranch && model.mrTitle /= "" then
-                        ( { model | commitStatus = Just "Creating Merge Request..." }
+                        ( { model | commitStatus = Just ( Working, "Opening merge request..." ) }
                         , GitLab.MergeRequests.createMergeRequest token project.id currentBranch project.defaultBranch model.mrTitle GotMRResult
                         )
 
@@ -1338,10 +1307,10 @@ update msg model =
                         currentMRs =
                             model.mergeRequests |> Maybe.withDefault []
                     in
-                    ( { model | mergeRequests = Just (mr :: currentMRs), commitStatus = Just ("Merge Request Created: " ++ mr.webUrl), mrTitle = "" }, Cmd.none )
+                    ( { model | mergeRequests = Just (mr :: currentMRs), commitStatus = Just ( Done, "Merge request opened" ), mrTitle = "" }, Cmd.none )
 
                 Err _ ->
-                    ( { model | commitStatus = Just "Failed to create Merge Request." }, Cmd.none )
+                    ( { model | commitStatus = Just ( Failed, "Couldn't open the merge request" ) }, Cmd.none )
 
         ToggleExportTarget target ->
             let
@@ -1412,12 +1381,12 @@ update msg model =
                                 ( model, Cmd.none )
 
                             else
-                                ( { model | commitStatus = Just "Running export pipeline..." }
+                                ( { model | commitStatus = Just ( Working, "Exporting..." ) }
                                 , GitLab.Commits.createCommit token project.id payload (GotCommitResult CommitOther)
                                 )
 
                         Nothing ->
-                            ( { model | commitStatus = Just "Export failed: Tokens not loaded." }, Cmd.none )
+                            ( { model | commitStatus = Just ( Failed, "Load tokens before exporting" ) }, Cmd.none )
 
                 _ ->
-                    ( { model | commitStatus = Just "Export failed: Project or branch not selected." }, Cmd.none )
+                    ( { model | commitStatus = Just ( Failed, "Pick a repository and branch before exporting" ) }, Cmd.none )

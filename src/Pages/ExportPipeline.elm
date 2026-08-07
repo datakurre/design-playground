@@ -1,47 +1,41 @@
 module Pages.ExportPipeline exposing (viewExportPipeline)
 
-import Html exposing (Html, button, div, h2, input, p, text)
-import Html.Attributes exposing (style)
+import Html exposing (Html, button, div, h3, input, label, p, text)
+import Html.Attributes exposing (checked, type_)
 import Html.Events exposing (onClick)
+import Tailwind as Tw exposing (classes)
+import Tailwind.Theme exposing (s1, s2, s3, s4)
 import Types exposing (..)
+import Ui
 
 
 viewExportPipeline : Model -> Html Msg
 viewExportPipeline model =
-    div [ style "padding" "2rem", style "background" "#fff", style "border-radius" "8px", style "box-shadow" "0 2px 4px rgba(0,0,0,0.1)" ]
-        [ h2 [] [ text "Export Pipeline" ]
-        , p [] [ text "Generate target formats from your tokens and commit them to the repository." ]
-        , div [ style "margin-top" "1rem", style "margin-bottom" "1rem" ]
-            [ div [ style "margin-bottom" "0.5rem" ]
-                [ input
-                    [ Html.Attributes.type_ "checkbox"
-                    , Html.Attributes.checked (List.member "css" model.exportTargets)
-                    , onClick (ToggleExportTarget "css")
-                    , style "margin-right" "0.5rem"
-                    ]
-                    []
-                , text "CSS Variables"
-                ]
-            , div [ style "margin-bottom" "0.5rem" ]
-                [ input
-                    [ Html.Attributes.type_ "checkbox"
-                    , Html.Attributes.checked (List.member "tailwind" model.exportTargets)
-                    , onClick (ToggleExportTarget "tailwind")
-                    , style "margin-right" "0.5rem"
-                    ]
-                    []
-                , text "Tailwind Config"
-                ]
+    div [ Ui.panel ]
+        [ h3 [ Ui.pageTitle, classes [ Tw.mb s1 ] ] [ text "Export" ]
+        , p [ Ui.muted, classes [ Tw.mb s4 ] ]
+            [ text "Write your tokens out in other formats and commit them to the repository." ]
+        , div [ classes [ Tw.flex, Tw.flex_col, Tw.gap s2, Tw.mb s4 ] ]
+            [ viewTarget model "css" "CSS custom properties" "exports/variables.css"
+            , viewTarget model "tailwind" "Tailwind config" "exports/tailwind.config.js"
             ]
-        , button
-            [ onClick RunExportPipeline
-            , style "padding" "0.5rem 1rem"
-            , style "background" "#e91e63"
-            , style "color" "white"
-            , style "border" "none"
-            , style "border-radius" "4px"
-            , style "cursor" "pointer"
-            , style "font-size" "1em"
+        , button [ Ui.btnPrimary, onClick RunExportPipeline ] [ text "Export and commit" ]
+        ]
+
+
+{-| The old checkboxes named only the format. Naming the file it writes makes
+the commit predictable before you click.
+-}
+viewTarget : Model -> String -> String -> String -> Html Msg
+viewTarget model target title path =
+    label [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.cursor_pointer ] ]
+        [ input
+            [ type_ "checkbox"
+            , checked (List.member target model.exportTargets)
+            , onClick (ToggleExportTarget target)
+            , classes [ Tw.cursor_pointer ]
             ]
-            [ text "Run Export Pipeline" ]
+            []
+        , Html.span [ classes [ Tw.text_sm ] ] [ text title ]
+        , Html.span [ Ui.mutedSmall, classes [ Tw.font_mono, Tw.ml s3 ] ] [ text path ]
         ]
