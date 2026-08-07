@@ -4,15 +4,19 @@ import Auth
 import Browser
 import Browser.Navigation as Nav
 import GitLab.Projects exposing (Project)
-import Html exposing (Html, a, button, div, h1, h2, h3, h4, img, li, span, text, ul)
-import Html.Attributes exposing (href, src, style)
+import Html exposing (Html, a, button, div, h2, img, li, span, text, ul)
+import Html.Attributes exposing (href, src)
 import Html.Events exposing (onClick)
 import Pages.ComponentRegistry exposing (viewComponentRegistry)
 import Pages.ExportPipeline exposing (viewExportPipeline)
 import Pages.GitWorkflows exposing (viewGitWorkflows)
 import Pages.ScreenComposer exposing (viewScreenComposer)
 import Pages.TokenStudio exposing (viewTokenStudio)
+import Tailwind as Tw exposing (classes)
+import Tailwind.Breakpoints exposing (hover)
+import Tailwind.Theme exposing (red, s0, s0_dot_5, s14, s2, s200, s3, s4, s50, s6, s700, s8, s900, slate, white)
 import Types exposing (..)
+import Ui
 import Update exposing (update)
 import Url exposing (Url)
 
@@ -133,284 +137,271 @@ view : Model -> Browser.Document Msg
 view model =
     { title = "Design Playground"
     , body =
-        [ div [ style "font-family" "sans-serif", style "padding" "2rem" ]
-            [ h1 [] [ text "Design Playground SPA" ]
-            , viewAuth model
-            , div [ style "margin-top" "2rem" ] [ text ("Current URL: " ++ Url.toString model.url) ]
-            , div [ style "margin-top" "1rem" ]
-                [ a [ href "/" ] [ text "Home" ]
-                , text " | "
-                , a [ href "/about" ] [ text "About" ]
+        [ div [ classes [ Tw.min_h_screen, Tw.bg_color (slate s50), Tw.text_color (slate s900) ] ]
+            [ viewAppBar model
+            , div [ Ui.page ]
+                [ viewError model
+                , viewWorkspace model
                 ]
-            , viewProjects model
             ]
         ]
     }
 
 
-viewAuth : Model -> Html Msg
-viewAuth model =
-    div [ style "padding" "1rem", style "border" "1px solid #ccc", style "border-radius" "8px", style "display" "inline-block" ]
-        [ case model.error of
-            Just err ->
-                div [ style "color" "red", style "margin-bottom" "1rem" ] [ text err ]
-
-            Nothing ->
-                text ""
-        , case model.token of
-            Nothing ->
-                a
-                    [ href (Auth.loginUrl model.pkceChallenge)
-                    , style "display" "inline-block"
-                    , style "padding" "0.5rem 1rem"
-                    , style "background" "#fc6d26"
-                    , style "color" "white"
-                    , style "text-decoration" "none"
-                    , style "border-radius" "4px"
-                    , style "font-weight" "bold"
-                    ]
-                    [ text "Connect to GitLab" ]
-
-            Just _ ->
-                case model.user of
-                    Nothing ->
-                        text "Loading profile..."
-
-                    Just user ->
-                        div [ style "display" "flex", style "align-items" "center", style "gap" "1rem" ]
-                            [ img [ src user.avatarUrl, style "width" "48px", style "border-radius" "50%" ] []
-                            , div []
-                                [ div [ style "font-weight" "bold" ] [ text user.name ]
-                                , div [ style "color" "#666" ] [ text ("@" ++ user.username) ]
-                                ]
-                            , button
-                                [ onClick Logout
-                                , style "margin-left" "1rem"
-                                , style "padding" "0.5rem 1rem"
-                                , style "cursor" "pointer"
-                                , style "background" "#f4f4f4"
-                                , style "border" "1px solid #ccc"
-                                , style "border-radius" "4px"
-                                ]
-                                [ text "Logout" ]
-                            ]
+{-| One slim bar carries identity, the current repository, and account
+controls. Everything the old header showed above the fold — a "Design
+Playground SPA" hero, the raw current URL, and Home/About links that went
+nowhere — is gone.
+-}
+viewAppBar : Model -> Html Msg
+viewAppBar model =
+    div
+        [ classes
+            [ Tw.bg_simple white
+            , Tw.border_b
+            , Tw.border_color (slate s200)
+            , Tw.px s4
+            ]
+        ]
+        [ div
+            [ classes
+                [ Tw.mx_auto
+                , Tw.raw "max-w-6xl"
+                , Tw.flex
+                , Tw.items_center
+                , Tw.justify_between
+                , Tw.gap s4
+                , Tw.h s14
+                ]
+            ]
+            [ div [ classes [ Tw.font_semibold, Tw.text_sm ] ] [ text "Design Playground" ]
+            , div [ classes [ Tw.flex, Tw.items_center, Tw.gap s3 ] ]
+                [ viewStatus model.commitStatus
+                , viewRepoBadge model
+                , viewAccount model
+                ]
+            ]
         ]
 
 
-viewProjects : Model -> Html Msg
-viewProjects model =
-    case ( model.token, model.user ) of
-        ( Just _, Just _ ) ->
-            div [ style "margin-top" "2rem", style "border-top" "1px solid #ccc", style "padding-top" "1rem" ]
-                [ h2 [] [ text "GitLab Persistence Layer" ]
-                , case model.projects of
-                    Nothing ->
-                        button [ onClick FetchProjects ] [ text "Load My Projects" ]
+viewStatus : Maybe Status -> Html Msg
+viewStatus status =
+    case status of
+        Just ( level, message ) ->
+            Ui.pill
+                (case level of
+                    Working ->
+                        Ui.Neutral
 
-                    Just projects ->
-                        case model.selectedProject of
-                            Nothing ->
-                                div [ style "max-width" "600px", style "margin" "0 auto" ]
-                                    [ h3 [] [ text "Select a Repository" ]
-                                    , ul [ style "list-style" "none", style "padding" "0" ]
-                                        (List.map
-                                            (\p ->
-                                                li
-                                                    [ style "padding" "0.5rem"
-                                                    , style "cursor" "pointer"
-                                                    , style "border-bottom" "1px solid #eee"
-                                                    , onClick (SelectProject p)
-                                                    ]
-                                                    [ text p.pathWithNamespace ]
-                                            )
-                                            projects
-                                        )
-                                    , button
-                                        [ onClick LoadMoreProjects
-                                        , style "margin-top" "1rem"
-                                        , style "padding" "0.5rem 1rem"
-                                        , style "cursor" "pointer"
-                                        ]
-                                        [ text "Load More" ]
-                                    ]
+                    Done ->
+                        Ui.Positive
 
-                            Just project ->
-                                viewProjectDetails model project
-                ]
+                    Failed ->
+                        Ui.Negative
+                )
+                message
 
-        _ ->
+        Nothing ->
             text ""
 
 
-viewProjectDetails : Model -> Project -> Html Msg
-viewProjectDetails model project =
-    div []
-        [ div [ style "display" "flex", style "justify-content" "space-between", style "align-items" "center", style "margin-bottom" "1rem" ]
-            [ h3 [ style "margin" "0" ] [ text ("Repository: " ++ project.pathWithNamespace) ]
-            , button
-                [ onClick UnselectProject
-                , style "padding" "0.5rem 1rem"
-                , style "cursor" "pointer"
-                , style "background" "#f4f4f4"
-                , style "border" "1px solid #ccc"
-                , style "border-radius" "4px"
+viewRepoBadge : Model -> Html Msg
+viewRepoBadge model =
+    case model.selectedProject of
+        Just project ->
+            div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2 ] ]
+                [ span [ classes [ Tw.text_sm, Tw.font_medium ] ] [ text project.pathWithNamespace ]
+                , button [ Ui.btnNeutral, onClick UnselectProject ] [ text "Change" ]
                 ]
-                [ text "Change Repository" ]
-            ]
-        , div [ style "margin-bottom" "1rem" ]
-            [ button [ onClick WriteTestFile ] [ text "Test Write Operation" ]
-            , case model.commitStatus of
-                Just status ->
-                    span
-                        [ style "margin-left" "1rem"
-                        , style "font-weight" "bold"
-                        , style "color"
-                            (if status == "Success!" then
-                                "green"
 
-                             else if status == "Writing..." then
-                                "blue"
+        Nothing ->
+            text ""
 
-                             else
-                                "red"
-                            )
-                        ]
-                        [ text status ]
 
+viewAccount : Model -> Html Msg
+viewAccount model =
+    case model.token of
+        Nothing ->
+            a [ Ui.btnBrand, href (Auth.loginUrl model.pkceChallenge) ] [ text "Connect to GitLab" ]
+
+        Just _ ->
+            case model.user of
                 Nothing ->
-                    text ""
+                    span [ Ui.muted ] [ text "Signing in..." ]
+
+                Just user ->
+                    div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2 ] ]
+                        [ img
+                            [ src user.avatarUrl
+                            , Html.Attributes.alt (user.name ++ " (@" ++ user.username ++ ")")
+                            , Html.Attributes.title (user.name ++ " (@" ++ user.username ++ ")")
+                            , classes [ Tw.w s6, Tw.h s6, Tw.rounded_full ]
+                            ]
+                            []
+                        , button [ Ui.btnNeutral, onClick Logout ] [ text "Sign out" ]
+                        ]
+
+
+viewError : Model -> Html Msg
+viewError model =
+    case model.error of
+        Just err ->
+            div
+                [ classes
+                    [ Tw.mb s4
+                    , Tw.p s3
+                    , Tw.rounded_md
+                    , Tw.border
+                    , Tw.border_color (red s200)
+                    , Tw.bg_color (red s50)
+                    , Tw.text_sm
+                    , Tw.text_color (red s700)
+                    ]
+                ]
+                [ text err ]
+
+        Nothing ->
+            text ""
+
+
+{-| Signed out, there is nothing to show but the sign-in button in the bar.
+Signed in without a repository, the user picks one. After that, the editor.
+-}
+viewWorkspace : Model -> Html Msg
+viewWorkspace model =
+    case ( model.token, model.user ) of
+        ( Just _, Just _ ) ->
+            case model.projects of
+                Nothing ->
+                    div [ classes [ Tw.text_center, Tw.py s8 ] ]
+                        [ div [ Ui.muted, classes [ Tw.mb s3 ] ]
+                            [ text "Your design tokens, components and screens live in a GitLab repository." ]
+                        , button [ Ui.btnPrimary, onClick FetchProjects ] [ text "Choose a repository" ]
+                        ]
+
+                Just projects ->
+                    case model.selectedProject of
+                        Nothing ->
+                            viewProjectPicker projects
+
+                        Just project ->
+                            viewEditor model project
+
+        _ ->
+            div [ classes [ Tw.text_center, Tw.py s8 ] ]
+                [ h2 [ Ui.pageTitle, classes [ Tw.mb s2 ] ] [ text "Design tokens, kept in Git" ]
+                , div [ Ui.muted ]
+                    [ text "Connect your GitLab account to edit the tokens, components and screens in one of your repositories." ]
+                ]
+
+
+viewProjectPicker : List Project -> Html Msg
+viewProjectPicker projects =
+    div [ classes [ Tw.mx_auto, Tw.raw "max-w-xl" ] ]
+        [ h2 [ Ui.pageTitle, classes [ Tw.mb s3 ] ] [ text "Choose a repository" ]
+        , ul [ Ui.panel, classes [ Tw.list_none, Tw.p s0 ] ]
+            (List.map
+                (\p ->
+                    li []
+                        [ button
+                            [ onClick (SelectProject p)
+                            , classes
+                                [ Tw.w_full
+                                , Tw.text_left
+                                , Tw.px s4
+                                , Tw.py s3
+                                , Tw.text_sm
+                                , Tw.border_none
+                                , Tw.raw "bg-transparent"
+                                , Tw.cursor_pointer
+                                , Tw.border_b
+                                , Tw.border_color (slate s200)
+                                , hover [ Tw.bg_color (slate s50) ]
+                                ]
+                            ]
+                            [ text p.pathWithNamespace ]
+                        ]
+                )
+                projects
+            )
+        , div [ classes [ Tw.mt s3, Tw.text_center ] ]
+            [ button [ Ui.btnNeutral, onClick LoadMoreProjects ] [ text "Load more" ] ]
+        ]
+
+
+viewEditor : Model -> Project -> Html Msg
+viewEditor model project =
+    div []
+        [ viewTabs model
+        , div [ classes [ Tw.py s4 ] ] [ viewActiveTab model ]
+        , viewRepositoryFiles model project
+        ]
+
+
+{-| The five tabs used to be five near-identical twenty-line button blocks.
+Their labels were internal vocabulary; these are what the user is editing.
+-}
+viewTabs : Model -> Html Msg
+viewTabs model =
+    div
+        [ classes
+            [ Tw.flex
+            , Tw.gap s6
+            , Tw.border_b
+            , Tw.border_color (slate s200)
             ]
-        , div [ style "display" "flex", style "gap" "1rem", style "margin-bottom" "1rem", style "border-bottom" "1px solid #ccc", style "padding-bottom" "0.5rem" ]
-            [ button
-                [ onClick (SwitchTab TokenStudio)
-                , style "padding" "0.5rem 1rem"
-                , style "background"
-                    (if model.activeTab == TokenStudio then
-                        "#e0f7fa"
-
-                     else
-                        "transparent"
-                    )
-                , style "border" "none"
-                , style "cursor" "pointer"
-                , style "font-weight"
-                    (if model.activeTab == TokenStudio then
-                        "bold"
-
-                     else
-                        "normal"
-                    )
-                ]
-                [ text "Token Studio" ]
-            , button
-                [ onClick (SwitchTab ComponentRegistry)
-                , style "padding" "0.5rem 1rem"
-                , style "background"
-                    (if model.activeTab == ComponentRegistry then
-                        "#e0f7fa"
-
-                     else
-                        "transparent"
-                    )
-                , style "border" "none"
-                , style "cursor" "pointer"
-                , style "font-weight"
-                    (if model.activeTab == ComponentRegistry then
-                        "bold"
-
-                     else
-                        "normal"
-                    )
-                ]
-                [ text "Component Registry" ]
-            , button
-                [ onClick (SwitchTab ScreenComposer)
-                , style "padding" "0.5rem 1rem"
-                , style "background"
-                    (if model.activeTab == ScreenComposer then
-                        "#e0f7fa"
-
-                     else
-                        "transparent"
-                    )
-                , style "border" "none"
-                , style "cursor" "pointer"
-                , style "font-weight"
-                    (if model.activeTab == ScreenComposer then
-                        "bold"
-
-                     else
-                        "normal"
-                    )
-                ]
-                [ text "Screen Composer" ]
-            , button
-                [ onClick (SwitchTab GitWorkflows)
-                , style "padding" "0.5rem 1rem"
-                , style "background"
-                    (if model.activeTab == GitWorkflows then
-                        "#e0f7fa"
-
-                     else
-                        "transparent"
-                    )
-                , style "border" "none"
-                , style "cursor" "pointer"
-                , style "font-weight"
-                    (if model.activeTab == GitWorkflows then
-                        "bold"
-
-                     else
-                        "normal"
-                    )
-                ]
-                [ text "Git Workflows" ]
-            , button
-                [ onClick (SwitchTab ExportPipeline)
-                , style "padding" "0.5rem 1rem"
-                , style "background"
-                    (if model.activeTab == ExportPipeline then
-                        "#e0f7fa"
-
-                     else
-                        "transparent"
-                    )
-                , style "border" "none"
-                , style "cursor" "pointer"
-                , style "font-weight"
-                    (if model.activeTab == ExportPipeline then
-                        "bold"
-
-                     else
-                        "normal"
-                    )
-                ]
-                [ text "Export Pipeline" ]
+        ]
+        (List.map
+            (\( tabId, label ) -> Ui.tab (model.activeTab == tabId) (SwitchTab tabId) label)
+            [ ( TokenStudio, "Tokens" )
+            , ( ComponentRegistry, "Components" )
+            , ( ScreenComposer, "Screens" )
+            , ( GitWorkflows, "Branches & Reviews" )
+            , ( ExportPipeline, "Export" )
             ]
-        , if model.activeTab == TokenStudio then
+        )
+
+
+viewActiveTab : Model -> Html Msg
+viewActiveTab model =
+    case model.activeTab of
+        TokenStudio ->
             viewTokenStudio model
 
-          else if model.activeTab == ComponentRegistry then
+        ComponentRegistry ->
             viewComponentRegistry model
 
-          else if model.activeTab == ScreenComposer then
+        ScreenComposer ->
             viewScreenComposer model
 
-          else if model.activeTab == GitWorkflows then
+        GitWorkflows ->
             viewGitWorkflows model
 
-          else
+        ExportPipeline ->
             viewExportPipeline model
-        , h4 [ style "margin-top" "2rem" ] [ text ("Files in " ++ project.defaultBranch) ]
+
+
+{-| This listing used to sit expanded under every tab, showing raw git mode
+bits ("100644 blob tokens/tokens.json"). It is reference material, so it is
+collapsed and shows paths only.
+-}
+viewRepositoryFiles : Model -> Project -> Html Msg
+viewRepositoryFiles model project =
+    Html.details [ classes [ Tw.mt s4, Tw.text_sm ] ]
+        [ Html.summary [ Ui.muted, classes [ Tw.cursor_pointer ] ]
+            [ text ("Files on " ++ project.defaultBranch) ]
         , case model.repositoryTree of
             Nothing ->
-                text "Loading files..."
+                div [ Ui.muted, classes [ Tw.mt s2 ] ] [ text "Loading..." ]
 
             Just tree ->
                 if List.isEmpty tree then
-                    text "Repository is empty."
+                    div [ Ui.muted, classes [ Tw.mt s2 ] ] [ text "This repository is empty." ]
 
                 else
-                    ul [ style "font-family" "monospace", style "background" "#f4f4f4", style "padding" "1rem", style "border-radius" "4px" ]
-                        (List.map (\item -> li [] [ text (item.mode ++ " " ++ item.type_ ++ " " ++ item.path) ]) tree)
+                    ul
+                        [ Ui.panelSunken
+                        , classes [ Tw.mt s2, Tw.list_none, Tw.font_mono, Tw.text_xs, Tw.text_color (slate s700) ]
+                        ]
+                        (List.map (\item -> li [ classes [ Tw.py s0_dot_5 ] ] [ text item.path ]) tree)
         ]

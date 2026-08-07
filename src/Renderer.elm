@@ -77,24 +77,20 @@ renderScreenNode components screens visited tokens node =
                             renderLayoutWithSlots components screens visited tokens slotDict layout
 
                         Nothing ->
-                            div [ style "color" "red", style "border" "1px solid red", style "padding" "0.5rem" ]
-                                [ text ("Component " ++ props.componentName ++ " has no layout defined.") ]
+                            previewProblem (props.componentName ++ " has no layout yet — add one on the Components tab.")
 
                 Nothing ->
-                    div [ style "color" "red", style "border" "1px solid red", style "padding" "0.5rem" ]
-                        [ text ("Component not found: " ++ props.componentName) ]
+                    previewProblem ("There is no component called " ++ props.componentName ++ ".")
 
         ScreenInstance props ->
             if List.member props.screenName visited then
-                div [ style "color" "red", style "border" "1px solid red", style "padding" "0.5rem" ]
-                    [ text ("Infinite recursion detected for screen: " ++ props.screenName) ]
+                previewProblem (props.screenName ++ " ends up including itself — remove the loop to preview it.")
             else
                 case Dict.get props.screenName screens of
                     Just screen ->
                         renderScreenNode components screens (props.screenName :: visited) tokens screen.root
                     Nothing ->
-                        div [ style "color" "red", style "border" "1px solid red", style "padding" "0.5rem" ]
-                            [ text ("Screen not found: " ++ props.screenName) ]
+                        previewProblem ("There is no screen called " ++ props.screenName ++ ".")
 
         Container props children ->
             div
@@ -151,3 +147,20 @@ renderLayoutWithSlots components screens visited tokens slots layout =
 render : List FlatToken -> Layout -> Html msg
 render tokens layout =
     renderLayoutWithSlots Dict.empty Dict.empty [] tokens Dict.empty layout
+
+
+{-| Something in the design can't be drawn. This renders inside the preview
+surface, among the user's own token-driven styles, so it is styled inline like
+everything else in this module rather than with the app's Tailwind classes.
+-}
+previewProblem : String -> Html msg
+previewProblem message =
+    div
+        [ style "color" "#b91c1c"
+        , style "background" "#fef2f2"
+        , style "border" "1px solid #fecaca"
+        , style "border-radius" "6px"
+        , style "padding" "0.5rem 0.75rem"
+        , style "font" "13px/1.4 system-ui, sans-serif"
+        ]
+        [ text message ]

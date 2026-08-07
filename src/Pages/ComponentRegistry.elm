@@ -3,67 +3,140 @@ module Pages.ComponentRegistry exposing (viewComponentRegistry)
 import Components
 import CssProperties
 import Dict
-import Html exposing (Html, button, div, h4, h5, h6, li, text, ul)
-import Html.Attributes exposing (style, value)
+import Html exposing (Html, button, div, h3, h4, li, text, ul)
+import Html.Attributes exposing (value)
 import Html.Events exposing (onClick, onInput)
 import Renderer
+import Tailwind as Tw exposing (classes)
+import Tailwind.Breakpoints exposing (hover)
+import Tailwind.Theme exposing (s0, s0_dot_5, s1, s2, s3, s4, s6, s24, s40, s50, s64, s100, s200, s700, s900, slate)
 import Themes
+import Tokens
 import Types exposing (..)
+import Ui
 
 
+{-| One node in the layout tree. Layouts nest, so this recurses.
+-}
 viewLayoutEditorNode : Model -> List Int -> Components.Layout -> Html Msg
 viewLayoutEditorNode model path layout =
     let
-        (nodeType, styles, childrenNodes) =
+        ( nodeType, styles, childrenNodes ) =
             case layout of
                 Components.Stack props children ->
-                    ("Stack", props.styles, children)
+                    ( "Stack", props.styles, children )
+
                 Components.Grid props children ->
-                    ("Grid", props.styles, children)
+                    ( "Grid", props.styles, children )
+
                 Components.Element props content ->
-                    ("Element (" ++ content ++ ")", props.styles, [])
+                    ( "Text", props.styles, [] )
     in
-    div [ style "margin-bottom" "1rem", style "border" "1px solid #ddd", style "padding" "0.5rem", style "border-radius" "4px" ]
-        [ div [ style "display" "flex", style "justify-content" "space-between", style "align-items" "center", style "margin-bottom" "0.5rem", style "background" "#f0f0f0", style "padding" "0.2rem 0.5rem" ]
-            [ Html.strong [] [ text nodeType ]
-            , button [ onClick (DeleteLayoutNode path), style "padding" "0.2rem 0.5rem", style "background" "#ffdddd", style "border" "none", style "cursor" "pointer" ] [ text "Delete Node" ]
+    div
+        [ classes
+            [ Tw.mb s2
+            , Tw.border
+            , Tw.border_color (slate s200)
+            , Tw.rounded_md
+            , Tw.overflow_hidden
             ]
-        , div [ style "margin-bottom" "0.5rem", style "padding-left" "1rem" ]
-            [ h6 [ style "margin" "0 0 0.5rem 0" ] [ text "Styles" ]
-            , ul [ style "list-style" "none", style "padding" "0", style "margin" "0 0 0.5rem 0" ]
-                (List.map (\(key, val) -> 
-                    li [ style "display" "flex", style "gap" "0.5rem", style "margin-bottom" "0.2rem" ] 
-                        [ text (key ++ ": ")
-                        , Html.input [ value val, onInput (UpdateLayoutProperty path key), style "padding" "0.2rem", style "flex" "1", Html.Attributes.attribute "list" "tokensList" ] []
-                        , button [ onClick (RemoveLayoutProperty path key), style "padding" "0.2rem", style "background" "#ffdddd", style "border" "none" ] [ text "X" ] 
-                        ]
-                ) (Dict.toList styles))
-            , div [ style "display" "flex", style "gap" "0.5rem", style "align-items" "center" ]
-                [ Html.input [ value model.newLayoutPropertyName, onInput UpdateNewLayoutPropertyName, Html.Attributes.placeholder "CSS Property", style "padding" "0.2rem", style "width" "100px", Html.Attributes.attribute "list" "css-properties-list" ] []
-                , Html.input [ value model.newLayoutPropertyValue, onInput UpdateNewLayoutPropertyValue, Html.Attributes.placeholder "Token", style "padding" "0.2rem", style "flex" "1", Html.Attributes.attribute "list" "tokensList" ] []
-                , button [ onClick (UpdateLayoutProperty path model.newLayoutPropertyName model.newLayoutPropertyValue), style "padding" "0.2rem" ] [ text "Add Style" ]
+        ]
+        [ div
+            [ classes
+                [ Tw.flex
+                , Tw.justify_between
+                , Tw.items_center
+                , Tw.px s2
+                , Tw.py s1
+                , Tw.bg_color (slate s50)
+                , Tw.border_b
+                , Tw.border_color (slate s200)
+                ]
+            ]
+            [ Html.strong [ Ui.fieldLabel ] [ text nodeType ]
+            , button
+                [ Ui.iconButton
+                , onClick (DeleteLayoutNode path)
+                , Html.Attributes.attribute "aria-label" ("Remove this " ++ nodeType)
+                , Html.Attributes.title ("Remove this " ++ nodeType)
+                ]
+                [ text "×" ]
+            ]
+        , div [ classes [ Tw.p s2 ] ]
+            [ div [ Ui.fieldLabel, classes [ Tw.mb s1 ] ] [ text "Styles" ]
+            , ul [ classes [ Tw.list_none, Tw.p s0, Tw.mb s1 ] ]
+                (List.map
+                    (\( key, val ) ->
+                        li [ classes [ Tw.flex, Tw.gap s2, Tw.items_center, Tw.mb s1 ] ]
+                            [ div [ Ui.mutedSmall, classes [ Tw.w s24, Tw.truncate ] ] [ text key ]
+                            , Html.input
+                                [ Ui.textInput
+                                , value val
+                                , onInput (UpdateLayoutProperty path key)
+                                , Html.Attributes.attribute "aria-label" key
+                                , Html.Attributes.attribute "list" "tokensList"
+                                , classes [ Tw.flex_1 ]
+                                ]
+                                []
+                            , button
+                                [ Ui.iconButton
+                                , onClick (RemoveLayoutProperty path key)
+                                , Html.Attributes.attribute "aria-label" ("Remove " ++ key)
+                                , Html.Attributes.title ("Remove " ++ key)
+                                ]
+                                [ text "×" ]
+                            ]
+                    )
+                    (Dict.toList styles)
+                )
+            , div [ classes [ Tw.flex, Tw.gap s2, Tw.items_center ] ]
+                [ Html.input
+                    [ Ui.textInput
+                    , value model.newLayoutPropertyName
+                    , onInput UpdateNewLayoutPropertyName
+                    , Html.Attributes.placeholder "CSS property"
+                    , Html.Attributes.attribute "aria-label" "CSS property"
+                    , Html.Attributes.attribute "list" "css-properties-list"
+                    , classes [ Tw.w s40 ]
+                    ]
+                    []
+                , Html.input
+                    [ Ui.textInput
+                    , value model.newLayoutPropertyValue
+                    , onInput UpdateNewLayoutPropertyValue
+                    , Html.Attributes.placeholder "Value or {token}"
+                    , Html.Attributes.attribute "aria-label" "Value"
+                    , Html.Attributes.attribute "list" "tokensList"
+                    , classes [ Tw.flex_1 ]
+                    ]
+                    []
+                , button [ Ui.btnSmall, onClick (UpdateLayoutProperty path model.newLayoutPropertyName model.newLayoutPropertyValue) ]
+                    [ text "Add style" ]
                 ]
             ]
         , case layout of
             Components.Element _ content ->
-                div [ style "padding-left" "1rem" ]
-                    [ h6 [ style "margin" "0 0 0.5rem 0" ] [ text "Content" ]
-                    , Html.input 
-                        [ value content
+                div [ classes [ Tw.px s2, Tw.pb s2 ] ]
+                    [ div [ Ui.fieldLabel, classes [ Tw.mb s1 ] ] [ text "Text" ]
+                    , Html.input
+                        [ Ui.textInput
+                        , value content
                         , onInput (UpdateLayoutText path)
-                        , style "padding" "0.2rem"
-                        , style "width" "100%" 
-                        ] []
+                        , Html.Attributes.attribute "aria-label" "Text content"
+                        , classes [ Tw.w_full ]
+                        ]
+                        []
                     ]
+
             _ ->
-                div [ style "padding-left" "1rem", style "border-left" "2px solid #eee" ]
-                    [ h6 [ style "margin" "0 0 0.5rem 0" ] [ text "Children" ]
-                    , div []
-                        (List.indexedMap (\i child -> viewLayoutEditorNode model (path ++ [i]) child) childrenNodes)
-                    , div [ style "display" "flex", style "gap" "0.5rem", style "margin-top" "0.5rem" ]
-                        [ button [ onClick (AddLayoutStack path), style "padding" "0.2rem" ] [ text "+ Stack" ]
-                        , button [ onClick (AddLayoutGrid path), style "padding" "0.2rem" ] [ text "+ Grid" ]
-                        , button [ onClick (AddLayoutText path "New Text"), style "padding" "0.2rem" ] [ text "+ Text" ]
+                div [ classes [ Tw.px s2, Tw.pb s2 ] ]
+                    [ div [ Ui.fieldLabel, classes [ Tw.mb s1 ] ] [ text "Inside" ]
+                    , div [ classes [ Tw.pl s2, Tw.border_l_2, Tw.border_color (slate s100) ] ]
+                        (List.indexedMap (\i child -> viewLayoutEditorNode model (path ++ [ i ]) child) childrenNodes)
+                    , div [ classes [ Tw.flex, Tw.gap s2, Tw.mt s1 ] ]
+                        [ button [ Ui.btnSmall, onClick (AddLayoutStack path) ] [ text "+ Stack" ]
+                        , button [ Ui.btnSmall, onClick (AddLayoutGrid path) ] [ text "+ Grid" ]
+                        , button [ Ui.btnSmall, onClick (AddLayoutText path "New Text") ] [ text "+ Text" ]
                         ]
                     ]
         ]
@@ -73,162 +146,211 @@ viewComponentRegistry : Model -> Html Msg
 viewComponentRegistry model =
     case model.components of
         Nothing ->
-            text "Loading components..."
+            div [ Ui.muted ] [ text "Loading components..." ]
 
         Just components ->
-            div [ style "display" "flex", style "gap" "2rem" ]
-                [ div [ style "flex" "1" ]
-                    [ h4 [] [ text "Components" ]
-                    , ul [ style "list-style" "none", style "padding" "0" ]
-                        (List.map
-                            (\c ->
-                                li
-                                    [ style "padding" "0.5rem"
-                                    , style "cursor" "pointer"
-                                    , style "border-bottom" "1px solid #eee"
-                                    , style "background"
-                                        (if model.selectedComponentName == Just c.name then
-                                            "#e0f7fa"
+            div [ classes [ Tw.flex, Tw.gap s4, Tw.items_start ] ]
+                [ viewComponentList model components
+                , div [ classes [ Tw.flex_1 ] ] [ viewSelectedComponent model components ]
+                ]
 
-                                         else
-                                            "transparent"
-                                        )
-                                    , onClick (SelectComponent (Just c.name))
-                                    ]
-                                    [ text c.name ]
-                            )
-                            components
-                        )
-                    , div [ style "margin-top" "1rem", style "display" "flex", style "gap" "0.5rem" ]
-                        [ Html.input
-                            [ value model.newComponentName
-                            , onInput UpdateNewComponentName
-                            , Html.Attributes.placeholder "New Component Name"
-                            , style "padding" "0.5rem"
-                            , style "width" "150px"
-                            ]
-                            []
-                        , Html.select
-                            [ Html.Events.onInput UpdateNewComponentTemplate
-                            , value model.newComponentTemplate
-                            , style "padding" "0.5rem"
-                            ]
-                            [ Html.option [ value "Empty" ] [ text "Empty" ]
-                            , Html.option [ value "Button" ] [ text "Button" ]
-                            , Html.option [ value "Card" ] [ text "Card" ]
-                            ]
-                        , button [ onClick CreateComponent, style "padding" "0.5rem" ] [ text "Create" ]
-                        ]
-                    ]
-                , div [ style "flex" "2" ]
-                    [ case model.selectedComponentName of
-                        Nothing ->
-                            text "Select a component to edit."
 
-                        Just activeName ->
-                            let
-                                activeComponent =
-                                    List.filter (\c -> c.name == activeName) components |> List.head
-
-                                baseTokens =
-                                    model.tokens |> Maybe.withDefault []
-
-                                displayTokens =
-                                    case model.activeThemeName of
-                                        Nothing ->
-                                            baseTokens
-
-                                        Just activeThemeNameStr ->
-                                            let
-                                                activeTheme =
-                                                    List.filter (\t -> t.name == activeThemeNameStr) model.themes |> List.head
-                                            in
-                                            case activeTheme of
-                                                Just theme ->
-                                                    Themes.applyTheme baseTokens theme
-
-                                                Nothing ->
-                                                    baseTokens
-                            in
-                            case activeComponent of
-                                Just comp ->
-                                    div [ style "display" "flex", style "gap" "1rem" ]
-                                        [ div [ style "flex" "1", style "background" "#fff", style "padding" "1rem", style "border" "1px solid #ccc", style "border-radius" "8px" ]
-                                            [ div [ style "display" "flex", style "justify-content" "space-between", style "margin-bottom" "1rem" ]
-                                                [ h4 [ style "margin" "0" ] [ text ("Component: " ++ comp.name) ]
-                                                , div [ style "display" "flex", style "gap" "0.5rem" ]
-                                                    [ button [ onClick SaveComponent, style "padding" "0.5rem 1rem", style "background" "#28a745", style "color" "white", style "border" "none", style "border-radius" "4px", style "cursor" "pointer" ] [ text "Save Component" ]
-                                                    , button [ onClick (DeleteComponent comp.name), style "padding" "0.5rem 1rem", style "background" "#dc3545", style "color" "white", style "border" "none", style "border-radius" "4px", style "cursor" "pointer" ] [ text "Delete Component" ]
-                                                    ]
-                                                ]
-                                            , div [ style "margin-bottom" "1rem" ]
-                                                [ h5 [] [ text "Variants" ]
-                                                , ul [] (List.map (\v -> li [] [ text v ]) comp.variants)
-                                                , div [ style "display" "flex", style "gap" "0.5rem" ]
-                                                    [ Html.input [ value model.newComponentVariant, onInput UpdateNewComponentVariant, Html.Attributes.placeholder "New Variant", style "padding" "0.5rem" ] []
-                                                    , button [ onClick AddComponentVariant, style "padding" "0.5rem" ] [ text "Add Variant" ]
-                                                    ]
-                                                ]
-                                            , div [ style "margin-bottom" "1rem" ]
-                                                [ h5 [] [ text "States" ]
-                                                , ul [] (List.map (\s -> li [] [ text s ]) comp.states)
-                                                , div [ style "display" "flex", style "gap" "0.5rem" ]
-                                                    [ Html.input [ value model.newComponentState, onInput UpdateNewComponentState, Html.Attributes.placeholder "New State", style "padding" "0.5rem" ] []
-                                                    , button [ onClick AddComponentState, style "padding" "0.5rem" ] [ text "Add State" ]
-                                                    ]
-                                                ]
-                                            , div [ style "margin-bottom" "1rem" ]
-                                                [ h5 [] [ text "Slots" ]
-                                                , ul [] (List.map (\s -> li [] [ text s ]) comp.slots)
-                                                , div [ style "display" "flex", style "gap" "0.5rem" ]
-                                                    [ Html.input [ value model.newComponentSlot, onInput UpdateNewComponentSlot, Html.Attributes.placeholder "New Slot", style "padding" "0.5rem" ] []
-                                                    , button [ onClick AddComponentSlot, style "padding" "0.5rem" ] [ text "Add Slot" ]
-                                                    ]
-                                                ]
-                                            , div [ style "margin-bottom" "1rem", style "border-top" "1px solid #eee", style "padding-top" "1rem" ]
-                                                [ h5 [] [ text "Visual Layout Editor" ]
-                                                , Html.datalist [ Html.Attributes.id "tokensList" ]
-                                                    (List.map (\( p, _ ) -> Html.option [ value ("{" ++ String.join "." p ++ "}") ] []) displayTokens)
-                                                , Html.datalist [ Html.Attributes.id "css-properties-list" ]
-                                                    (List.map (\prop -> Html.option [ value prop ] []) CssProperties.allProperties)
-                                                , case comp.layout of
-                                                    Nothing ->
-                                                        button [ onClick InitComponentLayout, style "padding" "0.5rem" ] [ text "Initialize Layout (Stack)" ]
-
-                                                    Just layoutRoot ->
-                                                        viewLayoutEditorNode model [] layoutRoot
-                                                ]
-                                            ]
-                                        , div [ style "flex" "1", style "background" "#f9f9f9", style "padding" "1rem", style "border" "1px solid #ccc", style "border-radius" "8px", style "display" "flex", style "flex-direction" "column" ]
-                                            [ div [ style "display" "flex", style "justify-content" "space-between", style "align-items" "center", style "margin-bottom" "1rem" ]
-                                                [ h4 [ style "margin" "0" ] [ text "Live Preview" ]
-                                                , Html.select
-                                                    [ onInput
-                                                        (\val ->
-                                                            SelectTheme
-                                                                (if val == "" then
-                                                                    Nothing
-                                                                 else
-                                                                    Just val
-                                                                )
-                                                        )
-                                                    , style "padding" "0.5rem"
-                                                    ]
-                                                    (Html.option [ value "" ] [ text "Base Theme" ]
-                                                        :: List.map (\t -> Html.option [ value t.name, Html.Attributes.selected (model.activeThemeName == Just t.name) ] [ text t.name ]) model.themes
-                                                    )
-                                                ]
-                                            , case comp.layout of
-                                                Just l ->
-                                                    div [ style "border" "1px dashed #aaa", style "padding" "1rem", style "min-height" "100px", style "background" "#fff" ]
-                                                        [ Renderer.render displayTokens l ]
-
-                                                Nothing ->
-                                                    text "No layout defined."
-                                            ]
+viewComponentList : Model -> List Components.Component -> Html Msg
+viewComponentList model components =
+    div [ Ui.panel, classes [ Tw.w s64 ] ]
+        [ h3 [ Ui.pageTitle, classes [ Tw.mb s2 ] ] [ text "Components" ]
+        , ul [ classes [ Tw.list_none, Tw.p s0 ] ]
+            (List.map
+                (\c ->
+                    li []
+                        [ button
+                            [ onClick (SelectComponent (Just c.name))
+                            , classes
+                                [ Tw.w_full
+                                , Tw.text_left
+                                , Tw.px s2
+                                , Tw.py s2
+                                , Tw.text_sm
+                                , Tw.border_none
+                                , Tw.rounded_md
+                                , Tw.cursor_pointer
+                                , if model.selectedComponentName == Just c.name then
+                                    Tw.batch
+                                        [ Tw.bg_color (slate s100)
+                                        , Tw.font_medium
+                                        , Tw.text_color (slate s900)
                                         ]
 
-                                Nothing ->
-                                    text "Component not found."
-                    ]
+                                  else
+                                    Tw.batch
+                                        [ Tw.raw "bg-transparent"
+                                        , Tw.text_color (slate s700)
+                                        , hover [ Tw.bg_color (slate s50) ]
+                                        ]
+                                ]
+                            ]
+                            [ text c.name ]
+                        ]
+                )
+                components
+            )
+        , div [ classes [ Tw.mt s3, Tw.pt s3, Tw.flex, Tw.flex_col, Tw.gap s2 ], Ui.divider ]
+            [ Html.input
+                [ Ui.textInput
+                , value model.newComponentName
+                , onInput UpdateNewComponentName
+                , Html.Attributes.placeholder "New component"
+                , Html.Attributes.attribute "aria-label" "New component name"
+                , classes [ Tw.w_full ]
                 ]
+                []
+            , div [ classes [ Tw.flex, Tw.gap s2 ] ]
+                [ Html.select
+                    [ Ui.selectInput
+                    , Html.Events.onInput UpdateNewComponentTemplate
+                    , value model.newComponentTemplate
+                    , Html.Attributes.attribute "aria-label" "Start from"
+                    , classes [ Tw.flex_1 ]
+                    ]
+                    [ Html.option [ value "Empty" ] [ text "Empty" ]
+                    , Html.option [ value "Button" ] [ text "Button" ]
+                    , Html.option [ value "Card" ] [ text "Card" ]
+                    ]
+                , button [ Ui.btnNeutral, onClick CreateComponent ] [ text "Add" ]
+                ]
+            ]
+        ]
+
+
+viewSelectedComponent : Model -> List Components.Component -> Html Msg
+viewSelectedComponent model components =
+    case model.selectedComponentName of
+        Nothing ->
+            div [ Ui.panel, Ui.muted, classes [ Tw.text_center, Tw.py s6 ] ]
+                [ text "Pick a component to edit it." ]
+
+        Just activeName ->
+            let
+                activeComponent =
+                    List.filter (\c -> c.name == activeName) components |> List.head
+
+                baseTokens =
+                    model.tokens |> Maybe.withDefault []
+
+                displayTokens =
+                    case model.activeThemeName of
+                        Nothing ->
+                            baseTokens
+
+                        Just activeThemeNameStr ->
+                            let
+                                activeTheme =
+                                    List.filter (\t -> t.name == activeThemeNameStr) model.themes |> List.head
+                            in
+                            case activeTheme of
+                                Just theme ->
+                                    Themes.applyTheme baseTokens theme
+
+                                Nothing ->
+                                    baseTokens
+            in
+            case activeComponent of
+                Just comp ->
+                    div [ classes [ Tw.flex, Tw.gap s4, Tw.items_start ] ]
+                        [ viewComponentEditor model comp displayTokens
+                        , viewComponentPreview model comp displayTokens
+                        ]
+
+                Nothing ->
+                    div [ Ui.panel, Ui.muted ] [ text "That component no longer exists." ]
+
+
+viewComponentEditor : Model -> Components.Component -> List Tokens.FlatToken -> Html Msg
+viewComponentEditor model comp displayTokens =
+    div [ Ui.panel, classes [ Tw.flex_1 ] ]
+        [ div [ classes [ Tw.flex, Tw.justify_between, Tw.items_center, Tw.gap s2, Tw.mb s3, Tw.flex_wrap ] ]
+            [ h3 [ Ui.pageTitle ] [ text comp.name ]
+            , div [ classes [ Tw.flex, Tw.gap s2 ] ]
+                [ button [ Ui.btnPrimary, onClick SaveComponent ] [ text "Save" ]
+                , button [ Ui.btnDanger, onClick (DeleteComponent comp.name) ] [ text "Delete" ]
+                ]
+            ]
+        , viewNameList "Variants" comp.variants model.newComponentVariant UpdateNewComponentVariant AddComponentVariant
+        , viewNameList "States" comp.states model.newComponentState UpdateNewComponentState AddComponentState
+        , viewNameList "Slots" comp.slots model.newComponentSlot UpdateNewComponentSlot AddComponentSlot
+        , div [ classes [ Tw.mt s3, Tw.pt s3 ], Ui.divider ]
+            [ h4 [ Ui.sectionTitle, classes [ Tw.mb s2 ] ] [ text "Layout" ]
+            , Html.datalist [ Html.Attributes.id "tokensList" ]
+                (List.map (\( p, _ ) -> Html.option [ value ("{" ++ String.join "." p ++ "}") ] []) displayTokens)
+            , Html.datalist [ Html.Attributes.id "css-properties-list" ]
+                (List.map (\prop -> Html.option [ value prop ] []) CssProperties.allProperties)
+            , case comp.layout of
+                Nothing ->
+                    div []
+                        [ div [ Ui.muted, classes [ Tw.mb s2 ] ]
+                            [ text "This component has nothing in it yet." ]
+                        , button [ Ui.btnNeutral, onClick InitComponentLayout ] [ text "Add a layout" ]
+                        ]
+
+                Just layoutRoot ->
+                    viewLayoutEditorNode model [] layoutRoot
+            ]
+        ]
+
+
+{-| Variants, states and slots are all "a list of names you can add to".
+-}
+viewNameList : String -> List String -> String -> (String -> Msg) -> Msg -> Html Msg
+viewNameList label names draft onDraftChange onAdd =
+    div [ classes [ Tw.mb s3 ] ]
+        [ h4 [ Ui.sectionTitle, classes [ Tw.mb s1 ] ] [ text label ]
+        , if List.isEmpty names then
+            div [ Ui.mutedSmall, classes [ Tw.mb s1 ] ] [ text "None yet." ]
+
+          else
+            div [ classes [ Tw.flex, Tw.gap s1, Tw.flex_wrap, Tw.mb s1 ] ]
+                (List.map
+                    (\n ->
+                        Html.span
+                            [ classes
+                                [ Tw.px s2
+                                , Tw.py s0_dot_5
+                                , Tw.rounded_full
+                                , Tw.text_xs
+                                , Tw.bg_color (slate s100)
+                                , Tw.text_color (slate s700)
+                                ]
+                            ]
+                            [ text n ]
+                    )
+                    names
+                )
+        , div [ classes [ Tw.flex, Tw.gap s2 ] ]
+            [ Html.input
+                [ Ui.textInput
+                , value draft
+                , onInput onDraftChange
+                , Html.Attributes.placeholder ("Add a " ++ String.toLower (String.dropRight 1 label))
+                , Html.Attributes.attribute "aria-label" ("New " ++ String.toLower (String.dropRight 1 label))
+                ]
+                []
+            , button [ Ui.btnSmall, onClick onAdd ] [ text "Add" ]
+            ]
+        ]
+
+
+viewComponentPreview : Model -> Components.Component -> List Tokens.FlatToken -> Html Msg
+viewComponentPreview model comp displayTokens =
+    div [ Ui.panelSunken, classes [ Tw.flex_1 ] ]
+        [ div [ classes [ Tw.flex, Tw.justify_between, Tw.items_center, Tw.gap s2, Tw.mb s3 ] ]
+            [ h3 [ Ui.sectionTitle ] [ text "Preview" ]
+            , Ui.themePicker (List.map .name model.themes) model.activeThemeName SelectTheme
+            ]
+        , case comp.layout of
+            Just l ->
+                div [ Ui.previewSurface, classes [ Tw.min_h s24 ] ]
+                    [ Renderer.render displayTokens l ]
+
+            Nothing ->
+                div [ Ui.muted ] [ text "Nothing to preview yet." ]
+        ]

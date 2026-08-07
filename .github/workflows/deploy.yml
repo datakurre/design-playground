@@ -32,9 +32,10 @@ jobs:
       - name: Install devenv
         run: nix profile install --accept-flake-config tarball+https://install.devenv.sh/latest
 
-      - name: Build Elm application
-        run: |
-          devenv shell elm make src/Main.elm --optimize --output=public/elm.js
+      # Generates .elm-tailwind/, which elm.json lists as a source directory.
+      # Must run before elm-test and elm-review can compile the project.
+      - name: Generate Tailwind Elm API
+        run: devenv shell make gen
 
       - name: Run Tests (elm-test)
         run: devenv shell elm-test
@@ -46,14 +47,14 @@ jobs:
         id: pages
         uses: actions/configure-pages@v5
 
-      - name: Update base href in index.html
-        run: |
-          sed -i 's|<head>|<head>\n    <base href="${{ steps.pages.outputs.base_path }}/">|' public/index.html
+      # The base path is set via `base` in vite.config.js, so no <base href> patching.
+      - name: Build application
+        run: devenv shell make dist-ci
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './public'
+          path: './dist'
 
       - name: Deploy to GitHub Pages
         id: deployment

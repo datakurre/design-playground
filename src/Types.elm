@@ -31,6 +31,21 @@ type Tab
     | ExportPipeline
 
 
+{-| How a status message should read. This used to be inferred in the view by
+comparing the message text to "Success!" and "Writing...", which meant every
+other message — "Saving theme...", "Branch created!" — fell through to red and
+looked like a failure.
+-}
+type StatusLevel
+    = Working
+    | Done
+    | Failed
+
+
+type alias Status =
+    ( StatusLevel, String )
+
+
 type alias Model =
     { key : Nav.Key
     , url : Url
@@ -41,7 +56,7 @@ type alias Model =
     , projectsPage : Int
     , selectedProject : Maybe Project
     , repositoryTree : Maybe (List TreeItem)
-    , commitStatus : Maybe String
+    , commitStatus : Maybe Status
     , originalTokens : Maybe (List Tokens.FlatToken)
     , tokensFileExists : Bool
     , tokens : Maybe (List Tokens.FlatToken)
@@ -91,7 +106,6 @@ type CommitContext
     | CommitDeleteTheme String
     | CommitDeleteComponent String
     | CommitDeleteScreen String
-    | CommitTestFile
     | CommitOther
 
 
@@ -108,7 +122,6 @@ type Msg
     | SelectProject Project
     | UnselectProject
     | GotTree (Result Http.Error (List TreeItem))
-    | WriteTestFile
     | GotCommitResult CommitContext (Result Http.Error ())
     | FetchTokens
     | GotTokensFile (Result Http.Error String)
