@@ -14,6 +14,8 @@ import Screens exposing (Screen)
 import Themes exposing (Theme)
 import Tokens
 import Url exposing (Url)
+import Contracts
+import Dict exposing (Dict)
 
 
 type alias Flags =
@@ -95,6 +97,10 @@ type alias Model =
     , exportTargets : List String
     , pkceChallenge : String
     , pkceVerifier : String
+    , contracts : Maybe (List Contracts.Contract)
+    , existingContracts : List String
+    , newContractRuleType : String
+    , newContractRuleFields : Dict String String
     }
 
 
@@ -106,6 +112,8 @@ type CommitContext
     | CommitDeleteTheme String
     | CommitDeleteComponent String
     | CommitDeleteScreen String
+    | CommitContract String
+    | CommitDeleteContract String
     | CommitOther
 
 
@@ -187,3 +195,11 @@ type Msg
     | GotMRResult (Result Http.Error MergeRequest)
     | ToggleExportTarget String
     | RunExportPipeline
+    | GotContractFile String (Result Http.Error String)
+    | UpdateNewContractRuleType String
+    | UpdateNewContractRuleField String String
+    | AddContractRule
+    | RemoveContractRule Int
+    | SaveContract
+    | DeleteContract String
+    | JumpToComponent String

@@ -4,6 +4,7 @@ import Auth
 import Browser
 import Browser.Navigation as Nav
 import Components
+import Contracts
 import Dict
 import Export
 import GitLab.Branches
@@ -172,7 +173,7 @@ update msg model =
                     )
 
         Logout ->
-            ( { model | token = Nothing, user = Nothing, error = Nothing, projects = Nothing, projectsPage = 1, selectedProject = Nothing, repositoryTree = Nothing, commitStatus = Nothing, originalTokens = Nothing, tokensFileExists = False, tokens = Nothing, themes = [], existingThemes = [], existingComponents = [], existingScreens = [], activeThemeName = Nothing, newThemeName = "", newTokenPath = "", newTokenType = "color", newTokenValue = "", activeTab = TokenStudio, components = Nothing, selectedComponentName = Nothing, newComponentName = "", newComponentVariant = "", newComponentSlot = "", newComponentState = "", screens = Nothing, selectedScreenName = Nothing, newScreenName = "" }
+            ( { model | token = Nothing, user = Nothing, error = Nothing, projects = Nothing, projectsPage = 1, selectedProject = Nothing, repositoryTree = Nothing, commitStatus = Nothing, originalTokens = Nothing, tokensFileExists = False, tokens = Nothing, themes = [], existingThemes = [], existingComponents = [], existingScreens = [], activeThemeName = Nothing, newThemeName = "", newTokenPath = "", newTokenType = "color", newTokenValue = "", activeTab = TokenStudio, components = Nothing, selectedComponentName = Nothing, newComponentName = "", newComponentVariant = "", newComponentSlot = "", newComponentState = "", screens = Nothing, selectedScreenName = Nothing, newScreenName = "", contracts = Nothing, existingContracts = [], newContractRuleType = "", newContractRuleFields = Dict.empty }
             , Ports.clearToken ()
             )
 
@@ -215,7 +216,7 @@ update msg model =
         SelectProject project ->
             case model.token of
                 Just token ->
-                    ( { model | selectedProject = Just project, repositoryTree = Nothing, commitStatus = Nothing, originalTokens = Nothing, tokensFileExists = False, tokens = Nothing, themes = [], existingThemes = [], existingComponents = [], existingScreens = [], activeThemeName = Nothing, originalComponents = Nothing, components = Nothing, selectedComponentName = Nothing, screens = Nothing, selectedScreenName = Nothing, currentBranch = Just project.defaultBranch, exportTargets = [ "css", "tailwind" ] }
+                    ( { model | selectedProject = Just project, repositoryTree = Nothing, commitStatus = Nothing, originalTokens = Nothing, tokensFileExists = False, tokens = Nothing, themes = [], existingThemes = [], existingComponents = [], existingScreens = [], activeThemeName = Nothing, originalComponents = Nothing, components = Nothing, selectedComponentName = Nothing, screens = Nothing, selectedScreenName = Nothing, currentBranch = Just project.defaultBranch, exportTargets = [ "css", "tailwind" ], contracts = Nothing, existingContracts = [], newContractRuleType = "", newContractRuleFields = Dict.empty }
                     , Cmd.batch
                         [ GitLab.Files.listTree token project.id project.defaultBranch GotTree
                         , GitLab.Files.getFileRaw token project.id project.defaultBranch "tokens/tokens.json" GotTokensFile
@@ -230,7 +231,7 @@ update msg model =
                     ( model, Cmd.none )
 
         UnselectProject ->
-            ( { model | selectedProject = Nothing, repositoryTree = Nothing, tokens = Nothing, themes = [], components = Nothing, screens = Nothing, activeThemeName = Nothing, selectedComponentName = Nothing, selectedScreenName = Nothing, commitStatus = Nothing }, Cmd.none )
+            ( { model | selectedProject = Nothing, repositoryTree = Nothing, tokens = Nothing, themes = [], components = Nothing, screens = Nothing, activeThemeName = Nothing, selectedComponentName = Nothing, selectedScreenName = Nothing, commitStatus = Nothing, contracts = Nothing, existingContracts = [], newContractRuleType = "", newContractRuleFields = Dict.empty }, Cmd.none )
 
         GotTree result ->
             case result of
@@ -272,6 +273,12 @@ update msg model =
 
                                 CommitDeleteScreen name ->
                                     { model | existingScreens = List.filter ((/=) name) model.existingScreens }
+
+                                CommitContract name ->
+                                    { model | existingContracts = addUnique name model.existingContracts }
+
+                                CommitDeleteContract name ->
+                                    { model | existingContracts = List.filter ((/=) name) model.existingContracts }
 
                                 _ ->
                                     model
@@ -508,10 +515,16 @@ update msg model =
                 Ok tree ->
                     let
                         jsonFiles =
-                            List.filter (\item -> String.endsWith ".json" item.name) tree
+                            List.filter (\item -> String.endsWith ".json" item.name && not (String.endsWith ".contract.json" item.name)) tree
 
                         componentNames =
                             List.map (\item -> String.replace ".json" "" item.name) jsonFiles
+                            
+                        contractFiles =
+                            List.filter (\item -> String.endsWith ".contract.json" item.name) tree
+                            
+                        contractComponentNames =
+                            List.map (\item -> String.replace ".contract.json" "" item.name) contractFiles
 
                         cmds =
                             case ( model.token, model.selectedProject ) of
@@ -519,14 +532,18 @@ update msg model =
                                     List.map
                                         (\file -> GitLab.Files.getFileRaw token project.id project.defaultBranch file.path (GotComponentFile file.name))
                                         jsonFiles
+                                        ++
+                                    List.map
+                                        (\file -> GitLab.Files.getFileRaw token project.id project.defaultBranch file.path (GotContractFile file.name))
+                                        contractFiles
 
                                 _ ->
                                     []
                     in
-                    ( { model | components = Just [], existingComponents = componentNames }, Cmd.batch cmds )
+                    ( { model | components = Just [], existingComponents = componentNames, contracts = Just [], existingContracts = contractComponentNames }, Cmd.batch cmds )
 
                 Err _ ->
-                    ( { model | components = Just [] }, Cmd.none )
+                    ( { model | components = Just [], contracts = Just [] }, Cmd.none )
 
         GotComponentFile filename result ->
             case result of
@@ -1226,6 +1243,176 @@ update msg model =
 
                 _ ->
                     ( model, Cmd.none )
+
+        GotContractFile filename result ->
+            case result of
+                Ok content ->
+                    case Decode.decodeString Contracts.decoder content of
+                        Ok contract ->
+                            let
+                                currentContracts =
+                                    model.contracts |> Maybe.withDefault []
+
+                                newContracts =
+                                    contract :: List.filter (\c -> c.component /= contract.component) currentContracts
+                            in
+                            ( { model | contracts = Just newContracts }, Cmd.none )
+
+                        Err _ ->
+                            ( model, Cmd.none )
+
+                Err _ ->
+                    ( model, Cmd.none )
+
+        UpdateNewContractRuleType type_ ->
+            ( { model | newContractRuleType = type_ }, Cmd.none )
+
+        UpdateNewContractRuleField key value ->
+            ( { model | newContractRuleFields = Dict.insert key value model.newContractRuleFields }, Cmd.none )
+
+        AddContractRule ->
+            case model.selectedComponentName of
+                Just compName ->
+                    let
+                        getFloat k = Dict.get k model.newContractRuleFields |> Maybe.andThen String.toFloat
+                        getList k = Dict.get k model.newContractRuleFields |> Maybe.map (\s -> String.split "," s |> List.map String.trim |> List.filter ((/=) "")) |> Maybe.withDefault []
+                        getString k = Dict.get k model.newContractRuleFields |> Maybe.andThen (\s -> if String.trim s == "" then Nothing else Just (String.trim s))
+                        
+                        maybeRule =
+                            case model.newContractRuleType of
+                                "allowedTokenGroups" ->
+                                    let groups = getList "groups" |> List.map (String.split ".")
+                                    in if List.isEmpty groups then Nothing else Just (Contracts.AllowedTokenGroups groups)
+
+                                "noHardcodedValues" ->
+                                    let props = getList "properties"
+                                    in if List.isEmpty props then Nothing else Just (Contracts.NoHardcodedValues props)
+
+                                "spacingOnScale" ->
+                                    case ( getList "properties", getString "scale" ) of
+                                        ( props, Just scaleStr ) ->
+                                            if List.isEmpty props then Nothing else Just (Contracts.SpacingOnScale props (String.split "." scaleStr))
+                                        _ -> Nothing
+
+                                "contrastThreshold" ->
+                                    case ( getString "foreground", getString "background", getFloat "minimumRatio" ) of
+                                        ( Just fg, Just bg, Just ratio ) ->
+                                            Just (Contracts.ContrastThreshold { foreground = fg, background = bg, minimumRatio = ratio })
+                                        _ -> Nothing
+
+                                _ -> Nothing
+                    in
+                    case maybeRule of
+                        Just rule ->
+                            let
+                                currentContracts = model.contracts |> Maybe.withDefault []
+                                existingContract = List.filter (\c -> c.component == compName) currentContracts |> List.head
+                                
+                                newContract =
+                                    case existingContract of
+                                        Just c -> { c | rules = c.rules ++ [ rule ] }
+                                        Nothing -> { component = compName, rules = [ rule ] }
+                                        
+                                newContracts =
+                                    newContract :: List.filter (\c -> c.component /= compName) currentContracts
+                            in
+                            ( { model | contracts = Just newContracts, newContractRuleFields = Dict.empty }, Cmd.none )
+                        Nothing ->
+                            ( model, Cmd.none )
+                Nothing ->
+                    ( model, Cmd.none )
+
+        RemoveContractRule index ->
+            case model.selectedComponentName of
+                Just compName ->
+                    let
+                        currentContracts = model.contracts |> Maybe.withDefault []
+                        existingContract = List.filter (\c -> c.component == compName) currentContracts |> List.head
+                    in
+                    case existingContract of
+                        Just c ->
+                            let
+                                newRules = List.take index c.rules ++ List.drop (index + 1) c.rules
+                                newContract = { c | rules = newRules }
+                                newContracts = newContract :: List.filter (\contract -> contract.component /= compName) currentContracts
+                            in
+                            ( { model | contracts = Just newContracts }, Cmd.none )
+                        Nothing ->
+                            ( model, Cmd.none )
+                Nothing ->
+                    ( model, Cmd.none )
+
+        SaveContract ->
+            case ( model.token, model.selectedProject, model.selectedComponentName ) of
+                ( Just token, Just project, Just activeName ) ->
+                    let
+                        currentContracts =
+                            model.contracts |> Maybe.withDefault []
+
+                        activeContract =
+                            List.filter (\c -> c.component == activeName) currentContracts |> List.head
+                    in
+                    case activeContract of
+                        Just contract ->
+                            let
+                                jsonString =
+                                    Encode.encode 2 (Contracts.encoder contract)
+
+                                actionType =
+                                    if List.member activeName model.existingContracts then
+                                        "update"
+                                    else
+                                        "create"
+
+                                payload =
+                                    { branch = Maybe.withDefault project.defaultBranch model.currentBranch
+                                    , commitMessage = "Save contract for " ++ activeName
+                                    , actions =
+                                        [ { action = actionType
+                                          , filePath = "components/" ++ activeName ++ ".contract.json"
+                                          , content = Just jsonString
+                                          }
+                                        ]
+                                    }
+                            in
+                            ( { model | commitStatus = Just ( Working, "Saving contract for " ++ activeName ++ "..." ) }
+                            , GitLab.Commits.createCommit token project.id payload (GotCommitResult (CommitContract activeName))
+                            )
+
+                        Nothing ->
+                            ( model, Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        DeleteContract name ->
+            case ( model.token, model.selectedProject ) of
+                ( Just token, Just project ) ->
+                    let
+                        payload =
+                            { branch = Maybe.withDefault project.defaultBranch model.currentBranch
+                            , commitMessage = "Delete contract for " ++ name
+                            , actions =
+                                [ { action = "delete"
+                                  , filePath = "components/" ++ name ++ ".contract.json"
+                                  , content = Nothing
+                                  }
+                                ]
+                            }
+                        
+                        currentContracts =
+                            model.contracts |> Maybe.withDefault []
+                    in
+                    ( { model | contracts = Just (List.filter (\c -> c.component /= name) currentContracts), commitStatus = Just ( Working, "Deleting contract for " ++ name ++ "..." ) }
+                    , GitLab.Commits.createCommit token project.id payload (GotCommitResult (CommitDeleteContract name))
+                    )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        JumpToComponent name ->
+            ( { model | activeTab = ComponentRegistry, selectedComponentName = Just name }, Cmd.none )
+
         GotBranches result ->
             case result of
                 Ok branchList ->
@@ -1237,7 +1424,7 @@ update msg model =
         SwitchBranch branchName ->
             case ( model.token, model.selectedProject ) of
                 ( Just token, Just project ) ->
-                    ( { model | currentBranch = Just branchName, repositoryTree = Nothing, originalComponents = Nothing, components = Nothing, originalTokens = Nothing, tokens = Nothing, themes = [], screens = Nothing, existingComponents = [], existingThemes = [], existingScreens = [], tokensFileExists = False, commitStatus = Just ( Done, "On branch " ++ branchName ) }
+                    ( { model | currentBranch = Just branchName, repositoryTree = Nothing, originalComponents = Nothing, components = Nothing, originalTokens = Nothing, tokens = Nothing, themes = [], screens = Nothing, existingComponents = [], existingThemes = [], existingScreens = [], tokensFileExists = False, commitStatus = Just ( Done, "On branch " ++ branchName ), contracts = Nothing, existingContracts = [], newContractRuleType = "", newContractRuleFields = Dict.empty }
                     , Cmd.batch
                         [ GitLab.Files.listTree token project.id branchName GotTree
                         , GitLab.Files.getFileRaw token project.id branchName "tokens/tokens.json" GotTokensFile
