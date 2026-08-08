@@ -1,8 +1,18 @@
-module Contracts exposing (Contract, Rule(..), decoder, encoder)
+module Contracts exposing (Contract, Rule(..), Violation, decoder, encoder, validate)
 
+import Components
+import Colors
+import Dict exposing (Dict)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
 import Tokens exposing (TokenPath)
+
+type alias Violation =
+    { path : List Int
+    , property : Maybe String
+    , message : String
+    }
+
 
 
 type Rule
@@ -104,3 +114,227 @@ encoder contract =
         [ ( "component", Encode.string contract.component )
         , ( "rules", Encode.list ruleEncoder contract.rules )
         ]
+
+
+validate : List Tokens.FlatToken -> Contract -> Components.Component -> List Violation
+validate tokens contract component =
+    case component.layout of
+        Nothing ->
+            []
+
+        Just layout ->
+            styleNodes layout
+                |> List.concatMap (\( path, styles ) -> List.concatMap (applyRule tokens path styles) contract.rules)
+
+
+applyRule : List Tokens.FlatToken -> List Int -> Dict String String -> Rule -> List Violation
+applyRule tokens path styles rule =
+    case rule of
+        AllowedTokenGroups groups ->
+            styles
+                |> Dict.toList
+                |> List.concatMap
+                    (\( property, value ) ->
+                        extractAliasPaths value
+                            |> List.filterMap
+                                (\aliasPath ->
+                                    if List.any (\grp -> isPrefixOf grp aliasPath) groups then
+                                        Nothing
+
+                                    else
+                                        Just
+                                            { path = path
+                                            , property = Just property
+                                            , message = "Token path '" ++ String.join "." aliasPath ++ "' is not in allowed groups."
+                                            }
+                                )
+                    )
+
+        NoHardcodedValues properties ->
+            styles
+                |> Dict.toList
+                |> List.filterMap
+                    (\( property, value ) ->
+                        if List.member property properties && containsHexLiteral value then
+                            Just
+                                { path = path
+                                , property = Just property
+                                , message = "Hardcoded hex value found."
+                                }
+
+                        else
+                            Nothing
+                    )
+
+        SpacingOnScale properties scale ->
+            let
+                scaleValues =
+                    tokens
+                        |> List.filter (\( tp, _ ) -> isPrefixOf scale tp)
+                        |> List.filterMap
+                            (\( _, t ) ->
+                                case Tokens.resolveAliasValue tokens t.value of
+                                    Tokens.StringValue s ->
+                                        Just s
+
+                                    _ ->
+                                        Nothing
+                            )
+            in
+            styles
+                |> Dict.toList
+                |> List.filterMap
+                    (\( property, value ) ->
+                        if List.member property properties then
+                            let
+                                resolved =
+                                    Tokens.resolveAlias tokens value
+                            in
+                            if not (List.member resolved scaleValues) then
+                                Just
+                                    { path = path
+                                    , property = Just property
+                                    , message = "Resolved value '" ++ resolved ++ "' is not part of the required scale."
+                                    }
+
+                            else
+                                Nothing
+
+                        else
+                            Nothing
+                    )
+
+        ContrastThreshold { foreground, background, minimumRatio } ->
+            case ( Dict.get foreground styles, Dict.get background styles ) of
+                ( Just fg, Just bg ) ->
+                    let
+                        fgRes =
+                            Tokens.resolveAlias tokens fg
+
+                        bgRes =
+                            Tokens.resolveAlias tokens bg
+                    in
+                    case ( Colors.parseHex fgRes, Colors.parseHex bgRes ) of
+                        ( Just fgColor, Just bgColor ) ->
+                            let
+                                ratio =
+                                    Colors.contrastRatio fgColor bgColor
+                            in
+                            if ratio < minimumRatio then
+                                let
+                                    ratioRounded =
+                                        toFloat (round (ratio * 100)) / 100
+                                in
+                                [ { path = path
+                                  , property = Nothing
+                                  , message = "Contrast ratio " ++ String.fromFloat ratioRounded ++ " is below minimum " ++ String.fromFloat minimumRatio
+                                  }
+                                ]
+
+                            else
+                                []
+
+                        _ ->
+                            []
+
+                _ ->
+                    []
+
+
+styleNodes : Components.Layout -> List ( List Int, Dict String String )
+styleNodes layout =
+    styleNodesHelp [] layout
+
+
+styleNodesHelp : List Int -> Components.Layout -> List ( List Int, Dict String String )
+styleNodesHelp path layout =
+    case layout of
+        Components.Stack props children ->
+            ( path, props.styles ) :: List.concat (List.indexedMap (\i child -> styleNodesHelp (path ++ [ i ]) child) children)
+
+        Components.Grid props children ->
+            ( path, props.styles ) :: List.concat (List.indexedMap (\i child -> styleNodesHelp (path ++ [ i ]) child) children)
+
+        Components.Element props _ ->
+            [ ( path, props.styles ) ]
+
+
+extractAliasPaths : String -> List Tokens.TokenPath
+extractAliasPaths value =
+    let
+        go s acc =
+            case String.indexes "{" s |> List.head of
+                Just startIdx ->
+                    let
+                        afterBrace =
+                            String.dropLeft (startIdx + 1) s
+                    in
+                    case String.indexes "}" afterBrace |> List.head of
+                        Just endOffset ->
+                            let
+                                aliasPathStr =
+                                    String.left endOffset afterBrace
+
+                                aliasPath =
+                                    String.split "." aliasPathStr
+
+                                after =
+                                    String.dropLeft (endOffset + 1) afterBrace
+                            in
+                            go after (aliasPath :: acc)
+
+                        Nothing ->
+                            acc
+
+                Nothing ->
+                    acc
+    in
+    go value [] |> List.reverse
+
+
+containsHexLiteral : String -> Bool
+containsHexLiteral value =
+    let
+        indexes =
+            String.indexes "#" value
+
+        takeHexRun s count =
+            case String.uncons s of
+                Just ( c, rest ) ->
+                    if Char.isHexDigit c then
+                        takeHexRun rest (count + 1)
+
+                    else
+                        count
+
+                Nothing ->
+                    count
+
+        checkAt idx =
+            let
+                after =
+                    String.dropLeft (idx + 1) value
+
+                runLength =
+                    takeHexRun after 0
+            in
+            List.member runLength [ 3, 4, 6, 8 ]
+    in
+    List.any checkAt indexes
+
+
+isPrefixOf : List a -> List a -> Bool
+isPrefixOf prefix list =
+    case ( prefix, list ) of
+        ( [], _ ) ->
+            True
+
+        ( _, [] ) ->
+            False
+
+        ( p :: ps, l :: ls ) ->
+            if p == l then
+                isPrefixOf ps ls
+
+            else
+                False
