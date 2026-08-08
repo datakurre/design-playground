@@ -5,6 +5,7 @@ import Html.Attributes exposing (href, value)
 import Html.Events exposing (onClick, onInput)
 import Tailwind as Tw exposing (classes)
 import Tailwind.Theme exposing (emerald, red, s1, s2, s3, s4, s6, s64, s600, s700, slate)
+import Contracts
 import Tokens
 import Types exposing (..)
 import Ui
@@ -19,6 +20,7 @@ viewGitWorkflows model =
                 div []
                     [ viewBranch model
                     , viewUnsavedChanges model
+                    , viewContractCheck model
                     , viewMergeRequests model
                     ]
 
@@ -183,3 +185,74 @@ diffTokens orig current =
                     Just ( path, "(new)", tokenValueToString tok.value )
         )
         current
+
+
+viewContractCheck : Model -> Html Msg
+viewContractCheck model =
+    let
+        tokens =
+            model.tokens |> Maybe.withDefault []
+
+        components =
+            model.components |> Maybe.withDefault []
+
+        contracts =
+            model.contracts |> Maybe.withDefault []
+
+        allViolations : List ( String, Contracts.Violation )
+        allViolations =
+            List.concatMap
+                (\comp ->
+                    let
+                        compContracts =
+                            List.filter (\c -> c.component == comp.name) contracts
+                    in
+                    List.concatMap
+                        (\contract ->
+                            Contracts.validate tokens contract comp
+                                |> List.map (\v -> ( comp.name, v ))
+                        )
+                        compContracts
+                )
+                components
+    in
+    div [ classes [ Tw.mb s6, Tw.pt s4 ], Ui.divider ]
+        [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.mb s2 ] ]
+            [ h4 [ Ui.sectionTitle ] [ text "Contract check" ]
+            , if not (List.isEmpty allViolations) then
+                Ui.pill Ui.Negative (String.fromInt (List.length allViolations))
+
+              else
+                text ""
+            ]
+        , if List.isEmpty contracts then
+            div []
+                [ Ui.pill Ui.Neutral "No contracts"
+                , div [ Ui.mutedSmall, classes [ Tw.mt s2 ] ] [ text "This project has no usage contracts yet." ]
+                ]
+
+          else if List.isEmpty allViolations then
+            div []
+                [ Ui.pill Ui.Positive "Passing"
+                , div [ Ui.mutedSmall, classes [ Tw.mt s2 ] ] [ text "All components satisfy their usage contracts." ]
+                ]
+
+          else
+            div
+                [ Ui.panelSunken
+                , classes [ Tw.text_sm, Tw.flex, Tw.flex_col, Tw.gap s1 ]
+                , Html.Attributes.attribute "aria-live" "polite"
+                ]
+                (List.map
+                    (\( compName, violation ) ->
+                        button
+                            [ Ui.btnQuiet
+                            , onClick (JumpToComponent compName)
+                            , classes [ Tw.text_left, Tw.w_full, Tw.block ]
+                            ]
+                            [ text (compName ++ ": " ++ violation.message) ]
+                    )
+                    allViolations
+                )
+        ]
+

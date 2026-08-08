@@ -9,7 +9,7 @@ import Html.Events exposing (onClick, onInput)
 import Renderer
 import Tailwind as Tw exposing (classes)
 import Tailwind.Breakpoints exposing (hover)
-import Tailwind.Theme exposing (s0, s0_dot_5, s1, s2, s3, s4, s6, s24, s40, s50, s64, s100, s200, s700, s900, slate)
+import Tailwind.Theme exposing (red, s0, s0_dot_5, s1, s2, s3, s4, s6, s24, s40, s50, s64, s100, s200, s700, s900, slate)
 import Themes
 import Tokens
 import Contracts
