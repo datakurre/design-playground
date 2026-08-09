@@ -249,9 +249,9 @@ update msg model =
                     , Cmd.batch
                         [ GitLab.Files.listTree token project.id project.defaultBranch GotTree
                         , GitLab.Files.getFileRaw token project.id project.defaultBranch "tokens/tokens.json" GotTokensFile
-                        , GitLab.Files.listTreeAtPath token project.id project.defaultBranch "themes" GotThemesTree
-                        , GitLab.Files.listTreeAtPath token project.id project.defaultBranch "components" GotComponentsTree
-                        , GitLab.Files.listTreeAtPath token project.id project.defaultBranch "layouts" GotScreensTree
+                        , GitLab.Files.listTreeAtPath token project.id project.defaultBranch "themes" (GotThemesTree project.defaultBranch)
+                        , GitLab.Files.listTreeAtPath token project.id project.defaultBranch "components" (GotComponentsTree project.defaultBranch)
+                        , GitLab.Files.listTreeAtPath token project.id project.defaultBranch "layouts" (GotScreensTree project.defaultBranch)
                         , GitLab.Branches.listBranches token project.id GotBranches
                         ]
                     )
@@ -318,16 +318,6 @@ update msg model =
                 Err _ ->
                     ( { model | commitStatus = Just ( Failed, "Couldn't save to GitLab" ) }, Cmd.none )
 
-        FetchTokens ->
-            case ( model.token, model.selectedProject ) of
-                ( Just token, Just project ) ->
-                    ( model
-                    , GitLab.Files.getFileRaw token project.id project.defaultBranch "tokens/tokens.json" GotTokensFile
-                    )
-
-                _ ->
-                    ( model, Cmd.none )
-
         GotTokensFile result ->
             case result of
                 Ok content ->
@@ -343,7 +333,7 @@ update msg model =
                 Err _ ->
                     ( { model | tokens = Just [], originalTokens = Just [], tokensFileExists = False, error = Nothing }, Cmd.none )
 
-        GotThemesTree result ->
+        GotThemesTree ref result ->
             case result of
                 Ok tree ->
                     let
@@ -357,7 +347,7 @@ update msg model =
                             case ( model.token, model.selectedProject ) of
                                 ( Just token, Just project ) ->
                                     List.map
-                                        (\file -> GitLab.Files.getFileRaw token project.id project.defaultBranch file.path (GotThemeFile file.name))
+                                        (\file -> GitLab.Files.getFileRaw token project.id ref file.path (GotThemeFile file.name))
                                         jsonFiles
 
                                 _ ->
@@ -557,7 +547,7 @@ update msg model =
         SwitchTab tab ->
             ( { model | activeTab = tab }, Cmd.none )
 
-        GotComponentsTree result ->
+        GotComponentsTree ref result ->
             case result of
                 Ok tree ->
                     let
@@ -577,10 +567,10 @@ update msg model =
                             case ( model.token, model.selectedProject ) of
                                 ( Just token, Just project ) ->
                                     List.map
-                                        (\file -> GitLab.Files.getFileRaw token project.id project.defaultBranch file.path (GotComponentFile file.name))
+                                        (\file -> GitLab.Files.getFileRaw token project.id ref file.path (GotComponentFile file.name))
                                         jsonFiles
                                         ++ List.map
-                                            (\file -> GitLab.Files.getFileRaw token project.id project.defaultBranch file.path (GotContractFile file.name))
+                                            (\file -> GitLab.Files.getFileRaw token project.id ref file.path (GotContractFile file.name))
                                             contractFiles
 
                                 _ ->
@@ -1116,7 +1106,7 @@ update msg model =
                 Nothing ->
                     ( model, Cmd.none )
 
-        GotScreensTree result ->
+        GotScreensTree ref result ->
             case result of
                 Ok tree ->
                     let
@@ -1130,7 +1120,7 @@ update msg model =
                             case ( model.token, model.selectedProject ) of
                                 ( Just token, Just project ) ->
                                     List.map
-                                        (\file -> GitLab.Files.getFileRaw token project.id project.defaultBranch file.path (GotScreenFile file.name))
+                                        (\file -> GitLab.Files.getFileRaw token project.id ref file.path (GotScreenFile file.name))
                                         jsonFiles
 
                                 _ ->
@@ -1623,9 +1613,9 @@ update msg model =
                     , Cmd.batch
                         [ GitLab.Files.listTree token project.id branchName GotTree
                         , GitLab.Files.getFileRaw token project.id branchName "tokens/tokens.json" GotTokensFile
-                        , GitLab.Files.listTreeAtPath token project.id branchName "themes" GotThemesTree
-                        , GitLab.Files.listTreeAtPath token project.id branchName "components" GotComponentsTree
-                        , GitLab.Files.listTreeAtPath token project.id branchName "layouts" GotScreensTree
+                        , GitLab.Files.listTreeAtPath token project.id branchName "themes" (GotThemesTree branchName)
+                        , GitLab.Files.listTreeAtPath token project.id branchName "components" (GotComponentsTree branchName)
+                        , GitLab.Files.listTreeAtPath token project.id branchName "layouts" (GotScreensTree branchName)
                         ]
                     )
 

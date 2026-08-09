@@ -135,9 +135,12 @@ type Msg
     | UnselectProject
     | GotTree (Result Http.Error (List TreeItem))
     | GotCommitResult CommitContext (Result Http.Error ())
-    | FetchTokens
     | GotTokensFile (Result Http.Error String)
-    | GotThemesTree (Result Http.Error (List TreeItem))
+      -- The three tree listings carry the git ref they were listed from, so the
+      -- per-file fetches they fan out into read the same branch. They used to
+      -- reach for `project.defaultBranch`, which meant switching branches
+      -- showed you the default branch's contents under the new branch's name.
+    | GotThemesTree String (Result Http.Error (List TreeItem))
     | GotThemeFile String (Result Http.Error String)
     | SelectTheme (Maybe String)
     | UpdateNewThemeName String
@@ -156,7 +159,7 @@ type Msg
     | CreateToken
     | ApplyStarterTokenScale
     | SwitchTab Tab
-    | GotComponentsTree (Result Http.Error (List TreeItem))
+    | GotComponentsTree String (Result Http.Error (List TreeItem))
     | GotComponentFile String (Result Http.Error String)
     | SelectComponent (Maybe String)
     | UpdateNewComponentName String
@@ -179,7 +182,7 @@ type Msg
     | AddLayoutGrid (List Int)
     | UpdateNewLayoutPropertyName String
     | UpdateNewLayoutPropertyValue String
-    | GotScreensTree (Result Http.Error (List TreeItem))
+    | GotScreensTree String (Result Http.Error (List TreeItem))
     | GotScreenFile String (Result Http.Error String)
     | SelectScreen (Maybe String)
     | UpdateNewScreenName String
