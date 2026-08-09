@@ -8,6 +8,7 @@ import Html exposing (Html, button, div, h3, h4, li, text, ul)
 import Html.Attributes exposing (value)
 import Html.Events exposing (onClick, onInput)
 import Renderer
+import Set
 import Tailwind as Tw exposing (classes)
 import Tailwind.Breakpoints exposing (hover)
 import Tailwind.Theme exposing (red, s0, s0_dot_5, s1, s100, s2, s200, s24, s3, s4, s40, s50, s6, s64, s700, s900, slate)
@@ -77,6 +78,7 @@ viewLayoutEditorNode model path layout =
                                 , onInput (UpdateLayoutProperty path key)
                                 , Html.Attributes.attribute "aria-label" key
                                 , Html.Attributes.attribute "list" "tokensList"
+                                , Html.Attributes.spellcheck False
                                 , classes [ Tw.flex_1 ]
                                 ]
                                 []
@@ -99,6 +101,7 @@ viewLayoutEditorNode model path layout =
                     , Html.Attributes.placeholder "CSS property"
                     , Html.Attributes.attribute "aria-label" "CSS property"
                     , Html.Attributes.attribute "list" "css-properties-list"
+                    , Html.Attributes.spellcheck False
                     , classes [ Tw.w s40 ]
                     ]
                     []
@@ -109,6 +112,7 @@ viewLayoutEditorNode model path layout =
                     , Html.Attributes.placeholder "Value or {token}"
                     , Html.Attributes.attribute "aria-label" "Value"
                     , Html.Attributes.attribute "list" "tokensList"
+                    , Html.Attributes.spellcheck False
                     , classes [ Tw.flex_1 ]
                     ]
                     []
@@ -295,15 +299,17 @@ viewComponentEditor model comp displayTokens =
                 , button [ Ui.btnDanger, onClick (DeleteComponent comp.name) ] [ text "Delete" ]
                 ]
             ]
-        , viewNameList "Variants" comp.variants model.newComponentVariant UpdateNewComponentVariant AddComponentVariant
-        , viewNameList "States" comp.states model.newComponentState UpdateNewComponentState AddComponentState
-        , viewNameList "Slots" comp.slots model.newComponentSlot UpdateNewComponentSlot AddComponentSlot
+        , viewNameList "Variants" commonVariantNames comp.variants model.newComponentVariant UpdateNewComponentVariant AddComponentVariant
+        , viewNameList "States" commonStateNames comp.states model.newComponentState UpdateNewComponentState AddComponentState
+        , viewNameList "Slots" [] comp.slots model.newComponentSlot UpdateNewComponentSlot AddComponentSlot
         , div [ classes [ Tw.mt s3, Tw.pt s3 ], Ui.divider ]
             [ h4 [ Ui.sectionTitle, classes [ Tw.mb s2 ] ] [ text "Layout" ]
             , Html.datalist [ Html.Attributes.id "tokensList" ]
                 (List.map (\( p, _ ) -> Html.option [ value ("{" ++ String.join "." p ++ "}") ] []) displayTokens)
             , Html.datalist [ Html.Attributes.id "css-properties-list" ]
                 (List.map (\prop -> Html.option [ value prop ] []) CssProperties.allProperties)
+            , Html.datalist [ Html.Attributes.id "token-groups-list" ]
+                (List.map (\p -> Html.option [ value p ] []) (tokenGroupPaths displayTokens))
             , case comp.layout of
                 Nothing ->
                     div []
@@ -320,10 +326,31 @@ viewComponentEditor model comp displayTokens =
         ]
 
 
-{-| Variants, states and slots are all "a list of names you can add to".
+{-| Common variant names across design systems — offered as datalist
+suggestions, not a closed set; anything can still be typed freehand.
 -}
-viewNameList : String -> List String -> String -> (String -> Msg) -> Msg -> Html Msg
-viewNameList label names draft onDraftChange onAdd =
+commonVariantNames : List String
+commonVariantNames =
+    [ "primary", "secondary", "tertiary", "ghost", "danger", "small", "medium", "large" ]
+
+
+{-| Common interaction/state names — same idea as `commonVariantNames`.
+-}
+commonStateNames : List String
+commonStateNames =
+    [ "default", "hover", "focus", "active", "disabled", "loading", "selected", "error" ]
+
+
+{-| Variants, states and slots are all "a list of names you can add to".
+`suggestions` seeds a `<datalist>` for the draft input; pass `[]` (as Slots
+does) when there's no established vocabulary worth suggesting.
+-}
+viewNameList : String -> List String -> List String -> String -> (String -> Msg) -> Msg -> Html Msg
+viewNameList label suggestions names draft onDraftChange onAdd =
+    let
+        datalistId =
+            "suggestions-" ++ label
+    in
     div [ classes [ Tw.mb s3 ] ]
         [ h4 [ Ui.sectionTitle, classes [ Tw.mb s1 ] ] [ text label ]
         , if List.isEmpty names then
@@ -347,14 +374,27 @@ viewNameList label names draft onDraftChange onAdd =
                     )
                     names
                 )
+        , if List.isEmpty suggestions then
+            text ""
+
+          else
+            Html.datalist [ Html.Attributes.id datalistId ]
+                (List.map (\n -> Html.option [ value n ] []) suggestions)
         , div [ classes [ Tw.flex, Tw.gap s2 ] ]
             [ Html.input
-                [ Ui.textInput
-                , value draft
-                , onInput onDraftChange
-                , Html.Attributes.placeholder ("Add a " ++ String.toLower (String.dropRight 1 label))
-                , Html.Attributes.attribute "aria-label" ("New " ++ String.toLower (String.dropRight 1 label))
-                ]
+                ([ Ui.textInput
+                 , value draft
+                 , onInput onDraftChange
+                 , Html.Attributes.placeholder ("Add a " ++ String.toLower (String.dropRight 1 label))
+                 , Html.Attributes.attribute "aria-label" ("New " ++ String.toLower (String.dropRight 1 label))
+                 ]
+                    ++ (if List.isEmpty suggestions then
+                            []
+
+                        else
+                            [ Html.Attributes.attribute "list" datalistId ]
+                       )
+                )
                 []
             , button [ Ui.btnSmall, onClick onAdd ] [ text "Add" ]
             ]
@@ -381,6 +421,26 @@ viewComponentPreview model comp displayTokens =
 resolveDisplayTokens : Model -> List Tokens.FlatToken
 resolveDisplayTokens model =
     Themes.resolve (Maybe.withDefault [] model.tokens) model.themes model.activeThemeName
+
+
+{-| The unique group prefixes of every token path, e.g. `color.primary.500`
+contributes `color` and `color.primary` (but not the full leaf path). Used to
+suggest values for contract rule fields ("groups", "scale") that name a group
+rather than a specific token.
+-}
+tokenGroupPaths : List Tokens.FlatToken -> List String
+tokenGroupPaths tokens =
+    tokens
+        |> List.concatMap (\( path, _ ) -> properPrefixes path)
+        |> List.map (String.join ".")
+        |> Set.fromList
+        |> Set.toList
+
+
+properPrefixes : List String -> List (List String)
+properPrefixes path =
+    List.range 1 (List.length path - 1)
+        |> List.map (\n -> List.take n path)
 
 
 viewUsageContract : Model -> Components.Component -> List Tokens.FlatToken -> Html Msg
@@ -453,28 +513,28 @@ viewUsageContract model comp displayTokens =
             , case model.newContractRuleType of
                 "allowedTokenGroups" ->
                     div []
-                        [ viewRuleField model "groups" "Allowed token groups" "interactive, spacing" "Comma-separated token group paths." ]
+                        [ viewRuleField model "groups" "Allowed token groups" "interactive, spacing" "Comma-separated token group paths." [ Html.Attributes.attribute "list" "token-groups-list" ] ]
 
                 "noHardcodedValues" ->
                     div []
-                        [ viewRuleField model "properties" "Properties" "color, background-color" "Comma-separated CSS property names." ]
+                        [ viewRuleField model "properties" "Properties" "color, background-color" "Comma-separated CSS property names." [ Html.Attributes.attribute "list" "css-properties-list" ] ]
 
                 "spacingOnScale" ->
                     div [ classes [ Tw.flex, Tw.gap s2, Tw.items_start ] ]
                         [ div [ classes [ Tw.flex_1 ] ]
-                            [ viewRuleField model "properties" "Properties" "padding, margin, gap" "Comma-separated CSS property names." ]
+                            [ viewRuleField model "properties" "Properties" "padding, margin, gap" "Comma-separated CSS property names." [ Html.Attributes.attribute "list" "css-properties-list" ] ]
                         , div [ classes [ Tw.flex_1 ] ]
-                            [ viewRuleField model "scale" "Scale" "spacing" "Token group path acting as the allowed scale." ]
+                            [ viewRuleField model "scale" "Scale" "spacing" "Token group path acting as the allowed scale." [ Html.Attributes.attribute "list" "token-groups-list" ] ]
                         ]
 
                 "contrastThreshold" ->
                     div [ classes [ Tw.flex, Tw.gap s2, Tw.items_start ] ]
                         [ div [ classes [ Tw.flex_1 ] ]
-                            [ viewRuleField model "foreground" "Foreground property" "color" "CSS property holding the text color." ]
+                            [ viewRuleField model "foreground" "Foreground property" "color" "CSS property holding the text color." [ Html.Attributes.attribute "list" "css-properties-list" ] ]
                         , div [ classes [ Tw.flex_1 ] ]
-                            [ viewRuleField model "background" "Background property" "background-color" "CSS property holding the background color." ]
+                            [ viewRuleField model "background" "Background property" "background-color" "CSS property holding the background color." [ Html.Attributes.attribute "list" "css-properties-list" ] ]
                         , div [ classes [ Tw.flex_1 ] ]
-                            [ viewRuleField model "minimumRatio" "Minimum ratio" "4.5" "A number, e.g. 4.5 for WCAG AA." ]
+                            [ viewRuleField model "minimumRatio" "Minimum ratio" "4.5" "A number, e.g. 4.5 for WCAG AA." [ Html.Attributes.type_ "number", Html.Attributes.step "0.1", Html.Attributes.min "1", Html.Attributes.max "21" ] ]
                         ]
 
                 _ ->
@@ -497,18 +557,25 @@ viewUsageContract model comp displayTokens =
 `model.newContractRuleFields` under `key`, with a hint line underneath. The hint
 is a visible line rather than only a placeholder, which disappears as soon as
 the user starts typing and offers no help if they get the format wrong.
+
+`extraAttrs` lets call sites opt into a `list="..."` datalist or a different
+`type_`/`step`/`min`/`max` (e.g. the numeric "minimum ratio" field) without
+branching inside this shared helper.
 -}
-viewRuleField : Model -> String -> String -> String -> String -> Html Msg
-viewRuleField model key label placeholder hint =
+viewRuleField : Model -> String -> String -> String -> String -> List (Html.Attribute Msg) -> Html Msg
+viewRuleField model key label placeholder hint extraAttrs =
     div []
         [ Html.input
-            [ Ui.textInput
-            , value (Dict.get key model.newContractRuleFields |> Maybe.withDefault "")
-            , onInput (UpdateNewContractRuleField key)
-            , Html.Attributes.placeholder placeholder
-            , Html.Attributes.attribute "aria-label" label
-            , classes [ Tw.w_full, Tw.mb s1 ]
-            ]
+            ([ Ui.textInput
+             , value (Dict.get key model.newContractRuleFields |> Maybe.withDefault "")
+             , onInput (UpdateNewContractRuleField key)
+             , Html.Attributes.placeholder placeholder
+             , Html.Attributes.attribute "aria-label" label
+             , Html.Attributes.spellcheck False
+             , classes [ Tw.w_full, Tw.mb s1 ]
+             ]
+                ++ extraAttrs
+            )
             []
         , div [ Ui.mutedSmall ] [ text hint ]
         ]

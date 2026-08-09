@@ -4,6 +4,7 @@ import Dict
 import Html exposing (Html, button, div, h3, li, span, text, ul)
 import Html.Attributes exposing (style, value)
 import Html.Events exposing (onClick, onInput)
+import Set
 import Tailwind as Tw exposing (classes)
 import Tailwind.Theme exposing (amber, s0, s0_dot_5, s1, s100, s2, s24, s300, s32, s4, s48, s6, s8, s800, slate)
 import Themes exposing (Theme)
@@ -44,6 +45,10 @@ viewTokenStudio model =
             in
             div [ Ui.panel ]
                 [ viewToolbar model
+                , Html.datalist [ Html.Attributes.id "token-alias-list" ]
+                    (List.map (\( p, _ ) -> Html.option [ value ("{" ++ String.join "." p ++ "}") ] []) displayTokens)
+                , Html.datalist [ Html.Attributes.id "token-groups-list" ]
+                    (List.map (\p -> Html.option [ value p ] []) (tokenGroupPaths displayTokens))
                 , if List.isEmpty displayTokens then
                     viewEmptyState model
 
@@ -137,6 +142,8 @@ viewNewToken model =
                 , onInput UpdateNewTokenPath
                 , Html.Attributes.placeholder "Name, e.g. color.primary"
                 , Html.Attributes.attribute "aria-label" "Token name"
+                , Html.Attributes.attribute "list" "token-groups-list"
+                , Html.Attributes.spellcheck False
                 ]
                 []
             , Html.select
@@ -154,6 +161,8 @@ viewNewToken model =
                 , onInput UpdateNewTokenValue
                 , Html.Attributes.placeholder "Value, or {another.token}"
                 , Html.Attributes.attribute "aria-label" "Token value"
+                , Html.Attributes.attribute "list" "token-alias-list"
+                , Html.Attributes.spellcheck False
                 ]
                 []
             , if model.newTokenType == "color" then
@@ -164,6 +173,27 @@ viewNewToken model =
             , button [ Ui.btnNeutral, onClick CreateToken ] [ text "Add" ]
             ]
         ]
+
+
+{-| The unique group prefixes of every token path, e.g. `color.primary.500`
+contributes `color` and `color.primary` (but not the full leaf path). Used to
+suggest consistent, nested names when creating a new token. Mirrors the
+identically-named helper in `Pages.ComponentRegistry`, which needs the same
+computation for its contract-rule suggestions.
+-}
+tokenGroupPaths : List Tokens.FlatToken -> List String
+tokenGroupPaths tokens =
+    tokens
+        |> List.concatMap (\( path, _ ) -> properPrefixes path)
+        |> List.map (String.join ".")
+        |> Set.fromList
+        |> Set.toList
+
+
+properPrefixes : List String -> List (List String)
+properPrefixes path =
+    List.range 1 (List.length path - 1)
+        |> List.map (\n -> List.take n path)
 
 
 {-| The native colour input, sized to match the text inputs beside it.
@@ -246,6 +276,8 @@ viewTokenEditor model path token activeThemeObj displayTokens =
                             , value s
                             , onInput (UpdateToken path)
                             , Html.Attributes.attribute "aria-label" ("Value of " ++ pathString)
+                            , Html.Attributes.attribute "list" "token-alias-list"
+                            , Html.Attributes.spellcheck False
                             , classes [ Tw.flex_1 ]
                             ]
                             []
@@ -317,6 +349,8 @@ viewTokenEditor model path token activeThemeObj displayTokens =
                                         , value val
                                         , onInput (UpdateCompositeToken path prop)
                                         , Html.Attributes.attribute "aria-label" (prop ++ " of " ++ pathString)
+                                        , Html.Attributes.attribute "list" "token-alias-list"
+                                        , Html.Attributes.spellcheck False
                                         , classes [ Tw.flex_1 ]
                                         ]
                                         []
@@ -337,6 +371,7 @@ viewTokenEditor model path token activeThemeObj displayTokens =
                                     , Html.Attributes.attribute "aria-label" "New part name"
                                     , value model.newCompositePropertyName
                                     , onInput UpdateNewCompositePropertyName
+                                    , Html.Attributes.spellcheck False
                                     , classes [ Tw.w s32 ]
                                     ]
                                     []

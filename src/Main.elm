@@ -5,9 +5,9 @@ import Browser
 import Browser.Navigation as Nav
 import Dict
 import GitLab.Projects exposing (Project)
-import Html exposing (Html, a, button, div, h2, img, li, span, text, ul)
+import Html exposing (Html, a, button, div, h2, img, input, li, span, text, ul)
 import Html.Attributes exposing (href, src)
-import Html.Events exposing (onClick)
+import Html.Events exposing (onClick, onInput)
 import Pages.ComponentRegistry exposing (viewComponentRegistry)
 import Pages.ExportPipeline exposing (viewExportPipeline)
 import Pages.GitWorkflows exposing (viewGitWorkflows)
@@ -61,6 +61,7 @@ init flags url key =
             , error = Nothing
             , projects = Nothing
             , projectsPage = 1
+            , projectSearch = ""
             , selectedProject = Nothing
             , repositoryTree = Nothing
             , commitStatus = Nothing
@@ -289,7 +290,7 @@ viewWorkspace model =
                 Just projects ->
                     case model.selectedProject of
                         Nothing ->
-                            viewProjectPicker projects
+                            viewProjectPicker model.projectSearch projects
 
                         Just project ->
                             viewEditor model project
@@ -302,10 +303,36 @@ viewWorkspace model =
                 ]
 
 
-viewProjectPicker : List Project -> Html Msg
-viewProjectPicker projects =
+{-| Filters client-side over whatever pages of projects are already loaded —
+it doesn't query GitLab. "Load more" still fetches additional pages
+separately, so a repository that hasn't been paged in yet won't show up
+until it has.
+-}
+viewProjectPicker : String -> List Project -> Html Msg
+viewProjectPicker search projects =
+    let
+        visibleProjects =
+            if String.trim search == "" then
+                projects
+
+            else
+                List.filter
+                    (\p -> String.contains (String.toLower search) (String.toLower p.pathWithNamespace))
+                    projects
+    in
     div [ classes [ Tw.mx_auto, Tw.raw "max-w-xl" ] ]
         [ h2 [ Ui.pageTitle, classes [ Tw.mb s3 ] ] [ text "Choose a repository" ]
+        , input
+            [ Ui.textInput
+            , Html.Attributes.type_ "search"
+            , Html.Attributes.value search
+            , onInput UpdateProjectSearch
+            , Html.Attributes.placeholder "Filter repositories"
+            , Html.Attributes.attribute "aria-label" "Filter repositories"
+            , Html.Attributes.spellcheck False
+            , classes [ Tw.w_full, Tw.mb s3 ]
+            ]
+            []
         , ul [ Ui.panel, classes [ Tw.list_none, Tw.p s0 ] ]
             (List.map
                 (\p ->
@@ -329,7 +356,7 @@ viewProjectPicker projects =
                             [ text p.pathWithNamespace ]
                         ]
                 )
-                projects
+                visibleProjects
             )
         , div [ classes [ Tw.mt s3, Tw.text_center ] ]
             [ button [ Ui.btnNeutral, onClick LoadMoreProjects ] [ text "Load more" ] ]

@@ -56,6 +56,7 @@ type alias Model =
     , error : Maybe String
     , projects : Maybe (List Project)
     , projectsPage : Int
+    , projectSearch : String
     , selectedProject : Maybe Project
     , repositoryTree : Maybe (List TreeItem)
     , commitStatus : Maybe Status
@@ -129,6 +130,7 @@ type Msg
     | GotProjects (Result Http.Error (List Project))
     | LoadMoreProjects
     | GotMoreProjects (Result Http.Error (List Project))
+    | UpdateProjectSearch String
     | SelectProject Project
     | UnselectProject
     | GotTree (Result Http.Error (List TreeItem))

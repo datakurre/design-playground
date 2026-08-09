@@ -50,11 +50,15 @@ viewBranch model =
                     (model.branches |> Maybe.withDefault [])
                 )
             ]
+        , Html.datalist [ Html.Attributes.id "branch-prefix-list" ]
+            (List.map (\prefix -> Html.option [ value prefix ] []) branchPrefixes)
         , div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.flex_wrap ] ]
             [ input
                 [ Ui.textInput
                 , Html.Attributes.placeholder "New branch, e.g. feature/new-colors"
                 , Html.Attributes.attribute "aria-label" "New branch name"
+                , Html.Attributes.attribute "list" "branch-prefix-list"
+                , Html.Attributes.spellcheck False
                 , value model.newBranchName
                 , onInput UpdateNewBranchName
                 , classes [ Tw.w s64 ]
@@ -63,6 +67,15 @@ viewBranch model =
             , button [ Ui.btnNeutral, onClick CreateBranch ] [ text "Create branch" ]
             ]
         ]
+
+
+{-| Common branch-name prefixes, offered as suggestions for the new-branch
+input — not enforced, just a nudge toward the convention the placeholder
+already hints at.
+-}
+branchPrefixes : List String
+branchPrefixes =
+    [ "feature/", "fix/", "chore/", "docs/", "refactor/", "release/" ]
 
 
 viewUnsavedChanges : Model -> Html Msg
