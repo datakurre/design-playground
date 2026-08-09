@@ -184,7 +184,11 @@ viewAppBar model =
             ]
             [ div [ classes [ Tw.font_semibold, Tw.text_sm ] ] [ text "Design Playground" ]
             , div [ classes [ Tw.flex, Tw.items_center, Tw.gap s3 ] ]
-                [ viewStatus model.commitStatus
+                [ -- The status pill is how the create forms report a refusal,
+                  -- and it sits a long way from the form that caused it.
+                  -- Announcing it at least keeps that from being silent twice.
+                  div [ Html.Attributes.attribute "aria-live" "polite" ]
+                    [ viewStatus model.commitStatus ]
                 , viewRepoBadge model
                 , viewAccount model
                 ]

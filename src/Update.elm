@@ -14,6 +14,7 @@ import GitLab.MergeRequests
 import GitLab.Projects
 import Json.Decode as Decode
 import Json.Encode as Encode
+import Naming
 import Ports
 import Screens exposing (ScreenNode(..))
 import Templates
@@ -22,6 +23,60 @@ import Tokens
 import TokenScale
 import Types exposing (..)
 import Url
+
+
+{-| The "add a variant / slot / state" forms are the same form three times
+over: check the typed name against what the component already has, append it,
+clear the field.
+
+They used to clear the field unconditionally while a `not (List.member ...)`
+guard inside the mapper quietly dropped duplicates — so adding "primary" twice
+looked like it worked and didn't. Routing all three through `Naming` means a
+duplicate says so and the field keeps what you typed.
+-}
+addNameToComponent :
+    { noun : String
+    , hint : String
+    , typed : String
+    , get : Components.Component -> List String
+    , set : List String -> Components.Component -> Components.Component
+    , clear : Model -> Model
+    }
+    -> Model
+    -> ( Model, Cmd Msg )
+addNameToComponent config model =
+    case model.selectedComponentName of
+        Nothing ->
+            ( { model | commitStatus = Just ( Failed, "Pick a component first" ) }, Cmd.none )
+
+        Just selected ->
+            let
+                currentComponents =
+                    model.components |> Maybe.withDefault []
+
+                existing =
+                    currentComponents
+                        |> List.filter (\c -> c.name == selected)
+                        |> List.head
+                        |> Maybe.map config.get
+                        |> Maybe.withDefault []
+            in
+            case Naming.check config.typed existing of
+                Err problem ->
+                    ( { model | commitStatus = Just ( Failed, Naming.describe config.noun config.hint problem ) }, Cmd.none )
+
+                Ok name ->
+                    let
+                        appendTo c =
+                            if c.name == selected then
+                                config.set (config.get c ++ [ name ]) c
+
+                            else
+                                c
+                    in
+                    ( config.clear { model | components = Just (List.map appendTo currentComponents), commitStatus = Nothing }
+                    , Cmd.none
+                    )
 
 
 updateLayoutNode : List Int -> (Components.Layout -> Components.Layout) -> Components.Layout -> Components.Layout
@@ -385,29 +440,26 @@ update msg model =
             ( { model | activeThemeName = themeName }, Cmd.none )
 
         UpdateNewThemeName name ->
-            ( { model | newThemeName = name }, Cmd.none )
+            ( { model | newThemeName = name, commitStatus = Naming.clearFailure model.commitStatus }, Cmd.none )
 
         UpdateNewThemeTemplate template ->
             ( { model | newThemeTemplate = template }, Cmd.none )
 
         CreateTheme ->
-            let
-                name =
-                    String.trim model.newThemeName
-            in
-            if name /= "" && not (List.any (\t -> t.name == name) model.themes) then
-                let
-                    newTheme =
-                        Templates.themeTemplates
-                            |> List.filter (\t -> t.id == model.newThemeTemplate)
-                            |> List.head
-                            |> Maybe.map (\t -> t.build name)
-                            |> Maybe.withDefault (Themes.fromTokens name [])
-                in
-                ( { model | themes = newTheme :: model.themes, activeThemeName = Just name, newThemeName = "", newThemeTemplate = "empty" }, Cmd.none )
+            case Naming.check model.newThemeName (List.map .name model.themes) of
+                Err problem ->
+                    ( { model | commitStatus = Just ( Failed, Naming.describe "theme" "Dark" problem ) }, Cmd.none )
 
-            else
-                ( model, Cmd.none )
+                Ok name ->
+                    let
+                        newTheme =
+                            Templates.themeTemplates
+                                |> List.filter (\t -> t.id == model.newThemeTemplate)
+                                |> List.head
+                                |> Maybe.map (\t -> t.build name)
+                                |> Maybe.withDefault (Themes.fromTokens name [])
+                    in
+                    ( { model | themes = newTheme :: model.themes, activeThemeName = Just name, newThemeName = "", newThemeTemplate = "empty", commitStatus = Nothing }, Cmd.none )
 
         UpdateToken path _ ->
             updateTokenPathLogic model msg path
@@ -428,7 +480,7 @@ update msg model =
             ( { model | newCompositePropertyValue = value }, Cmd.none )
 
         UpdateNewTokenPath path ->
-            ( { model | newTokenPath = path }, Cmd.none )
+            ( { model | newTokenPath = path, commitStatus = Naming.clearFailure model.commitStatus }, Cmd.none )
 
         UpdateNewTokenType t ->
             ( { model | newTokenType = t }, Cmd.none )
@@ -440,30 +492,31 @@ update msg model =
             case model.tokens of
                 Just tokensList ->
                     let
-                        path =
+                        -- Segments are split on ".", so joining them back is
+                        -- injective and `Naming` can work on the dotted path
+                        -- the user actually typed.
+                        segments =
                             String.split "." model.newTokenPath |> List.map String.trim |> List.filter (\s -> s /= "")
 
-                        newToken =
-                            { value = Tokens.StringValue model.newTokenValue
-                            , type_ = model.newTokenType
-                            , description = Nothing
-                            }
-
-                        tokenExists =
-                            List.any (\( p, _ ) -> p == path) tokensList
+                        existing =
+                            List.map (\( p, _ ) -> String.join "." p) tokensList
                     in
-                    if not (List.isEmpty path) && not tokenExists then
-                        let
-                            newTokens =
-                                ( path, newToken ) :: tokensList
-                        in
-                        ( { model | tokens = Just newTokens, newTokenPath = "", newTokenValue = "" }, Cmd.none )
+                    case Naming.check (String.join "." segments) existing of
+                        Err problem ->
+                            ( { model | commitStatus = Just ( Failed, Naming.describe "token" "color.brand.500" problem ) }, Cmd.none )
 
-                    else
-                        ( model, Cmd.none )
+                        Ok _ ->
+                            let
+                                newToken =
+                                    { value = Tokens.StringValue model.newTokenValue
+                                    , type_ = model.newTokenType
+                                    , description = Nothing
+                                    }
+                            in
+                            ( { model | tokens = Just (( segments, newToken ) :: tokensList), newTokenPath = "", newTokenValue = "", commitStatus = Nothing }, Cmd.none )
 
                 Nothing ->
-                    ( model, Cmd.none )
+                    ( { model | commitStatus = Just ( Working, "Tokens are still loading" ) }, Cmd.none )
 
         ApplyStarterTokenScale ->
             case model.tokens of
@@ -605,122 +658,72 @@ update msg model =
             ( { model | selectedComponentName = name }, Cmd.none )
 
         UpdateNewComponentName name ->
-            ( { model | newComponentName = name }, Cmd.none )
+            ( { model | newComponentName = name, commitStatus = Naming.clearFailure model.commitStatus }, Cmd.none )
 
         UpdateNewComponentTemplate template ->
             ( { model | newComponentTemplate = template }, Cmd.none )
 
         CreateComponent ->
             let
-                name =
-                    String.trim model.newComponentName
-
                 currentComponents =
                     model.components |> Maybe.withDefault []
             in
-            if name /= "" && not (List.any (\c -> c.name == name) currentComponents) then
-                let
-                    newComponent =
-                        Templates.componentTemplates
-                            |> List.filter (\t -> t.id == model.newComponentTemplate)
-                            |> List.head
-                            |> Maybe.map (\t -> t.build name)
-                            |> Maybe.withDefault (Templates.emptyComponent name)
-                in
-                ( { model | components = Just (newComponent :: currentComponents), selectedComponentName = Just name, newComponentName = "", newComponentTemplate = "empty" }, Cmd.none )
+            case Naming.check model.newComponentName (List.map .name currentComponents) of
+                Err problem ->
+                    ( { model | commitStatus = Just ( Failed, Naming.describe "component" "Button" problem ) }, Cmd.none )
 
-            else
-                ( model, Cmd.none )
+                Ok name ->
+                    let
+                        newComponent =
+                            Templates.componentTemplates
+                                |> List.filter (\t -> t.id == model.newComponentTemplate)
+                                |> List.head
+                                |> Maybe.map (\t -> t.build name)
+                                |> Maybe.withDefault (Templates.emptyComponent name)
+                    in
+                    ( { model | components = Just (newComponent :: currentComponents), selectedComponentName = Just name, newComponentName = "", newComponentTemplate = "empty", commitStatus = Nothing }, Cmd.none )
 
         UpdateNewComponentVariant name ->
-            ( { model | newComponentVariant = name }, Cmd.none )
+            ( { model | newComponentVariant = name, commitStatus = Naming.clearFailure model.commitStatus }, Cmd.none )
 
         AddComponentVariant ->
-            let
-                variant =
-                    String.trim model.newComponentVariant
-            in
-            if variant /= "" then
-                case model.selectedComponentName of
-                    Just name ->
-                        let
-                            currentComponents =
-                                model.components |> Maybe.withDefault []
-
-                            updateComponent c =
-                                if c.name == name && not (List.member variant c.variants) then
-                                    { c | variants = c.variants ++ [ variant ] }
-
-                                else
-                                    c
-                        in
-                        ( { model | components = Just (List.map updateComponent currentComponents), newComponentVariant = "" }, Cmd.none )
-
-                    Nothing ->
-                        ( model, Cmd.none )
-
-            else
-                ( model, Cmd.none )
+            addNameToComponent
+                { noun = "variant"
+                , hint = "primary"
+                , typed = model.newComponentVariant
+                , get = .variants
+                , set = \names c -> { c | variants = names }
+                , clear = \m -> { m | newComponentVariant = "" }
+                }
+                model
 
         UpdateNewComponentSlot name ->
-            ( { model | newComponentSlot = name }, Cmd.none )
+            ( { model | newComponentSlot = name, commitStatus = Naming.clearFailure model.commitStatus }, Cmd.none )
 
         AddComponentSlot ->
-            let
-                slot =
-                    String.trim model.newComponentSlot
-            in
-            if slot /= "" then
-                case model.selectedComponentName of
-                    Just name ->
-                        let
-                            currentComponents =
-                                model.components |> Maybe.withDefault []
-
-                            updateComponent c =
-                                if c.name == name && not (List.member slot c.slots) then
-                                    { c | slots = c.slots ++ [ slot ] }
-
-                                else
-                                    c
-                        in
-                        ( { model | components = Just (List.map updateComponent currentComponents), newComponentSlot = "" }, Cmd.none )
-
-                    Nothing ->
-                        ( model, Cmd.none )
-
-            else
-                ( model, Cmd.none )
+            addNameToComponent
+                { noun = "slot"
+                , hint = "label"
+                , typed = model.newComponentSlot
+                , get = .slots
+                , set = \names c -> { c | slots = names }
+                , clear = \m -> { m | newComponentSlot = "" }
+                }
+                model
 
         UpdateNewComponentState name ->
-            ( { model | newComponentState = name }, Cmd.none )
+            ( { model | newComponentState = name, commitStatus = Naming.clearFailure model.commitStatus }, Cmd.none )
 
         AddComponentState ->
-            let
-                state =
-                    String.trim model.newComponentState
-            in
-            if state /= "" then
-                case model.selectedComponentName of
-                    Just name ->
-                        let
-                            currentComponents =
-                                model.components |> Maybe.withDefault []
-
-                            updateComponent c =
-                                if c.name == name && not (List.member state c.states) then
-                                    { c | states = c.states ++ [ state ] }
-
-                                else
-                                    c
-                        in
-                        ( { model | components = Just (List.map updateComponent currentComponents), newComponentState = "", screens = Nothing, selectedScreenName = Nothing, newScreenName = "" }, Cmd.none )
-
-                    Nothing ->
-                        ( model, Cmd.none )
-
-            else
-                ( model, Cmd.none )
+            addNameToComponent
+                { noun = "state"
+                , hint = "hover"
+                , typed = model.newComponentState
+                , get = .states
+                , set = \names c -> { c | states = names }
+                , clear = \m -> { m | newComponentState = "" }
+                }
+                model
 
         SaveComponent ->
             case ( model.token, model.selectedProject, model.selectedComponentName ) of
@@ -1155,32 +1158,30 @@ update msg model =
             ( { model | selectedScreenName = name }, Cmd.none )
 
         UpdateNewScreenName name ->
-            ( { model | newScreenName = name }, Cmd.none )
+            ( { model | newScreenName = name, commitStatus = Naming.clearFailure model.commitStatus }, Cmd.none )
 
         UpdateNewScreenTemplate template ->
             ( { model | newScreenTemplate = template }, Cmd.none )
 
         CreateScreen ->
             let
-                name =
-                    String.trim model.newScreenName
-
                 currentScreens =
                     model.screens |> Maybe.withDefault []
             in
-            if name /= "" && not (List.any (\s -> s.name == name) currentScreens) then
-                let
-                    newScreen =
-                        Templates.screenTemplates
-                            |> List.filter (\t -> t.id == model.newScreenTemplate)
-                            |> List.head
-                            |> Maybe.map (\t -> t.build name)
-                            |> Maybe.withDefault (Templates.emptyScreen name)
-                in
-                ( { model | screens = Just (newScreen :: currentScreens), selectedScreenName = Just name, newScreenName = "", newScreenTemplate = "empty" }, Cmd.none )
+            case Naming.check model.newScreenName (List.map .name currentScreens) of
+                Err problem ->
+                    ( { model | commitStatus = Just ( Failed, Naming.describe "screen" "Login" problem ) }, Cmd.none )
 
-            else
-                ( model, Cmd.none )
+                Ok name ->
+                    let
+                        newScreen =
+                            Templates.screenTemplates
+                                |> List.filter (\t -> t.id == model.newScreenTemplate)
+                                |> List.head
+                                |> Maybe.map (\t -> t.build name)
+                                |> Maybe.withDefault (Templates.emptyScreen name)
+                    in
+                    ( { model | screens = Just (newScreen :: currentScreens), selectedScreenName = Just name, newScreenName = "", newScreenTemplate = "empty", commitStatus = Nothing }, Cmd.none )
 
         SaveScreen ->
             case ( model.token, model.selectedProject, model.selectedScreenName ) of
@@ -1623,22 +1624,27 @@ update msg model =
                     ( model, Cmd.none )
 
         UpdateNewBranchName name ->
-            ( { model | newBranchName = name }, Cmd.none )
+            ( { model | newBranchName = name, commitStatus = Naming.clearFailure model.commitStatus }, Cmd.none )
 
         CreateBranch ->
             case ( model.token, model.selectedProject, model.currentBranch ) of
                 ( Just token, Just project, Just currentBranch ) ->
                     let
-                        branchName =
-                            String.trim model.newBranchName
+                        -- Checking for a collision here rather than letting
+                        -- GitLab 400 keeps the reason specific: the generic
+                        -- "Couldn't create the branch" never said which of the
+                        -- several possible causes it was.
+                        existing =
+                            model.branches |> Maybe.withDefault [] |> List.map .name
                     in
-                    if branchName /= "" then
-                        ( { model | commitStatus = Just ( Working, "Creating branch..." ) }
-                        , GitLab.Branches.createBranch token project.id branchName currentBranch GotCreateBranchResult
-                        )
+                    case Naming.check model.newBranchName existing of
+                        Err problem ->
+                            ( { model | commitStatus = Just ( Failed, Naming.describe "branch" "feature/new-colors" problem ) }, Cmd.none )
 
-                    else
-                        ( model, Cmd.none )
+                        Ok branchName ->
+                            ( { model | commitStatus = Just ( Working, "Creating branch..." ) }
+                            , GitLab.Branches.createBranch token project.id branchName currentBranch GotCreateBranchResult
+                            )
 
                 _ ->
                     ( model, Cmd.none )
@@ -1656,18 +1662,29 @@ update msg model =
                     ( { model | commitStatus = Just ( Failed, "Couldn't create the branch" ) }, Cmd.none )
 
         UpdateMRTitle title ->
-            ( { model | mrTitle = title }, Cmd.none )
+            ( { model | mrTitle = title, commitStatus = Naming.clearFailure model.commitStatus }, Cmd.none )
 
         CreateMergeRequest ->
             case ( model.token, model.selectedProject, model.currentBranch ) of
                 ( Just token, Just project, Just currentBranch ) ->
-                    if currentBranch /= project.defaultBranch && model.mrTitle /= "" then
-                        ( { model | commitStatus = Just ( Working, "Opening merge request..." ) }
-                        , GitLab.MergeRequests.createMergeRequest token project.id currentBranch project.defaultBranch model.mrTitle GotMRResult
+                    -- Two different refusals, and they need different remedies:
+                    -- being on the default branch takes three steps to fix, so
+                    -- report it first rather than collapsing both into one
+                    -- "can't do that".
+                    if currentBranch == project.defaultBranch then
+                        ( { model | commitStatus = Just ( Failed, "You're on " ++ project.defaultBranch ++ " — create a branch, save your changes onto it, then open a merge request" ) }
+                        , Cmd.none
+                        )
+
+                    else if String.trim model.mrTitle == "" then
+                        ( { model | commitStatus = Just ( Failed, "Describe what you changed in the merge request title" ) }
+                        , Cmd.none
                         )
 
                     else
-                        ( model, Cmd.none )
+                        ( { model | commitStatus = Just ( Working, "Opening merge request..." ) }
+                        , GitLab.MergeRequests.createMergeRequest token project.id currentBranch project.defaultBranch model.mrTitle GotMRResult
+                        )
 
                 _ ->
                     ( model, Cmd.none )
@@ -1750,7 +1767,7 @@ update msg model =
                                     }
                             in
                             if List.isEmpty finalActions then
-                                ( model, Cmd.none )
+                                ( { model | commitStatus = Just ( Failed, "Pick at least one export format" ) }, Cmd.none )
 
                             else
                                 ( { model | commitStatus = Just ( Working, "Exporting..." ) }
