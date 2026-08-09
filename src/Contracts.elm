@@ -155,11 +155,11 @@ applyRule tokens path styles rule =
                 |> Dict.toList
                 |> List.filterMap
                     (\( property, value ) ->
-                        if List.member property properties && containsHexLiteral value then
+                        if List.member property properties && hasHardcodedValues value then
                             Just
                                 { path = path
                                 , property = Just property
-                                , message = "Hardcoded hex value found."
+                                , message = "Hardcoded value found."
                                 }
 
                         else
@@ -292,35 +292,34 @@ extractAliasPaths value =
     go value [] |> List.reverse
 
 
-containsHexLiteral : String -> Bool
-containsHexLiteral value =
+hasHardcodedValues : String -> Bool
+hasHardcodedValues value =
     let
-        indexes =
-            String.indexes "#" value
+        go s =
+            case String.indexes "{" s |> List.head of
+                Just startIdx ->
+                    let
+                        before =
+                            String.left startIdx s
 
-        takeHexRun s count =
-            case String.uncons s of
-                Just ( c, rest ) ->
-                    if Char.isHexDigit c then
-                        takeHexRun rest (count + 1)
+                        afterBrace =
+                            String.dropLeft (startIdx + 1) s
+                    in
+                    case String.indexes "}" afterBrace |> List.head of
+                        Just endOffset ->
+                            let
+                                after =
+                                    String.dropLeft (endOffset + 1) afterBrace
+                            in
+                            before ++ go after
 
-                    else
-                        count
+                        Nothing ->
+                            s
 
                 Nothing ->
-                    count
-
-        checkAt idx =
-            let
-                after =
-                    String.dropLeft (idx + 1) value
-
-                runLength =
-                    takeHexRun after 0
-            in
-            List.member runLength [ 3, 4, 6, 8 ]
+                    s
     in
-    List.any checkAt indexes
+    String.trim (go value) /= ""
 
 
 isPrefixOf : List a -> List a -> Bool

@@ -540,7 +540,12 @@ viewUsageContract model comp displayTokens =
             , button [ Ui.btnNeutral, onClick AddContractRule ] [ text "Add rule" ]
             ]
         , div [ classes [ Tw.flex, Tw.gap s2 ] ]
-            ([ button [ Ui.btnPrimary, onClick SaveContract ] [ text "Save contract" ] ]
+            ((if List.member comp.name model.existingComponents then
+                [ button [ Ui.btnPrimary, onClick SaveContract ] [ text "Save contract" ] ]
+
+              else
+                [ button [ Ui.btnPrimary, Html.Attributes.disabled True, Html.Attributes.title "Save the component first before saving contracts" ] [ text "Save contract" ] ]
+             )
                 ++ (if List.member comp.name model.existingContracts then
                         [ button [ Ui.btnDanger, onClick (DeleteContract comp.name) ] [ text "Delete contract" ] ]
 

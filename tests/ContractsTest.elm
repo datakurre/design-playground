@@ -128,14 +128,29 @@ suite =
 
                         _ ->
                             Expect.fail "Expected 1 violation"
-            , test "NoHardcodedValues: fails with raw hex on listed property" <|
+            , test "NoHardcodedValues: fails with hardcoded string on listed property" <|
                 \_ ->
                     let
                         component =
-                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.singleton "color" "#ff0000" } "content") }
+                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.singleton "padding" "10px" } "content") }
 
                         contract =
-                            { component = "Test", rules = [ NoHardcodedValues [ "color" ] ] }
+                            { component = "Test", rules = [ NoHardcodedValues [ "padding" ] ] }
+                    in
+                    case Contracts.validate [] contract component of
+                        [ _ ] ->
+                            Expect.pass
+
+                        _ ->
+                            Expect.fail "Expected 1 violation"
+            , test "NoHardcodedValues: fails with mixed string on listed property" <|
+                \_ ->
+                    let
+                        component =
+                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.singleton "border" "1px solid {core.border}" } "content") }
+
+                        contract =
+                            { component = "Test", rules = [ NoHardcodedValues [ "border" ] ] }
                     in
                     case Contracts.validate [] contract component of
                         [ _ ] ->
@@ -153,7 +168,17 @@ suite =
                             { component = "Test", rules = [ NoHardcodedValues [ "color" ] ] }
                     in
                     Expect.equal [] (Contracts.validate [] contract component)
-            , test "NoHardcodedValues: passes with hex on unlisted property" <|
+            , test "NoHardcodedValues: passes with multiple aliases on listed property" <|
+                \_ ->
+                    let
+                        component =
+                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.singleton "padding" "{spacing.sm} {spacing.md}" } "content") }
+
+                        contract =
+                            { component = "Test", rules = [ NoHardcodedValues [ "padding" ] ] }
+                    in
+                    Expect.equal [] (Contracts.validate [] contract component)
+            , test "NoHardcodedValues: passes with hardcoded string on unlisted property" <|
                 \_ ->
                     let
                         component =
