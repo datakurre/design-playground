@@ -3,10 +3,11 @@ module Pages.ScreenComposer exposing (viewScreenComposer)
 import Components
 import Dict
 import Help
-import Html exposing (Html, button, div, h3, h4, li, text, ul)
-import Html.Attributes exposing (value)
+import Html exposing (Html, a, button, div, h3, h4, li, text, ul)
+import Html.Attributes exposing (href, value)
 import Html.Events exposing (onClick, onInput)
 import Renderer
+import Route
 import Screens exposing (Screen)
 import Tailwind as Tw exposing (classes)
 import Tailwind.Breakpoints exposing (hover)
@@ -39,10 +40,18 @@ viewScreenList model screens =
             (List.map
                 (\s ->
                     li []
-                        [ button
-                            [ onClick (SelectScreen (Just s.name))
+                        [ Html.a
+                            [ Html.Attributes.href
+                                (case model.selectedProject of
+                                    Just p ->
+                                        Route.toString (Route.Repo p.pathWithNamespace (Route.ScreensTab (Just s.name)))
+
+                                    Nothing ->
+                                        "#"
+                                )
                             , classes
                                 [ Tw.w_full
+                                , Tw.block
                                 , Tw.text_left
                                 , Tw.px s2
                                 , Tw.py s2
@@ -50,6 +59,7 @@ viewScreenList model screens =
                                 , Tw.border_none
                                 , Tw.rounded_md
                                 , Tw.cursor_pointer
+                                , Tw.no_underline
                                 , if model.selectedScreenName == Just s.name then
                                     Tw.batch
                                         [ Tw.bg_color (slate s100)

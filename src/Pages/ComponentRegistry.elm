@@ -7,8 +7,11 @@ import Dict
 import Help
 import Html exposing (Html, button, div, h3, h4, li, text, ul)
 import Html.Attributes exposing (value)
-import Html.Events exposing (onCheck, onClick, onInput)
+import Html.Events exposing (onCheck, onClick, onInput, stopPropagationOn)
+import Json.Decode
+import Naming
 import Renderer
+import Route
 import Tailwind as Tw exposing (classes)
 import Tailwind.Breakpoints exposing (hover)
 import Tailwind.Theme exposing (red, s0, s0_dot_5, s1, s100, s2, s200, s24, s3, s300, s4, s40, s400, s50, s6, s600, s64, s700, s800, s900, slate)
@@ -267,8 +270,15 @@ viewComponentList model components =
                                         Ui.pill Negative (String.fromInt (List.length violations))
                     in
                     li []
-                        [ button
-                            [ onClick (SelectComponent (Just c.name))
+                        [ Html.a
+                            [ Html.Attributes.href
+                                (case model.selectedProject of
+                                    Just p ->
+                                        Route.toString (Route.Repo p.pathWithNamespace (Route.ComponentsTab (Just c.name)))
+
+                                    Nothing ->
+                                        "#"
+                                )
                             , classes
                                 [ Tw.flex
                                 , Tw.justify_between
@@ -281,6 +291,7 @@ viewComponentList model components =
                                 , Tw.border_none
                                 , Tw.rounded_md
                                 , Tw.cursor_pointer
+                                , Tw.no_underline
                                 , if model.selectedComponentName == Just c.name then
                                     Tw.batch
                                         [ Tw.bg_color (slate s100)

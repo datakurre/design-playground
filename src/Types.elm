@@ -145,6 +145,7 @@ type Msg
     | UpdateProjectSearch String
     | SelectProject Project
     | UnselectProject
+    | GotProject (Result Http.Error Project)
     | GotTree (Result Http.Error (List TreeItem))
     | GotCommitResult CommitContext (Result Http.Error ())
     | GotTokensFile (Result Http.Error String)

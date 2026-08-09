@@ -23,6 +23,7 @@ import Tokens
 import TokenScale
 import Types exposing (..)
 import Url
+import Route
 
 
 {-| The "add a variant / slot / state" forms are the same form three times
@@ -152,6 +153,31 @@ updateLayoutNode path updateFn layout =
                 Components.Element _ _ ->
                     layout
 
+routeToTab : Route.TabRoute -> Types.Tab
+routeToTab tr =
+    case tr of
+        Route.TokensTab -> Types.TokenStudio
+        Route.ComponentsTab _ -> Types.ComponentRegistry
+        Route.ScreensTab _ -> Types.ScreenComposer
+        Route.GitWorkflowsTab -> Types.GitWorkflows
+        Route.ExportPipelineTab -> Types.ExportPipeline
+
+resetForProject : GitLab.Projects.Project -> Model -> Model
+resetForProject project model =
+    { model | selectedProject = Just project, repositoryTree = Nothing, commitStatus = Nothing, originalTokens = Nothing, tokensFileExists = False, tokens = Nothing, themes = [], existingThemes = [], existingComponents = [], existingScreens = [], activeThemeName = Nothing, originalComponents = Nothing, components = Nothing, selectedComponentName = Nothing, screens = Nothing, selectedScreenName = Nothing, currentBranch = Just project.defaultBranch, exportTargets = [ "css", "tailwind" ], contracts = Nothing, existingContracts = [], newContractRuleType = "allowedTokenGroups", newContractRuleFields = Dict.empty }
+
+fetchProjectData : String -> GitLab.Projects.Project -> Cmd Msg
+fetchProjectData token project =
+    Cmd.batch
+        [ GitLab.Files.listTree token project.id project.defaultBranch GotTree
+        , GitLab.Files.getFileRaw token project.id project.defaultBranch "tokens/tokens.json" GotTokensFile
+        , GitLab.Files.listTreeAtPath token project.id project.defaultBranch "themes" (GotThemesTree project.defaultBranch)
+        , GitLab.Files.listTreeAtPath token project.id project.defaultBranch "components" (GotComponentsTree project.defaultBranch)
+        , GitLab.Files.listTreeAtPath token project.id project.defaultBranch "layouts" (GotScreensTree project.defaultBranch)
+        , GitLab.Branches.listBranches token project.id GotBranches
+        , GitLab.Files.getFileRaw token project.id project.defaultBranch "contracts.json" (GotContractFile "contracts.json")
+        ]
+
 
 updateTokenPathLogic : Model -> Msg -> Tokens.TokenPath -> ( Model, Cmd Msg )
 updateTokenPathLogic model msg path =
@@ -251,7 +277,61 @@ update msg model =
                     ( model, Nav.load hrefString )
 
         UrlChanged url ->
-            ( { model | url = url }, Cmd.none )
+            case Route.parse url of
+                Just Route.Home ->
+                    ( { model | url = url, selectedProject = Nothing, activeTab = TokenStudio, selectedComponentName = Nothing, selectedScreenName = Nothing }, Cmd.none )
+
+                Just (Route.Repo path tabRoute) ->
+                    let
+                        tab = routeToTab tabRoute
+                        compName = case tabRoute of
+                            Route.ComponentsTab c -> c
+                            _ -> Nothing
+                        scrName = case tabRoute of
+                            Route.ScreensTab s -> s
+                            _ -> Nothing
+
+                        ( baseModel, cmd ) =
+                            case model.selectedProject of
+                                Just p ->
+                                    if p.pathWithNamespace /= path then
+                                        case model.token of
+                                            Just t ->
+                                                ( { model | selectedProject = Nothing, commitStatus = Just ( Working, "Loading repository..." ) }
+                                                , GitLab.Projects.getProject t path GotProject
+                                                )
+                                            Nothing ->
+                                                ( model, Cmd.none )
+                                    else
+                                        ( model, Cmd.none )
+
+                                Nothing ->
+                                    let
+                                        knownProject =
+                                            model.projects |> Maybe.andThen (List.filter (\p -> p.pathWithNamespace == path) >> List.head)
+                                    in
+                                    case knownProject of
+                                        Just p ->
+                                            case model.token of
+                                                Just t ->
+                                                    ( resetForProject p model
+                                                    , fetchProjectData t p
+                                                    )
+                                                Nothing ->
+                                                    ( model, Cmd.none )
+                                        Nothing ->
+                                            case model.token of
+                                                Just t ->
+                                                    ( { model | commitStatus = Just ( Working, "Loading repository..." ) }
+                                                    , GitLab.Projects.getProject t path GotProject
+                                                    )
+                                                Nothing ->
+                                                    ( model, Cmd.none )
+                    in
+                    ( { baseModel | url = url, activeTab = tab, selectedComponentName = compName, selectedScreenName = scrName }, cmd )
+
+                Nothing ->
+                    ( { model | url = url }, Cmd.none )
 
         GotTokenResult result ->
             case result of
@@ -337,24 +417,22 @@ update msg model =
             ( { model | projectSearch = search }, Cmd.none )
 
         SelectProject project ->
-            case model.token of
-                Just token ->
-                    ( { model | selectedProject = Just project, repositoryTree = Nothing, commitStatus = Nothing, originalTokens = Nothing, tokensFileExists = False, tokens = Nothing, themes = [], existingThemes = [], existingComponents = [], existingScreens = [], activeThemeName = Nothing, originalComponents = Nothing, components = Nothing, selectedComponentName = Nothing, screens = Nothing, selectedScreenName = Nothing, currentBranch = Just project.defaultBranch, exportTargets = [ "css", "tailwind" ], contracts = Nothing, existingContracts = [], newContractRuleType = "allowedTokenGroups", newContractRuleFields = Dict.empty }
-                    , Cmd.batch
-                        [ GitLab.Files.listTree token project.id project.defaultBranch GotTree
-                        , GitLab.Files.getFileRaw token project.id project.defaultBranch "tokens/tokens.json" GotTokensFile
-                        , GitLab.Files.listTreeAtPath token project.id project.defaultBranch "themes" (GotThemesTree project.defaultBranch)
-                        , GitLab.Files.listTreeAtPath token project.id project.defaultBranch "components" (GotComponentsTree project.defaultBranch)
-                        , GitLab.Files.listTreeAtPath token project.id project.defaultBranch "layouts" (GotScreensTree project.defaultBranch)
-                        , GitLab.Branches.listBranches token project.id GotBranches
-                        ]
-                    )
-
-                Nothing ->
-                    ( model, Cmd.none )
+            ( model, Nav.pushUrl model.key (Route.toString (Route.Repo project.pathWithNamespace Route.TokensTab)) )
 
         UnselectProject ->
-            ( { model | selectedProject = Nothing, repositoryTree = Nothing, tokens = Nothing, themes = [], components = Nothing, screens = Nothing, activeThemeName = Nothing, selectedComponentName = Nothing, selectedScreenName = Nothing, commitStatus = Nothing, contracts = Nothing, existingContracts = [], newContractRuleType = "allowedTokenGroups", newContractRuleFields = Dict.empty }, Cmd.none )
+            ( { model | selectedProject = Nothing, repositoryTree = Nothing, tokens = Nothing, themes = [], components = Nothing, screens = Nothing, activeThemeName = Nothing, selectedComponentName = Nothing, selectedScreenName = Nothing, commitStatus = Nothing, contracts = Nothing, existingContracts = [], newContractRuleType = "allowedTokenGroups", newContractRuleFields = Dict.empty }, Nav.pushUrl model.key "/" )
+
+        GotProject result ->
+            case result of
+                Ok project ->
+                    case model.token of
+                        Just t ->
+                            ( resetForProject project model, fetchProjectData t project )
+                        Nothing ->
+                            ( model, Cmd.none )
+
+                Err _ ->
+                    ( { model | error = Just "Failed to fetch project details.", commitStatus = Nothing }, Cmd.none )
 
         GotTree result ->
             case result of
@@ -659,7 +737,19 @@ update msg model =
                     ( model, Cmd.none )
 
         SwitchTab tab ->
-            ( { model | activeTab = tab }, Cmd.none )
+            case model.selectedProject of
+                Just p ->
+                    let
+                        tabRoute = case tab of
+                            TokenStudio -> Route.TokensTab
+                            ComponentRegistry -> Route.ComponentsTab model.selectedComponentName
+                            ScreenComposer -> Route.ScreensTab model.selectedScreenName
+                            GitWorkflows -> Route.GitWorkflowsTab
+                            ExportPipeline -> Route.ExportPipelineTab
+                    in
+                    ( model, Nav.pushUrl model.key (Route.toString (Route.Repo p.pathWithNamespace tabRoute)) )
+                Nothing ->
+                    ( { model | activeTab = tab }, Cmd.none )
 
         GotComponentsTree ref result ->
             case result of
@@ -716,7 +806,11 @@ update msg model =
                     ( model, Cmd.none )
 
         SelectComponent name ->
-            ( { model | selectedComponentName = name }, Cmd.none )
+            case model.selectedProject of
+                Just p ->
+                    ( model, Nav.pushUrl model.key (Route.toString (Route.Repo p.pathWithNamespace (Route.ComponentsTab name))) )
+                Nothing ->
+                    ( { model | selectedComponentName = name }, Cmd.none )
 
         UpdateNewComponentName name ->
             ( { model | newComponentName = name, commitStatus = Naming.clearFailure model.commitStatus }, Cmd.none )
@@ -1434,7 +1528,11 @@ update msg model =
                     ( model, Cmd.none )
 
         SelectScreen name ->
-            ( { model | selectedScreenName = name }, Cmd.none )
+            case model.selectedProject of
+                Just p ->
+                    ( model, Nav.pushUrl model.key (Route.toString (Route.Repo p.pathWithNamespace (Route.ScreensTab name))) )
+                Nothing ->
+                    ( { model | selectedScreenName = name }, Cmd.none )
 
         UpdateNewScreenName name ->
             ( { model | newScreenName = name, commitStatus = Naming.clearFailure model.commitStatus }, Cmd.none )

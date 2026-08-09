@@ -14,6 +14,7 @@ import Pages.ExportPipeline exposing (viewExportPipeline)
 import Pages.GitWorkflows exposing (viewGitWorkflows)
 import Pages.ScreenComposer exposing (viewScreenComposer)
 import Pages.TokenStudio exposing (viewTokenStudio)
+import Route
 import Tailwind as Tw exposing (classes)
 import Tailwind.Breakpoints exposing (hover)
 import Tailwind.Theme exposing (red, s0, s0_dot_5, s14, s2, s200, s3, s4, s50, s6, s700, s8, s900, slate, white)
@@ -378,10 +379,11 @@ viewProjectPicker search projects =
             (List.map
                 (\p ->
                     li []
-                        [ button
-                            [ onClick (SelectProject p)
+                        [ a
+                            [ href (Route.toString (Route.Repo p.pathWithNamespace Route.TokensTab))
                             , classes
                                 [ Tw.w_full
+                                , Tw.block
                                 , Tw.text_left
                                 , Tw.px s4
                                 , Tw.py s3
@@ -391,6 +393,7 @@ viewProjectPicker search projects =
                                 , Tw.cursor_pointer
                                 , Tw.border_b
                                 , Tw.border_color (slate s200)
+                                , Tw.no_underline
                                 , hover [ Tw.bg_color (slate s50) ]
                                 ]
                             ]
@@ -432,7 +435,36 @@ viewTabs model =
             ]
         ]
         (List.map
-            (\( tabId, label ) -> Ui.tab (model.activeTab == tabId) (SwitchTab tabId) label)
+            (\( tabId, label ) ->
+                let
+                    tabUrl =
+                        case model.selectedProject of
+                            Just p ->
+                                Route.toString
+                                    (Route.Repo p.pathWithNamespace
+                                        (case tabId of
+                                            TokenStudio ->
+                                                Route.TokensTab
+
+                                            ComponentRegistry ->
+                                                Route.ComponentsTab model.selectedComponentName
+
+                                            ScreenComposer ->
+                                                Route.ScreensTab model.selectedScreenName
+
+                                            GitWorkflows ->
+                                                Route.GitWorkflowsTab
+
+                                            ExportPipeline ->
+                                                Route.ExportPipelineTab
+                                        )
+                                    )
+
+                            Nothing ->
+                                "#"
+                in
+                Ui.tabLink (model.activeTab == tabId) tabUrl label
+            )
             [ ( TokenStudio, "Tokens" )
             , ( ComponentRegistry, "Components" )
             , ( ScreenComposer, "Screens" )

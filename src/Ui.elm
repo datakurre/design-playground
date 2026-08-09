@@ -3,7 +3,7 @@ module Ui exposing
     , panel, panelSunken, page, divider
     , btnPrimary, btnNeutral, btnDanger, btnBrand, btnSmall, btnQuiet, iconButton
     , textInput, selectInput
-    , tab, themePicker
+    , tab, tabLink, themePicker
     , PillTone(..), pill
     , previewSurface
     , contextHelp, tabLede
@@ -44,7 +44,7 @@ Three steps, and no more.
 
 # Navigation
 
-@docs tab, themePicker
+@docs tab, tabLink, themePicker
 
 
 # Status
@@ -353,21 +353,42 @@ tab isActive msg label =
             , Tw.border_b_2
             , Tw.raw "bg-transparent"
             , Tw.cursor_pointer
-            , Tw.transition_colors
+            , Tw.no_underline
+            , hover [ Tw.text_color (slate s900) ]
             , if isActive then
-                batch
-                    [ Tw.font_semibold
-                    , Tw.text_color (slate s900)
-                    , Tw.border_color (slate s900)
-                    ]
+                batch [ Tw.border_color (slate s900), Tw.text_color (slate s900), Tw.font_medium ]
 
               else
-                batch
-                    [ Tw.font_medium
-                    , Tw.text_color (slate s500)
-                    , Tw.raw "border-transparent"
-                    , hover [ Tw.text_color (slate s800) ]
-                    ]
+                batch [ Tw.raw "border-transparent", Tw.text_color (slate s500) ]
+            ]
+        ]
+        [ Html.text label ]
+
+tabLink : Bool -> String -> String -> Html msg
+tabLink isActive url label =
+    Html.a
+        [ Html.Attributes.href url
+        , Html.Attributes.attribute "aria-current"
+            (if isActive then
+                "page"
+
+             else
+                "false"
+            )
+        , classes
+            [ Tw.px s1
+            , Tw.py s3
+            , Tw.text_sm
+            , Tw.border_b_2
+            , Tw.raw "bg-transparent"
+            , Tw.cursor_pointer
+            , Tw.no_underline
+            , hover [ Tw.text_color (slate s900) ]
+            , if isActive then
+                batch [ Tw.border_color (slate s900), Tw.text_color (slate s900), Tw.font_medium ]
+
+              else
+                batch [ Tw.raw "border-transparent", Tw.text_color (slate s500) ]
             ]
         ]
         [ Html.text label ]

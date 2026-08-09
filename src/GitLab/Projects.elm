@@ -1,4 +1,4 @@
-module GitLab.Projects exposing (Project, listProjects, projectDecoder)
+module GitLab.Projects exposing (Project, getProject, listProjects, projectDecoder)
 
 import Http
 import Json.Decode as Decode exposing (Decoder)
@@ -29,6 +29,24 @@ listProjects token page toMsg =
         , url = "https://gitlab.com/api/v4/projects?membership=true&order_by=id&sort=desc&per_page=20&page=" ++ String.fromInt page
         , body = Http.emptyBody
         , expect = Http.expectJson toMsg (Decode.list projectDecoder)
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
+getProject : String -> String -> (Result Http.Error Project -> msg) -> Cmd msg
+getProject token pathWithNamespace toMsg =
+    let
+        encodedPath =
+            pathWithNamespace
+                |> String.replace "/" "%2F"
+    in
+    Http.request
+        { method = "GET"
+        , headers = [ Http.header "Authorization" ("Bearer " ++ token) ]
+        , url = "https://gitlab.com/api/v4/projects/" ++ encodedPath
+        , body = Http.emptyBody
+        , expect = Http.expectJson toMsg projectDecoder
         , timeout = Nothing
         , tracker = Nothing
         }
