@@ -11,7 +11,7 @@ import Html.Events exposing (onClick, onInput)
 import Renderer
 import Tailwind as Tw exposing (classes)
 import Tailwind.Breakpoints exposing (hover)
-import Tailwind.Theme exposing (red, s0, s0_dot_5, s1, s100, s2, s200, s24, s3, s4, s40, s50, s6, s64, s700, s900, slate)
+import Tailwind.Theme exposing (red, s0, s0_dot_5, s1, s100, s2, s200, s24, s3, s4, s40, s400, s50, s6, s64, s700, s800, s900, slate)
 import Templates
 import Themes
 import TokenBrowse
@@ -133,6 +133,8 @@ viewLayoutEditorNode model path layout =
                         , classes [ Tw.w_full ]
                         ]
                         []
+                    , div [ Ui.mutedSmall, classes [ Tw.mt s2 ] ]
+                        [ text "Elements render text or slots and cannot contain other layout nodes (like Stack or Grid)." ]
                     ]
 
             _ ->
@@ -313,9 +315,9 @@ viewComponentEditor model comp displayTokens =
                 , button [ Ui.btnDanger, onClick (DeleteComponent comp.name) ] [ text "Delete" ]
                 ]
             ]
-        , viewNameList "Variants" commonVariantNames comp.variants model.newComponentVariant UpdateNewComponentVariant AddComponentVariant
-        , viewNameList "States" commonStateNames comp.states model.newComponentState UpdateNewComponentState AddComponentState
-        , viewNameList "Slots" [] comp.slots model.newComponentSlot UpdateNewComponentSlot AddComponentSlot
+        , viewNameList "Variants" Help.componentVariant commonVariantNames comp.variants model.newComponentVariant UpdateNewComponentVariant AddComponentVariant RemoveComponentVariant
+        , viewNameList "States" Help.componentState commonStateNames comp.states model.newComponentState UpdateNewComponentState AddComponentState RemoveComponentState
+        , viewNameList "Slots" Help.componentSlot [] comp.slots model.newComponentSlot UpdateNewComponentSlot AddComponentSlot RemoveComponentSlot
         , div [ classes [ Tw.mt s3, Tw.pt s3 ], Ui.divider ]
             [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.mb s2 ] ]
                 [ h4 [ Ui.sectionTitle ] [ text "Layout" ]
@@ -331,8 +333,12 @@ viewComponentEditor model comp displayTokens =
                 Nothing ->
                     div []
                         [ div [ Ui.muted, classes [ Tw.mb s2 ] ]
-                            [ text "This component has nothing in it yet." ]
-                        , button [ Ui.btnNeutral, onClick InitComponentLayout ] [ text "Add a layout" ]
+                            [ text "This component has nothing in it yet. Choose a root layout node:" ]
+                        , div [ classes [ Tw.flex, Tw.gap s2 ] ]
+                            [ button [ Ui.btnNeutral, onClick (InitComponentLayout "stack") ] [ text "+ Stack" ]
+                            , button [ Ui.btnNeutral, onClick (InitComponentLayout "grid") ] [ text "+ Grid" ]
+                            , button [ Ui.btnNeutral, onClick (InitComponentLayout "element") ] [ text "+ Element" ]
+                            ]
                         ]
 
                 Just layoutRoot ->
@@ -362,14 +368,17 @@ commonStateNames =
 `suggestions` seeds a `<datalist>` for the draft input; pass `[]` (as Slots
 does) when there's no established vocabulary worth suggesting.
 -}
-viewNameList : String -> List String -> List String -> String -> (String -> Msg) -> Msg -> Html Msg
-viewNameList label suggestions names draft onDraftChange onAdd =
+viewNameList : String -> Help.Topic -> List String -> List String -> String -> (String -> Msg) -> Msg -> (String -> Msg) -> Html Msg
+viewNameList label helpTopic suggestions names draft onDraftChange onAdd onRemove =
     let
         datalistId =
             "suggestions-" ++ label
     in
     div [ classes [ Tw.mb s3 ] ]
-        [ h4 [ Ui.sectionTitle, classes [ Tw.mb s1 ] ] [ text label ]
+        [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.mb s1 ] ]
+            [ h4 [ Ui.sectionTitle ] [ text label ]
+            , Ui.contextHelp helpTopic
+            ]
         , if List.isEmpty names then
             div [ Ui.mutedSmall, classes [ Tw.mb s1 ] ] [ text "None yet." ]
 
@@ -385,9 +394,20 @@ viewNameList label suggestions names draft onDraftChange onAdd =
                                 , Tw.text_xs
                                 , Tw.bg_color (slate s100)
                                 , Tw.text_color (slate s700)
+                                , Tw.flex
+                                , Tw.items_center
+                                , Tw.gap s1
                                 ]
                             ]
-                            [ text n ]
+                            [ text n 
+                            , button
+                                [ onClick (onRemove n)
+                                , Html.Attributes.attribute "aria-label" ("Remove " ++ n)
+                                , Html.Attributes.title ("Remove " ++ n)
+                                , classes [ Tw.border_none, Tw.raw "bg-transparent", Tw.cursor_pointer, Tw.text_color (slate s400), hover [ Tw.text_color (slate s800) ] ]
+                                ]
+                                [ text "×" ]
+                            ]
                     )
                     names
                 )

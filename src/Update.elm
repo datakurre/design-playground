@@ -79,6 +79,29 @@ addNameToComponent config model =
                     )
 
 
+removeNameFromComponent : (Components.Component -> List String) -> (List String -> Components.Component -> Components.Component) -> String -> Model -> ( Model, Cmd Msg )
+removeNameFromComponent get set name model =
+    case model.selectedComponentName of
+        Nothing ->
+            ( model, Cmd.none )
+
+        Just selected ->
+            let
+                currentComponents =
+                    model.components |> Maybe.withDefault []
+
+                removeFrom c =
+                    if c.name == selected then
+                        set (List.filter (\n -> n /= name) (get c)) c
+
+                    else
+                        c
+            in
+            ( { model | components = Just (List.map removeFrom currentComponents) }
+            , Cmd.none
+            )
+
+
 updateLayoutNode : List Int -> (Components.Layout -> Components.Layout) -> Components.Layout -> Components.Layout
 updateLayoutNode path updateFn layout =
     case path of
@@ -716,6 +739,9 @@ update msg model =
                 }
                 model
 
+        RemoveComponentVariant name ->
+            removeNameFromComponent .variants (\names c -> { c | variants = names }) name model
+
         UpdateNewComponentSlot name ->
             ( { model | newComponentSlot = name, commitStatus = Naming.clearFailure model.commitStatus }, Cmd.none )
 
@@ -730,6 +756,9 @@ update msg model =
                 }
                 model
 
+        RemoveComponentSlot name ->
+            removeNameFromComponent .slots (\names c -> { c | slots = names }) name model
+
         UpdateNewComponentState name ->
             ( { model | newComponentState = name, commitStatus = Naming.clearFailure model.commitStatus }, Cmd.none )
 
@@ -743,6 +772,9 @@ update msg model =
                 , clear = \m -> { m | newComponentState = "" }
                 }
                 model
+
+        RemoveComponentState name ->
+            removeNameFromComponent .states (\names c -> { c | states = names }) name model
 
         SaveComponent ->
             case ( model.token, model.selectedProject, model.selectedComponentName ) of
@@ -800,16 +832,30 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
-        InitComponentLayout ->
+        InitComponentLayout layoutType ->
             case model.selectedComponentName of
                 Just name ->
                     let
                         currentComponents =
                             model.components |> Maybe.withDefault []
 
+                        newLayout =
+                            case layoutType of
+                                "stack" ->
+                                    Components.Stack { direction = "column", styles = Dict.empty } []
+
+                                "grid" ->
+                                    Components.Grid { columns = 1, styles = Dict.empty } []
+
+                                "element" ->
+                                    Components.Element { isSlot = False, styles = Dict.empty } "New Element"
+
+                                _ ->
+                                    Components.Stack { direction = "column", styles = Dict.empty } []
+
                         updateComponent c =
                             if c.name == name then
-                                { c | layout = Just (Components.Stack { direction = "column", styles = Dict.empty } []) }
+                                { c | layout = Just newLayout }
 
                             else
                                 c
@@ -842,8 +888,9 @@ update msg model =
                                                                 Components.Grid p children ->
                                                                     Components.Grid { p | styles = Dict.insert prop value p.styles } children
 
-                                                                _ ->
-                                                                    node
+                                                                Components.Element p content ->
+                                                                    Components.Element { p | styles = Dict.insert prop value p.styles } content
+
                                                         )
                                                         l
                                                     )
@@ -883,8 +930,9 @@ update msg model =
                                                                 Components.Grid p children ->
                                                                     Components.Grid { p | styles = Dict.remove prop p.styles } children
 
-                                                                _ ->
-                                                                    node
+                                                                Components.Element p content ->
+                                                                    Components.Element { p | styles = Dict.remove prop p.styles } content
+
                                                         )
                                                         l
                                                     )

@@ -2,7 +2,7 @@ module HelpTest exposing (..)
 
 import Expect
 import Help
-import Test exposing (..)
+import Test exposing (Test, describe, test)
 import Types exposing (Tab(..))
 
 
@@ -20,6 +20,9 @@ suite =
                     , "component-layout"
                     , "usage-contract"
                     , "component-editor"
+                    , "component-variant"
+                    , "component-state"
+                    , "component-slot"
                     , "screens"
                     , "add-component-to-screen"
                     , "add-screen-to-screen"
@@ -38,7 +41,20 @@ suite =
                     ids =
                         List.map .id Help.all
                 in
-                Expect.equal (List.length ids) (List.length (List.foldl (\id acc -> if List.member id acc then acc else id :: acc) [] ids))
+                Expect.equal (List.length ids)
+                    (List.length
+                        (List.foldl
+                            (\id acc ->
+                                if List.member id acc then
+                                    acc
+
+                                else
+                                    id :: acc
+                            )
+                            []
+                            ids
+                        )
+                    )
         , test "every topic has a non-empty title" <|
             \_ ->
                 Expect.equal True (List.all (\t -> String.trim t.title /= "") Help.all)

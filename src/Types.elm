@@ -182,12 +182,15 @@ type Msg
     | CreateComponent
     | UpdateNewComponentVariant String
     | AddComponentVariant
+    | RemoveComponentVariant String
     | UpdateNewComponentSlot String
     | AddComponentSlot
+    | RemoveComponentSlot String
     | UpdateNewComponentState String
     | AddComponentState
+    | RemoveComponentState String
     | SaveComponent
-    | InitComponentLayout
+    | InitComponentLayout String
     | UpdateLayoutProperty (List Int) String String
     | RemoveLayoutProperty (List Int) String
     | UpdateLayoutText (List Int) String

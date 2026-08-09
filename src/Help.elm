@@ -2,7 +2,7 @@ module Help exposing
     ( Topic
     , forTab
     , tokens, themes, tokenFilters, newToken
-    , components, componentLayout, usageContract, componentEditor
+    , components, componentLayout, usageContract, componentEditor, componentVariant, componentState, componentSlot
     , screens, addComponentToScreen, addScreenToScreen, screenEditor
     , gitWorkflows, branch, unsavedChanges, mergeRequests, contractCheck
     , export
@@ -30,7 +30,7 @@ broken once.
 
 @docs tokens, themes, tokenFilters, newToken
 
-@docs components, componentLayout, usageContract, componentEditor
+@docs components, componentLayout, usageContract, componentEditor, componentVariant, componentState, componentSlot
 
 @docs screens, addComponentToScreen, addScreenToScreen, screenEditor
 
@@ -188,6 +188,36 @@ componentEditor =
 
 
 {-| -}
+componentVariant : Topic
+componentVariant =
+    { id = "component-variant"
+    , title = "Variants"
+    , lede = Nothing
+    , body = [ "Variants define alternative visual styles for a component (e.g., 'primary', 'danger')." ]
+    }
+
+
+{-| -}
+componentState : Topic
+componentState =
+    { id = "component-state"
+    , title = "States"
+    , lede = Nothing
+    , body = [ "States represent interactive or conditional modes like 'hover', 'active', or 'disabled'." ]
+    }
+
+
+{-| -}
+componentSlot : Topic
+componentSlot =
+    { id = "component-slot"
+    , title = "Slots"
+    , lede = Nothing
+    , body = [ "Slots are placeholders inside this component that other screens can fill with their own content." ]
+    }
+
+
+{-| -}
 screens : Topic
 screens =
     { id = "screens"
@@ -331,6 +361,9 @@ all =
     , componentLayout
     , usageContract
     , componentEditor
+    , componentVariant
+    , componentState
+    , componentSlot
     , screens
     , addComponentToScreen
     , addScreenToScreen

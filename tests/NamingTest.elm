@@ -2,7 +2,7 @@ module NamingTest exposing (suite)
 
 import Expect
 import Naming
-import Test exposing (..)
+import Test exposing (Test, describe, test)
 import Types exposing (StatusLevel(..))
 
 

@@ -4,7 +4,7 @@ import Expect
 import Html.Attributes
 import Pages.TokenStudio as TokenStudio
 import Set
-import Test exposing (..)
+import Test exposing (Test, describe, test)
 import Test.Html.Query as Query
 import Test.Html.Selector as Selector
 import TokenBrowse
