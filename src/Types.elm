@@ -68,6 +68,7 @@ type alias Model =
     , existingScreens : List String
     , activeThemeName : Maybe String
     , newThemeName : String
+    , newThemeTemplate : String
     , newTokenPath : String
     , newTokenType : String
     , newTokenValue : String
@@ -87,6 +88,7 @@ type alias Model =
     , screens : Maybe (List Screen)
     , selectedScreenName : Maybe String
     , newScreenName : String
+    , newScreenTemplate : String
     , branches : Maybe (List Branch)
     , currentBranch : Maybe String
     , newBranchName : String
@@ -137,6 +139,7 @@ type Msg
     | GotThemeFile String (Result Http.Error String)
     | SelectTheme (Maybe String)
     | UpdateNewThemeName String
+    | UpdateNewThemeTemplate String
     | CreateTheme
     | UpdateToken Tokens.TokenPath String
     | UpdateCompositeToken Tokens.TokenPath String String
@@ -149,6 +152,7 @@ type Msg
     | UpdateNewTokenType String
     | UpdateNewTokenValue String
     | CreateToken
+    | ApplyStarterTokenScale
     | SwitchTab Tab
     | GotComponentsTree (Result Http.Error (List TreeItem))
     | GotComponentFile String (Result Http.Error String)
@@ -177,6 +181,7 @@ type Msg
     | GotScreenFile String (Result Http.Error String)
     | SelectScreen (Maybe String)
     | UpdateNewScreenName String
+    | UpdateNewScreenTemplate String
     | CreateScreen
     | SaveScreen
     | AddComponentToScreen String

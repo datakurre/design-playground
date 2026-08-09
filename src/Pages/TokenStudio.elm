@@ -8,6 +8,7 @@ import Tailwind as Tw exposing (classes)
 import Tailwind.Theme exposing (amber, s0, s0_dot_5, s1, s100, s2, s24, s300, s32, s4, s48, s6, s8, s800, slate)
 import Themes exposing (Theme)
 import Tokens
+import Templates
 import Types exposing (..)
 import Ui
 
@@ -72,7 +73,19 @@ viewToolbar model =
                     , Html.Attributes.placeholder "New theme name"
                     ]
                     []
+                , Html.select
+                    [ Ui.selectInput
+                    , onInput UpdateNewThemeTemplate
+                    , value model.newThemeTemplate
+                    , Html.Attributes.attribute "aria-label" "Start from"
+                    ]
+                    (List.map (\t -> Html.option [ value t.id ] [ text t.label ]) Templates.themeTemplates)
                 , button [ Ui.btnNeutral, onClick CreateTheme ] [ text "Add theme" ]
+                , if model.activeThemeName == Nothing then
+                    button [ Ui.btnNeutral, onClick ApplyStarterTokenScale ] [ text "Add starter scale" ]
+
+                  else
+                    text ""
                 ]
             ]
         , div [ classes [ Tw.flex, Tw.gap s2 ] ]
@@ -104,7 +117,7 @@ viewEmptyState model =
         [ div [ Ui.muted ]
             [ text
                 (if model.activeThemeName == Nothing then
-                    "No tokens yet. Add your first one below — it will be saved to tokens/tokens.json."
+                    "No tokens yet. Add your first one below, or click \"Add starter scale\" above for an opinionated color / spacing / font-size ramp to start from."
 
                  else
                     "This theme doesn't override anything yet."

@@ -18,6 +18,7 @@ import Ports
 import Screens exposing (ScreenNode(..))
 import Themes
 import Tokens
+import TokenScale
 import Templates
 import Types exposing (..)
 import Url
@@ -393,6 +394,9 @@ update msg model =
         UpdateNewThemeName name ->
             ( { model | newThemeName = name }, Cmd.none )
 
+        UpdateNewThemeTemplate template ->
+            ( { model | newThemeTemplate = template }, Cmd.none )
+
         CreateTheme ->
             let
                 name =
@@ -401,9 +405,13 @@ update msg model =
             if name /= "" && not (List.any (\t -> t.name == name) model.themes) then
                 let
                     newTheme =
-                        Themes.fromTokens name []
+                        Templates.themeTemplates
+                            |> List.filter (\t -> t.id == model.newThemeTemplate)
+                            |> List.head
+                            |> Maybe.map (\t -> t.build name)
+                            |> Maybe.withDefault (Themes.fromTokens name [])
                 in
-                ( { model | themes = newTheme :: model.themes, activeThemeName = Just name, newThemeName = "" }, Cmd.none )
+                ( { model | themes = newTheme :: model.themes, activeThemeName = Just name, newThemeName = "", newThemeTemplate = "empty" }, Cmd.none )
 
             else
                 ( model, Cmd.none )
@@ -460,6 +468,14 @@ update msg model =
 
                     else
                         ( model, Cmd.none )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        ApplyStarterTokenScale ->
+            case model.tokens of
+                Just existing ->
+                    ( { model | tokens = Just (TokenScale.mergeStarterScale existing) }, Cmd.none )
 
                 Nothing ->
                     ( model, Cmd.none )
@@ -1148,6 +1164,9 @@ update msg model =
         UpdateNewScreenName name ->
             ( { model | newScreenName = name }, Cmd.none )
 
+        UpdateNewScreenTemplate template ->
+            ( { model | newScreenTemplate = template }, Cmd.none )
+
         CreateScreen ->
             let
                 name =
@@ -1159,9 +1178,13 @@ update msg model =
             if name /= "" && not (List.any (\s -> s.name == name) currentScreens) then
                 let
                     newScreen =
-                        { name = name, path = "/" ++ String.replace " " "-" (String.toLower name), root = Container { direction = "column", styles = Dict.fromList [ ( "padding", "2rem" ), ( "gap", "1rem" ) ] } [] }
+                        Templates.screenTemplates
+                            |> List.filter (\t -> t.id == model.newScreenTemplate)
+                            |> List.head
+                            |> Maybe.map (\t -> t.build name)
+                            |> Maybe.withDefault (Templates.emptyScreen name)
                 in
-                ( { model | screens = Just (newScreen :: currentScreens), selectedScreenName = Just name, newScreenName = "" }, Cmd.none )
+                ( { model | screens = Just (newScreen :: currentScreens), selectedScreenName = Just name, newScreenName = "", newScreenTemplate = "empty" }, Cmd.none )
 
             else
                 ( model, Cmd.none )

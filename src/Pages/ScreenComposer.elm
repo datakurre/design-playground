@@ -10,6 +10,7 @@ import Screens exposing (Screen)
 import Tailwind as Tw exposing (classes)
 import Tailwind.Breakpoints exposing (hover)
 import Tailwind.Theme exposing (s0, s100, s2, s24, s3, s4, s48, s50, s6, s64, s700, s900, slate)
+import Templates
 import Themes
 import Tokens
 import Types exposing (..)
@@ -78,6 +79,13 @@ viewScreenList model screens =
                 , classes [ Tw.flex_1, Tw.min_w s24 ]
                 ]
                 []
+            , Html.select
+                [ Ui.selectInput
+                , onInput UpdateNewScreenTemplate
+                , value model.newScreenTemplate
+                , Html.Attributes.attribute "aria-label" "Start from"
+                ]
+                (List.map (\t -> Html.option [ value t.id ] [ text t.label ]) Templates.screenTemplates)
             , button [ Ui.btnNeutral, onClick CreateScreen ] [ text "Add" ]
             ]
         ]
