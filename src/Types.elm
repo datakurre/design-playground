@@ -219,6 +219,7 @@ type Msg
     | SaveScreen
     | AddComponentToScreen String
     | AddScreenToScreen String
+    | RemoveScreenNode Int
     | SwitchBranch String
     | UpdateNewBranchName String
     | CreateBranch

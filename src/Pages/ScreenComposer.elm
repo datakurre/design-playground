@@ -155,7 +155,7 @@ viewSelectedScreen model screens =
             case activeScreen of
                 Just screen ->
                     div [ classes [ Tw.flex, Tw.flex_col, Tw.gap s4 ] ]
-                        [ viewScreenEditor model screen screens
+                        [ viewScreenEditor model screen screens screensDict
                         , viewScreenPreview model screen componentsDict screensDict displayTokens
                         ]
 
@@ -163,8 +163,8 @@ viewSelectedScreen model screens =
                     div [ Ui.panel, Ui.muted ] [ text "That screen no longer exists." ]
 
 
-viewScreenEditor : Model -> Screen -> List Screen -> Html Msg
-viewScreenEditor model screen screens =
+viewScreenEditor : Model -> Screen -> List Screen -> Dict.Dict String Screen -> Html Msg
+viewScreenEditor model screen screens screensDict =
     div [ Ui.panel ]
         [ div [ classes [ Tw.flex, Tw.justify_between, Tw.items_start, Tw.gap s2, Tw.mb s3, Tw.flex_wrap ] ]
             [ div []
@@ -179,6 +179,19 @@ viewScreenEditor model screen screens =
                 , button [ Ui.btnDanger, onClick (DeleteScreen screen.name) ] [ text "Delete" ]
                 ]
             ]
+        , div [ classes [ Tw.mb s3 ] ]
+            [ h4 [ Ui.sectionTitle, classes [ Tw.mb s2 ] ] [ text "Contents" ]
+            , case screen.root of
+                Screens.Container _ [] ->
+                    div [ Ui.mutedSmall ] [ text "Nothing added yet." ]
+                
+                Screens.Container _ children ->
+                    ul [ classes [ Tw.list_none, Tw.p s0, Tw.m s0 ] ]
+                        (List.indexedMap (\index node -> viewAddedNode screen.name index node screensDict) children)
+                
+                _ ->
+                    div [ Ui.mutedSmall ] [ text "Invalid root node." ]
+            ]
         , viewAdders "Add a component"
             Help.addComponentToScreen
             (model.components |> Maybe.withDefault [] |> List.map .name)
@@ -190,6 +203,57 @@ viewScreenEditor model screen screens =
             AddScreenToScreen
             "This is your only screen so far."
         ]
+
+
+viewAddedNode : String -> Int -> Screens.ScreenNode -> Dict.Dict String Screen -> Html Msg
+viewAddedNode parentName index node screensDict =
+    let
+        ( nodeName, nodeType, hasLoop ) =
+            case node of
+                Screens.ComponentInstance props ->
+                    ( props.componentName, "Component", False )
+                
+                Screens.ScreenInstance props ->
+                    ( props.screenName, "Screen", checkLoop parentName [ parentName ] screensDict (Screens.ScreenInstance props) )
+                
+                _ ->
+                    ( "Unknown", "Unknown", False )
+    in
+    li [ classes [ Tw.flex, Tw.justify_between, Tw.items_center, Tw.p s2, Tw.border_b, Tw.border_color (Tailwind.Theme.slate Tailwind.Theme.s200) ] ]
+        [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2 ] ]
+            [ div [ classes [ Tw.font_medium ] ] [ text nodeName ]
+            , div [ Ui.mutedSmall, classes [ Tw.px s2, Tw.py Tailwind.Theme.s0_dot_5, Tw.bg_color (Tailwind.Theme.slate Tailwind.Theme.s100), Tw.rounded_full ] ] [ text nodeType ]
+            , if hasLoop then
+                div [ classes [ Tw.text_color (Tailwind.Theme.red Tailwind.Theme.s600), Tw.text_xs, Tw.font_medium, Tw.bg_color (Tailwind.Theme.red Tailwind.Theme.s50), Tw.px s2, Tw.py Tailwind.Theme.s0_dot_5, Tw.border, Tw.border_color (Tailwind.Theme.red Tailwind.Theme.s200), Tw.rounded_md ] ] [ text "Loop detected" ]
+              else
+                text ""
+            ]
+        , button
+            [ Ui.btnDanger
+            , onClick (RemoveScreenNode index)
+            ]
+            [ text "Remove" ]
+        ]
+
+
+checkLoop : String -> List String -> Dict.Dict String Screen -> Screens.ScreenNode -> Bool
+checkLoop originalTarget visited screensDict node =
+    case node of
+        Screens.ScreenInstance props ->
+            if props.screenName == originalTarget || List.member props.screenName visited then
+                True
+            else
+                case Dict.get props.screenName screensDict of
+                    Just screen ->
+                        checkLoop originalTarget (props.screenName :: visited) screensDict screen.root
+                    Nothing ->
+                        False
+                        
+        Screens.Container _ children ->
+            List.any (checkLoop originalTarget visited screensDict) children
+            
+        _ ->
+            False
 
 
 {-| Both adders append to the top level of the screen. The old labels said
