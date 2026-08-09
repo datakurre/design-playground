@@ -4,6 +4,7 @@ import Components
 import Contracts
 import CssProperties
 import Dict
+import Help
 import Html exposing (Html, button, div, h3, h4, li, text, ul)
 import Html.Attributes exposing (value)
 import Html.Events exposing (onClick, onInput)
@@ -168,7 +169,10 @@ viewComponentList model components =
             resolveDisplayTokens model
     in
     div [ Ui.panel, classes [ Tw.w s64 ] ]
-        [ h3 [ Ui.pageTitle, classes [ Tw.mb s2 ] ] [ text "Components" ]
+        [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.mb s2 ] ]
+            [ h3 [ Ui.pageTitle ] [ text "Components" ]
+            , Ui.contextHelp Help.components
+            ]
         , ul [ classes [ Tw.list_none, Tw.p s0 ] ]
             (List.map
                 (\c ->
@@ -293,7 +297,10 @@ viewComponentEditor : Model -> Components.Component -> List Tokens.FlatToken -> 
 viewComponentEditor model comp displayTokens =
     div [ Ui.panel, classes [ Tw.flex_1 ] ]
         [ div [ classes [ Tw.flex, Tw.justify_between, Tw.items_center, Tw.gap s2, Tw.mb s3, Tw.flex_wrap ] ]
-            [ h3 [ Ui.pageTitle ] [ text comp.name ]
+            [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2 ] ]
+                [ h3 [ Ui.pageTitle ] [ text comp.name ]
+                , Ui.contextHelp Help.componentEditor
+                ]
             , div [ classes [ Tw.flex, Tw.gap s2 ] ]
                 [ button [ Ui.btnPrimary, onClick SaveComponent ] [ text "Save" ]
                 , button [ Ui.btnDanger, onClick (DeleteComponent comp.name) ] [ text "Delete" ]
@@ -303,7 +310,10 @@ viewComponentEditor model comp displayTokens =
         , viewNameList "States" commonStateNames comp.states model.newComponentState UpdateNewComponentState AddComponentState
         , viewNameList "Slots" [] comp.slots model.newComponentSlot UpdateNewComponentSlot AddComponentSlot
         , div [ classes [ Tw.mt s3, Tw.pt s3 ], Ui.divider ]
-            [ h4 [ Ui.sectionTitle, classes [ Tw.mb s2 ] ] [ text "Layout" ]
+            [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.mb s2 ] ]
+                [ h4 [ Ui.sectionTitle ] [ text "Layout" ]
+                , Ui.contextHelp Help.componentLayout
+                ]
             , Html.datalist [ Html.Attributes.id "tokensList" ]
                 (List.map (\( p, _ ) -> Html.option [ value ("{" ++ String.join "." p ++ "}") ] []) displayTokens)
             , Html.datalist [ Html.Attributes.id "css-properties-list" ]
@@ -469,6 +479,7 @@ viewUsageContract model comp displayTokens =
     div []
         [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.mb s2 ] ]
             [ h4 [ Ui.sectionTitle ] [ text "Usage contract" ]
+            , Ui.contextHelp Help.usageContract
             , headingPill
             ]
         , div [ Html.Attributes.attribute "aria-live" "polite", classes [ Tw.mb s3 ] ]

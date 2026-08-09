@@ -1,6 +1,7 @@
 module Pages.GitWorkflows exposing (viewGitWorkflows)
 
 import Contracts
+import Help
 import Html exposing (Html, a, button, div, h3, h4, input, li, option, select, span, strong, text, ul)
 import Html.Attributes exposing (href, value)
 import Html.Events exposing (onClick, onInput)
@@ -15,7 +16,10 @@ import Ui
 viewGitWorkflows : Model -> Html Msg
 viewGitWorkflows model =
     div [ Ui.panel ]
-        [ h3 [ Ui.pageTitle, classes [ Tw.mb s3 ] ] [ text "Branches & Reviews" ]
+        [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.mb s3 ] ]
+            [ h3 [ Ui.pageTitle ] [ text "Branches & Reviews" ]
+            , Ui.contextHelp Help.gitWorkflows
+            ]
         , case model.selectedProject of
             Just _ ->
                 div []
@@ -33,7 +37,10 @@ viewGitWorkflows model =
 viewBranch : Model -> Html Msg
 viewBranch model =
     div [ classes [ Tw.mb s6 ] ]
-        [ h4 [ Ui.sectionTitle, classes [ Tw.mb s2 ] ] [ text "Branch" ]
+        [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.mb s2 ] ]
+            [ h4 [ Ui.sectionTitle ] [ text "Branch" ]
+            , Ui.contextHelp Help.branch
+            ]
         , div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.mb s3, Tw.flex_wrap ] ]
             [ span [ Ui.fieldLabel ] [ text "Working on" ]
             , select
@@ -122,7 +129,10 @@ viewUnsavedChanges model =
 viewMergeRequests : Model -> Html Msg
 viewMergeRequests model =
     div [ classes [ Tw.pt s4 ], Ui.divider ]
-        [ h4 [ Ui.sectionTitle, classes [ Tw.mb s2 ] ] [ text "Merge requests" ]
+        [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.mb s2 ] ]
+            [ h4 [ Ui.sectionTitle ] [ text "Merge requests" ]
+            , Ui.contextHelp Help.mergeRequests
+            ]
         , div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.flex_wrap ] ]
             [ input
                 [ Ui.textInput
@@ -236,6 +246,7 @@ viewContractCheck model =
     div [ classes [ Tw.mb s6, Tw.pt s4 ], Ui.divider ]
         [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.mb s2 ] ]
             [ h4 [ Ui.sectionTitle ] [ text "Contract check" ]
+            , Ui.contextHelp Help.contractCheck
             , if not (List.isEmpty allViolations) then
                 Ui.pill Ui.Negative (String.fromInt (List.length allViolations))
 

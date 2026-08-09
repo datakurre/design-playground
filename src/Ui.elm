@@ -6,6 +6,7 @@ module Ui exposing
     , tab, themePicker
     , PillTone(..), pill
     , previewSurface
+    , contextHelp
     )
 
 {-| The app's own chrome, in one place.
@@ -55,6 +56,11 @@ Three steps, and no more.
 
 @docs previewSurface
 
+
+# Help
+
+@docs contextHelp
+
 -}
 
 import Html exposing (Attribute, Html)
@@ -62,7 +68,7 @@ import Html.Attributes exposing (selected, value)
 import Html.Events exposing (onInput)
 import Tailwind as Tw exposing (Tailwind, batch, classes)
 import Tailwind.Breakpoints exposing (hover)
-import Tailwind.Theme exposing (emerald, orange, red, s0, s0_dot_5, s1, s1_dot_5, s2, s3, s4, s6, s50, s100, s200, s300, s400, s500, s600, s700, s800, s900, slate, white)
+import Tailwind.Theme exposing (emerald, orange, red, s0, s0_dot_5, s1, s1_dot_5, s2, s3, s4, s5, s6, s50, s100, s200, s300, s400, s500, s600, s700, s800, s900, slate, white)
 
 
 
@@ -452,4 +458,50 @@ previewSurface =
         , Tw.rounded_md
         , Tw.bg_simple white
         , Tw.p s4
+        ]
+
+
+
+-- HELP
+
+
+{-| A collapsed "?" disclosure that sits beside a page or section title and
+explains the surface below it. Built on native `<details>`/`<summary>` —
+the same choice `Main.elm` already makes for the repository file listing —
+so whether the panel is open is plain DOM state, not something threaded
+through `Model`/`Msg` for every topic.
+
+Takes any record with `title`/`body` fields (in practice, a `Help.Topic`)
+rather than importing `Help` here, so this module stays scoped to chrome —
+it has no opinion on what the help text says, only how it's disclosed.
+-}
+contextHelp : { r | title : String, body : List String } -> Html msg
+contextHelp topic =
+    Html.details [ classes [ Tw.inline_block ] ]
+        [ Html.summary
+            [ classes
+                [ Tw.inline_flex
+                , Tw.items_center
+                , Tw.justify_center
+                , Tw.w s5
+                , Tw.h s5
+                , Tw.rounded_full
+                , Tw.border
+                , Tw.border_color (slate s300)
+                , Tw.text_color (slate s500)
+                , Tw.text_xs
+                , Tw.font_medium
+                , Tw.cursor_pointer
+                , Tw.raw "bg-transparent"
+                , Tw.transition_colors
+                , Tw.raw "list-none [&::-webkit-details-marker]:hidden"
+                , hover [ Tw.bg_color (slate s50), Tw.text_color (slate s900) ]
+                ]
+            , Html.Attributes.attribute "aria-label" ("Help: " ++ topic.title)
+            ]
+            [ Html.text "?" ]
+        , Html.div [ panelSunken, classes [ Tw.mt s2, Tw.raw "max-w-md" ] ]
+            (Html.h4 [ fieldLabel, classes [ Tw.mb s1 ] ] [ Html.text topic.title ]
+                :: List.map (\p -> Html.p [ muted, classes [ Tw.mt s1 ] ] [ Html.text p ]) topic.body
+            )
         ]

@@ -1,5 +1,6 @@
 module Pages.ExportPipeline exposing (viewExportPipeline)
 
+import Help
 import Html exposing (Html, button, div, h3, input, label, p, text)
 import Html.Attributes exposing (checked, type_)
 import Html.Events exposing (onClick)
@@ -12,7 +13,10 @@ import Ui
 viewExportPipeline : Model -> Html Msg
 viewExportPipeline model =
     div [ Ui.panel ]
-        [ h3 [ Ui.pageTitle, classes [ Tw.mb s1 ] ] [ text "Export" ]
+        [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.mb s1 ] ]
+            [ h3 [ Ui.pageTitle ] [ text "Export" ]
+            , Ui.contextHelp Help.export
+            ]
         , p [ Ui.muted, classes [ Tw.mb s4 ] ]
             [ text "Write your tokens out in other formats and commit them to the repository." ]
         , div [ classes [ Tw.flex, Tw.flex_col, Tw.gap s2, Tw.mb s4 ] ]

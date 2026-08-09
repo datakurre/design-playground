@@ -1,6 +1,7 @@
 module Pages.TokenStudio exposing (viewTokenStudio)
 
 import Dict
+import Help
 import Html exposing (Html, button, div, h3, li, span, text, ul)
 import Html.Attributes exposing (style, value)
 import Html.Events exposing (onClick, onInput)
@@ -68,7 +69,10 @@ viewToolbar : Model -> Html Msg
 viewToolbar model =
     div [ classes [ Tw.flex, Tw.justify_between, Tw.items_center, Tw.gap s4, Tw.flex_wrap ] ]
         [ div []
-            [ h3 [ Ui.pageTitle ] [ text "Tokens" ]
+            [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2 ] ]
+                [ h3 [ Ui.pageTitle ] [ text "Tokens" ]
+                , Ui.contextHelp Help.tokens
+                ]
             , div [ classes [ Tw.flex, Tw.gap s2, Tw.items_center, Tw.mt s2 ] ]
                 [ Ui.themePicker (List.map .name model.themes) model.activeThemeName SelectTheme
                 , Html.input
@@ -134,7 +138,10 @@ viewEmptyState model =
 viewNewToken : Model -> Html Msg
 viewNewToken model =
     div [ classes [ Tw.mt s6, Tw.pt s4 ], Ui.divider ]
-        [ h3 [ Ui.sectionTitle, classes [ Tw.mb s2 ] ] [ text "Add a token" ]
+        [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.mb s2 ] ]
+            [ h3 [ Ui.sectionTitle ] [ text "Add a token" ]
+            , Ui.contextHelp Help.newToken
+            ]
         , div [ classes [ Tw.flex, Tw.gap s2, Tw.items_center, Tw.flex_wrap ] ]
             [ Html.input
                 [ Ui.textInput

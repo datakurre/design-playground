@@ -2,6 +2,7 @@ module Pages.ScreenComposer exposing (viewScreenComposer)
 
 import Components
 import Dict
+import Help
 import Html exposing (Html, button, div, h3, h4, li, text, ul)
 import Html.Attributes exposing (value)
 import Html.Events exposing (onClick, onInput)
@@ -33,7 +34,10 @@ viewScreenComposer model =
 viewScreenList : Model -> List Screen -> Html Msg
 viewScreenList model screens =
     div [ Ui.panel, classes [ Tw.w s64 ] ]
-        [ h3 [ Ui.pageTitle, classes [ Tw.mb s2 ] ] [ text "Screens" ]
+        [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.mb s2 ] ]
+            [ h3 [ Ui.pageTitle ] [ text "Screens" ]
+            , Ui.contextHelp Help.screens
+            ]
         , ul [ classes [ Tw.list_none, Tw.p s0 ] ]
             (List.map
                 (\s ->
@@ -150,7 +154,10 @@ viewScreenEditor model screen screens =
     div [ Ui.panel ]
         [ div [ classes [ Tw.flex, Tw.justify_between, Tw.items_start, Tw.gap s2, Tw.mb s3, Tw.flex_wrap ] ]
             [ div []
-                [ h3 [ Ui.pageTitle ] [ text screen.name ]
+                [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2 ] ]
+                    [ h3 [ Ui.pageTitle ] [ text screen.name ]
+                    , Ui.contextHelp Help.screenEditor
+                    ]
                 , div [ Ui.mutedSmall, classes [ Tw.font_mono ] ] [ text screen.path ]
                 ]
             , div [ classes [ Tw.flex, Tw.gap s2 ] ]
@@ -159,10 +166,12 @@ viewScreenEditor model screen screens =
                 ]
             ]
         , viewAdders "Add a component"
+            Help.addComponentToScreen
             (model.components |> Maybe.withDefault [] |> List.map .name)
             AddComponentToScreen
             "No components yet — create one on the Components tab."
         , viewAdders "Add another screen"
+            Help.addScreenToScreen
             (screens |> List.filter (\s -> s.name /= screen.name) |> List.map .name)
             AddScreenToScreen
             "This is your only screen so far."
@@ -172,10 +181,13 @@ viewScreenEditor model screen screens =
 {-| Both adders append to the top level of the screen. The old labels said
 "Insert Component into Root", which named an implementation detail of the tree.
 -}
-viewAdders : String -> List String -> (String -> Msg) -> String -> Html Msg
-viewAdders label names toMsg emptyHint =
+viewAdders : String -> Help.Topic -> List String -> (String -> Msg) -> String -> Html Msg
+viewAdders label topic names toMsg emptyHint =
     div [ classes [ Tw.mt s3, Tw.pt s3 ], Ui.divider ]
-        [ h4 [ Ui.sectionTitle, classes [ Tw.mb s2 ] ] [ text label ]
+        [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.mb s2 ] ]
+            [ h4 [ Ui.sectionTitle ] [ text label ]
+            , Ui.contextHelp topic
+            ]
         , if List.isEmpty names then
             div [ Ui.mutedSmall ] [ text emptyHint ]
 
