@@ -8,29 +8,51 @@ import Json.Decode as Decode
 import Test exposing (Test, describe, test)
 import Tokens exposing (TokenValue(..))
 
+
+{-| Encoding a single-rule contract and decoding it back must give the original.
+-}
+expectRoundTrip : Rule -> Expect.Expectation
+expectRoundTrip rule =
+    let
+        contract =
+            { component = "Button", rules = [ rule ] }
+    in
+    Decode.decodeValue Contracts.decoder (Contracts.encoder contract)
+        |> Expect.equal (Ok contract)
+
+
 suite : Test
 suite =
     describe "Contracts Codec"
-        [ test "encodes and decodes a full contract" <|
-            \_ ->
-                let
-                    contract =
-                        { component = "Button"
-                        , rules =
-                            [ AllowedTokenGroups [ [ "interactive" ], [ "spacing" ] ]
-                            , NoHardcodedValues [ "color", "background-color", "border-color" ]
-                            , SpacingOnScale [ "padding", "margin", "gap" ] [ "spacing" ]
-                            , ContrastThreshold { foreground = "color", background = "background-color", minimumRatio = 4.5 }
-                            ]
-                        }
-
-                    encoded =
-                        Contracts.encoder contract
-
-                    decoded =
-                        Decode.decodeValue Contracts.decoder encoded
-                in
-                Expect.equal (Ok contract) decoded
+        [ describe "round-trips each rule variant"
+            [ test "AllowedTokenGroups" <|
+                \_ ->
+                    expectRoundTrip (AllowedTokenGroups [ [ "interactive" ], [ "spacing" ] ])
+            , test "NoHardcodedValues" <|
+                \_ ->
+                    expectRoundTrip (NoHardcodedValues [ "color", "background-color", "border-color" ])
+            , test "SpacingOnScale" <|
+                \_ ->
+                    expectRoundTrip (SpacingOnScale [ "padding", "margin", "gap" ] [ "spacing" ])
+            , test "ContrastThreshold" <|
+                \_ ->
+                    expectRoundTrip (ContrastThreshold { foreground = "color", background = "background-color", minimumRatio = 4.5 })
+            , test "all four rule kinds at once" <|
+                \_ ->
+                    let
+                        contract =
+                            { component = "Button"
+                            , rules =
+                                [ AllowedTokenGroups [ [ "interactive" ], [ "spacing" ] ]
+                                , NoHardcodedValues [ "color", "background-color", "border-color" ]
+                                , SpacingOnScale [ "padding", "margin", "gap" ] [ "spacing" ]
+                                , ContrastThreshold { foreground = "color", background = "background-color", minimumRatio = 4.5 }
+                                ]
+                            }
+                    in
+                    Decode.decodeValue Contracts.decoder (Contracts.encoder contract)
+                        |> Expect.equal (Ok contract)
+            ]
         , test "decodes a contract from JSON string" <|
             \_ ->
                 let

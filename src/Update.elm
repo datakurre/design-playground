@@ -31,13 +31,34 @@ updateLayoutNode path updateFn layout =
         index :: rest ->
             case layout of
                 Components.Stack props children ->
-                    Components.Stack props (List.indexedMap (\i c -> if i == index then updateLayoutNode rest updateFn c else c) children)
+                    Components.Stack props
+                        (List.indexedMap
+                            (\i c ->
+                                if i == index then
+                                    updateLayoutNode rest updateFn c
+
+                                else
+                                    c
+                            )
+                            children
+                        )
 
                 Components.Grid props children ->
-                    Components.Grid props (List.indexedMap (\i c -> if i == index then updateLayoutNode rest updateFn c else c) children)
+                    Components.Grid props
+                        (List.indexedMap
+                            (\i c ->
+                                if i == index then
+                                    updateLayoutNode rest updateFn c
+
+                                else
+                                    c
+                            )
+                            children
+                        )
 
                 Components.Element _ _ ->
                     layout
+
 
 updateTokenPathLogic : Model -> Msg -> Tokens.TokenPath -> ( Model, Cmd Msg )
 updateTokenPathLogic model msg path =
@@ -140,8 +161,11 @@ update msg model =
             case result of
                 Ok token ->
                     let
-                        currentUrl = model.url
-                        newUrl = { currentUrl | query = Nothing }
+                        currentUrl =
+                            model.url
+
+                        newUrl =
+                            { currentUrl | query = Nothing }
                     in
                     ( { model | token = Just token, error = Nothing }
                     , Cmd.batch
@@ -173,7 +197,7 @@ update msg model =
                     )
 
         Logout ->
-            ( { model | token = Nothing, user = Nothing, error = Nothing, projects = Nothing, projectsPage = 1, selectedProject = Nothing, repositoryTree = Nothing, commitStatus = Nothing, originalTokens = Nothing, tokensFileExists = False, tokens = Nothing, themes = [], existingThemes = [], existingComponents = [], existingScreens = [], activeThemeName = Nothing, newThemeName = "", newTokenPath = "", newTokenType = "color", newTokenValue = "", activeTab = TokenStudio, components = Nothing, selectedComponentName = Nothing, newComponentName = "", newComponentVariant = "", newComponentSlot = "", newComponentState = "", screens = Nothing, selectedScreenName = Nothing, newScreenName = "", contracts = Nothing, existingContracts = [], newContractRuleType = "", newContractRuleFields = Dict.empty }
+            ( { model | token = Nothing, user = Nothing, error = Nothing, projects = Nothing, projectsPage = 1, selectedProject = Nothing, repositoryTree = Nothing, commitStatus = Nothing, originalTokens = Nothing, tokensFileExists = False, tokens = Nothing, themes = [], existingThemes = [], existingComponents = [], existingScreens = [], activeThemeName = Nothing, newThemeName = "", newTokenPath = "", newTokenType = "color", newTokenValue = "", activeTab = TokenStudio, components = Nothing, selectedComponentName = Nothing, newComponentName = "", newComponentVariant = "", newComponentSlot = "", newComponentState = "", screens = Nothing, selectedScreenName = Nothing, newScreenName = "", contracts = Nothing, existingContracts = [], newContractRuleType = "allowedTokenGroups", newContractRuleFields = Dict.empty }
             , Ports.clearToken ()
             )
 
@@ -216,7 +240,7 @@ update msg model =
         SelectProject project ->
             case model.token of
                 Just token ->
-                    ( { model | selectedProject = Just project, repositoryTree = Nothing, commitStatus = Nothing, originalTokens = Nothing, tokensFileExists = False, tokens = Nothing, themes = [], existingThemes = [], existingComponents = [], existingScreens = [], activeThemeName = Nothing, originalComponents = Nothing, components = Nothing, selectedComponentName = Nothing, screens = Nothing, selectedScreenName = Nothing, currentBranch = Just project.defaultBranch, exportTargets = [ "css", "tailwind" ], contracts = Nothing, existingContracts = [], newContractRuleType = "", newContractRuleFields = Dict.empty }
+                    ( { model | selectedProject = Just project, repositoryTree = Nothing, commitStatus = Nothing, originalTokens = Nothing, tokensFileExists = False, tokens = Nothing, themes = [], existingThemes = [], existingComponents = [], existingScreens = [], activeThemeName = Nothing, originalComponents = Nothing, components = Nothing, selectedComponentName = Nothing, screens = Nothing, selectedScreenName = Nothing, currentBranch = Just project.defaultBranch, exportTargets = [ "css", "tailwind" ], contracts = Nothing, existingContracts = [], newContractRuleType = "allowedTokenGroups", newContractRuleFields = Dict.empty }
                     , Cmd.batch
                         [ GitLab.Files.listTree token project.id project.defaultBranch GotTree
                         , GitLab.Files.getFileRaw token project.id project.defaultBranch "tokens/tokens.json" GotTokensFile
@@ -231,7 +255,7 @@ update msg model =
                     ( model, Cmd.none )
 
         UnselectProject ->
-            ( { model | selectedProject = Nothing, repositoryTree = Nothing, tokens = Nothing, themes = [], components = Nothing, screens = Nothing, activeThemeName = Nothing, selectedComponentName = Nothing, selectedScreenName = Nothing, commitStatus = Nothing, contracts = Nothing, existingContracts = [], newContractRuleType = "", newContractRuleFields = Dict.empty }, Cmd.none )
+            ( { model | selectedProject = Nothing, repositoryTree = Nothing, tokens = Nothing, themes = [], components = Nothing, screens = Nothing, activeThemeName = Nothing, selectedComponentName = Nothing, selectedScreenName = Nothing, commitStatus = Nothing, contracts = Nothing, existingContracts = [], newContractRuleType = "allowedTokenGroups", newContractRuleFields = Dict.empty }, Cmd.none )
 
         GotTree result ->
             case result of
@@ -248,6 +272,7 @@ update msg model =
                         addUnique item lst =
                             if not (List.member item lst) then
                                 item :: lst
+
                             else
                                 lst
 
@@ -456,6 +481,7 @@ update msg model =
                                                 [ { action =
                                                         if model.tokensFileExists then
                                                             "update"
+
                                                         else
                                                             "create"
                                                   , filePath = "tokens/tokens.json"
@@ -489,6 +515,7 @@ update msg model =
                                                 [ { action =
                                                         if List.member activeName model.existingThemes then
                                                             "update"
+
                                                         else
                                                             "create"
                                                   , filePath = "themes/" ++ activeName ++ ".json"
@@ -519,10 +546,10 @@ update msg model =
 
                         componentNames =
                             List.map (\item -> String.replace ".json" "" item.name) jsonFiles
-                            
+
                         contractFiles =
                             List.filter (\item -> String.endsWith ".contract.json" item.name) tree
-                            
+
                         contractComponentNames =
                             List.map (\item -> String.replace ".contract.json" "" item.name) contractFiles
 
@@ -532,10 +559,9 @@ update msg model =
                                     List.map
                                         (\file -> GitLab.Files.getFileRaw token project.id project.defaultBranch file.path (GotComponentFile file.name))
                                         jsonFiles
-                                        ++
-                                    List.map
-                                        (\file -> GitLab.Files.getFileRaw token project.id project.defaultBranch file.path (GotContractFile file.name))
-                                        contractFiles
+                                        ++ List.map
+                                            (\file -> GitLab.Files.getFileRaw token project.id project.defaultBranch file.path (GotContractFile file.name))
+                                            contractFiles
 
                                 _ ->
                                     []
@@ -592,21 +618,27 @@ update msg model =
                                 , variants = [ "primary", "secondary", "success", "danger" ]
                                 , slots = [ "default" ]
                                 , states = [ "hover", "active", "disabled" ]
-                                , layout = Just (Components.Element { isSlot = True, styles = Dict.fromList [("padding", "0.5rem 1rem"), ("border-radius", "0.25rem"), ("cursor", "pointer")] } "Button text")
+                                , layout = Just (Components.Element { isSlot = True, styles = Dict.fromList [ ( "padding", "0.5rem 1rem" ), ( "border-radius", "0.25rem" ), ( "cursor", "pointer" ) ] } "Button text")
                                 }
+
                             "Card" ->
                                 { name = name
                                 , description = Just "A basic card component"
                                 , variants = []
                                 , slots = [ "header", "body", "footer" ]
                                 , states = []
-                                , layout = Just (Components.Stack { direction = "column", styles = Dict.fromList [("border", "1px solid #ccc"), ("border-radius", "0.25rem"), ("overflow", "hidden")] } 
-                                    [ Components.Element { isSlot = True, styles = Dict.fromList [("padding", "1rem"), ("background-color", "#f8f9fa"), ("border-bottom", "1px solid #ccc")] } "Header Slot"
-                                    , Components.Element { isSlot = True, styles = Dict.fromList [("padding", "1rem")] } "Body Slot"
-                                    , Components.Element { isSlot = True, styles = Dict.fromList [("padding", "1rem"), ("background-color", "#f8f9fa"), ("border-top", "1px solid #ccc")] } "Footer Slot"
-                                    ])
+                                , layout =
+                                    Just
+                                        (Components.Stack { direction = "column", styles = Dict.fromList [ ( "border", "1px solid #ccc" ), ( "border-radius", "0.25rem" ), ( "overflow", "hidden" ) ] }
+                                            [ Components.Element { isSlot = True, styles = Dict.fromList [ ( "padding", "1rem" ), ( "background-color", "#f8f9fa" ), ( "border-bottom", "1px solid #ccc" ) ] } "Header Slot"
+                                            , Components.Element { isSlot = True, styles = Dict.fromList [ ( "padding", "1rem" ) ] } "Body Slot"
+                                            , Components.Element { isSlot = True, styles = Dict.fromList [ ( "padding", "1rem" ), ( "background-color", "#f8f9fa" ), ( "border-top", "1px solid #ccc" ) ] } "Footer Slot"
+                                            ]
+                                        )
                                 }
-                            _ -> -- "Empty"
+
+                            _ ->
+                                -- "Empty"
                                 { name = name, description = Nothing, variants = [], slots = [], states = [], layout = Nothing }
                 in
                 ( { model | components = Just (newComponent :: currentComponents), selectedComponentName = Just name, newComponentName = "" }, Cmd.none )
@@ -735,6 +767,7 @@ update msg model =
                                 actionType =
                                     if List.member activeName model.existingComponents then
                                         "update"
+
                                     else
                                         "create"
 
@@ -748,7 +781,6 @@ update msg model =
                                           }
                                         ]
                                     }
-
                             in
                             ( { model | commitStatus = Just ( Working, "Saving " ++ comp.name ++ "..." ) }
                             , GitLab.Commits.createCommit token project.id payload (GotCommitResult (CommitComponent comp.name))
@@ -790,14 +822,28 @@ update msg model =
                             if c.name == name then
                                 case c.layout of
                                     Just l ->
-                                        { c | layout = Just (updateLayoutNode path (\node -> 
-                                            case node of
-                                                Components.Stack p children -> Components.Stack { p | styles = Dict.insert prop value p.styles } children
-                                                Components.Grid p children -> Components.Grid { p | styles = Dict.insert prop value p.styles } children
-                                                _ -> node
-                                        ) l) }
+                                        { c
+                                            | layout =
+                                                Just
+                                                    (updateLayoutNode path
+                                                        (\node ->
+                                                            case node of
+                                                                Components.Stack p children ->
+                                                                    Components.Stack { p | styles = Dict.insert prop value p.styles } children
+
+                                                                Components.Grid p children ->
+                                                                    Components.Grid { p | styles = Dict.insert prop value p.styles } children
+
+                                                                _ ->
+                                                                    node
+                                                        )
+                                                        l
+                                                    )
+                                        }
+
                                     Nothing ->
                                         c
+
                             else
                                 c
                     in
@@ -817,14 +863,28 @@ update msg model =
                             if c.name == name then
                                 case c.layout of
                                     Just l ->
-                                        { c | layout = Just (updateLayoutNode path (\node -> 
-                                            case node of
-                                                Components.Stack p children -> Components.Stack { p | styles = Dict.remove prop p.styles } children
-                                                Components.Grid p children -> Components.Grid { p | styles = Dict.remove prop p.styles } children
-                                                _ -> node
-                                        ) l) }
+                                        { c
+                                            | layout =
+                                                Just
+                                                    (updateLayoutNode path
+                                                        (\node ->
+                                                            case node of
+                                                                Components.Stack p children ->
+                                                                    Components.Stack { p | styles = Dict.remove prop p.styles } children
+
+                                                                Components.Grid p children ->
+                                                                    Components.Grid { p | styles = Dict.remove prop p.styles } children
+
+                                                                _ ->
+                                                                    node
+                                                        )
+                                                        l
+                                                    )
+                                        }
+
                                     Nothing ->
                                         c
+
                             else
                                 c
                     in
@@ -850,14 +910,28 @@ update msg model =
                             if c.name == name then
                                 case c.layout of
                                     Just l ->
-                                        { c | layout = Just (updateLayoutNode path (\node -> 
-                                            case node of
-                                                Components.Stack p children -> Components.Stack p (children ++ [ Components.Element { isSlot = False, styles = Dict.empty } content ])
-                                                Components.Grid p children -> Components.Grid p (children ++ [ Components.Element { isSlot = False, styles = Dict.empty } content ])
-                                                _ -> node
-                                        ) l) }
+                                        { c
+                                            | layout =
+                                                Just
+                                                    (updateLayoutNode path
+                                                        (\node ->
+                                                            case node of
+                                                                Components.Stack p children ->
+                                                                    Components.Stack p (children ++ [ Components.Element { isSlot = False, styles = Dict.empty } content ])
+
+                                                                Components.Grid p children ->
+                                                                    Components.Grid p (children ++ [ Components.Element { isSlot = False, styles = Dict.empty } content ])
+
+                                                                _ ->
+                                                                    node
+                                                        )
+                                                        l
+                                                    )
+                                        }
+
                                     Nothing ->
                                         c
+
                             else
                                 c
                     in
@@ -877,14 +951,28 @@ update msg model =
                             if c.name == name then
                                 case c.layout of
                                     Just l ->
-                                        { c | layout = Just (updateLayoutNode path (\node -> 
-                                            case node of
-                                                Components.Stack p children -> Components.Stack p (children ++ [ Components.Stack { direction = "column", styles = Dict.empty } [] ])
-                                                Components.Grid p children -> Components.Grid p (children ++ [ Components.Stack { direction = "column", styles = Dict.empty } [] ])
-                                                _ -> node
-                                        ) l) }
+                                        { c
+                                            | layout =
+                                                Just
+                                                    (updateLayoutNode path
+                                                        (\node ->
+                                                            case node of
+                                                                Components.Stack p children ->
+                                                                    Components.Stack p (children ++ [ Components.Stack { direction = "column", styles = Dict.empty } [] ])
+
+                                                                Components.Grid p children ->
+                                                                    Components.Grid p (children ++ [ Components.Stack { direction = "column", styles = Dict.empty } [] ])
+
+                                                                _ ->
+                                                                    node
+                                                        )
+                                                        l
+                                                    )
+                                        }
+
                                     Nothing ->
                                         c
+
                             else
                                 c
                     in
@@ -904,14 +992,28 @@ update msg model =
                             if c.name == name then
                                 case c.layout of
                                     Just l ->
-                                        { c | layout = Just (updateLayoutNode path (\node -> 
-                                            case node of
-                                                Components.Stack p children -> Components.Stack p (children ++ [ Components.Grid { columns = 2, styles = Dict.empty } [] ])
-                                                Components.Grid p children -> Components.Grid p (children ++ [ Components.Grid { columns = 2, styles = Dict.empty } [] ])
-                                                _ -> node
-                                        ) l) }
+                                        { c
+                                            | layout =
+                                                Just
+                                                    (updateLayoutNode path
+                                                        (\node ->
+                                                            case node of
+                                                                Components.Stack p children ->
+                                                                    Components.Stack p (children ++ [ Components.Grid { columns = 2, styles = Dict.empty } [] ])
+
+                                                                Components.Grid p children ->
+                                                                    Components.Grid p (children ++ [ Components.Grid { columns = 2, styles = Dict.empty } [] ])
+
+                                                                _ ->
+                                                                    node
+                                                        )
+                                                        l
+                                                    )
+                                        }
+
                                     Nothing ->
                                         c
+
                             else
                                 c
                     in
@@ -931,13 +1033,25 @@ update msg model =
                             if c.name == name then
                                 case c.layout of
                                     Just l ->
-                                        { c | layout = Just (updateLayoutNode path (\node -> 
-                                            case node of
-                                                Components.Element p _ -> Components.Element p newContent
-                                                _ -> node
-                                        ) l) }
+                                        { c
+                                            | layout =
+                                                Just
+                                                    (updateLayoutNode path
+                                                        (\node ->
+                                                            case node of
+                                                                Components.Element p _ ->
+                                                                    Components.Element p newContent
+
+                                                                _ ->
+                                                                    node
+                                                        )
+                                                        l
+                                                    )
+                                        }
+
                                     Nothing ->
                                         c
+
                             else
                                 c
                     in
@@ -953,32 +1067,51 @@ update msg model =
                         currentComponents =
                             model.components |> Maybe.withDefault []
 
-                        parentPath = List.take (List.length path - 1) path
-                        indexToRemove = List.drop (List.length path - 1) path |> List.head |> Maybe.withDefault -1
+                        parentPath =
+                            List.take (List.length path - 1) path
+
+                        indexToRemove =
+                            List.drop (List.length path - 1) path |> List.head |> Maybe.withDefault -1
 
                         updateComponent c =
                             if c.name == name then
                                 case c.layout of
                                     Just l ->
                                         if indexToRemove >= 0 then
-                                            { c | layout = Just (updateLayoutNode parentPath (\node -> 
-                                                case node of
-                                                    Components.Stack p children -> 
-                                                        let
-                                                            newChildren = List.indexedMap Tuple.pair children |> List.filter (\(i, _) -> i /= indexToRemove) |> List.map Tuple.second
-                                                        in
-                                                        Components.Stack p newChildren
-                                                    Components.Grid p children -> 
-                                                        let
-                                                            newChildren = List.indexedMap Tuple.pair children |> List.filter (\(i, _) -> i /= indexToRemove) |> List.map Tuple.second
-                                                        in
-                                                        Components.Grid p newChildren
-                                                    _ -> node
-                                            ) l) }
+                                            { c
+                                                | layout =
+                                                    Just
+                                                        (updateLayoutNode parentPath
+                                                            (\node ->
+                                                                case node of
+                                                                    Components.Stack p children ->
+                                                                        let
+                                                                            newChildren =
+                                                                                List.indexedMap Tuple.pair children |> List.filter (\( i, _ ) -> i /= indexToRemove) |> List.map Tuple.second
+                                                                        in
+                                                                        Components.Stack p newChildren
+
+                                                                    Components.Grid p children ->
+                                                                        let
+                                                                            newChildren =
+                                                                                List.indexedMap Tuple.pair children |> List.filter (\( i, _ ) -> i /= indexToRemove) |> List.map Tuple.second
+                                                                        in
+                                                                        Components.Grid p newChildren
+
+                                                                    _ ->
+                                                                        node
+                                                            )
+                                                            l
+                                                        )
+                                            }
+
                                         else
-                                            c -- Cannot remove root this way
+                                            c
+
+                                    -- Cannot remove root this way
                                     Nothing ->
                                         c
+
                             else
                                 c
                     in
@@ -1079,6 +1212,7 @@ update msg model =
                                         [ { action =
                                                 if List.member activeName model.existingScreens then
                                                     "update"
+
                                                 else
                                                     "create"
                                           , filePath = "layouts/" ++ screen.name ++ ".json"
@@ -1152,6 +1286,7 @@ update msg model =
 
                 Nothing ->
                     ( model, Cmd.none )
+
         DeleteToken path ->
             case model.activeThemeName of
                 Nothing ->
@@ -1208,7 +1343,7 @@ update msg model =
                                   }
                                 ]
                             }
-                        
+
                         currentComponents =
                             model.components |> Maybe.withDefault []
                     in
@@ -1233,7 +1368,7 @@ update msg model =
                                   }
                                 ]
                             }
-                        
+
                         currentScreens =
                             model.screens |> Maybe.withDefault []
                     in
@@ -1274,51 +1409,95 @@ update msg model =
             case model.selectedComponentName of
                 Just compName ->
                     let
-                        getFloat k = Dict.get k model.newContractRuleFields |> Maybe.andThen String.toFloat
-                        getList k = Dict.get k model.newContractRuleFields |> Maybe.map (\s -> String.split "," s |> List.map String.trim |> List.filter ((/=) "")) |> Maybe.withDefault []
-                        getString k = Dict.get k model.newContractRuleFields |> Maybe.andThen (\s -> if String.trim s == "" then Nothing else Just (String.trim s))
-                        
+                        getFloat k =
+                            Dict.get k model.newContractRuleFields |> Maybe.andThen String.toFloat
+
+                        getList k =
+                            Dict.get k model.newContractRuleFields |> Maybe.map (\s -> String.split "," s |> List.map String.trim |> List.filter ((/=) "")) |> Maybe.withDefault []
+
+                        getString k =
+                            Dict.get k model.newContractRuleFields
+                                |> Maybe.andThen
+                                    (\s ->
+                                        if String.trim s == "" then
+                                            Nothing
+
+                                        else
+                                            Just (String.trim s)
+                                    )
+
                         maybeRule =
                             case model.newContractRuleType of
                                 "allowedTokenGroups" ->
-                                    let groups = getList "groups" |> List.map (String.split ".")
-                                    in if List.isEmpty groups then Nothing else Just (Contracts.AllowedTokenGroups groups)
+                                    let
+                                        groups =
+                                            getList "groups" |> List.map (String.split ".")
+                                    in
+                                    if List.isEmpty groups then
+                                        Nothing
+
+                                    else
+                                        Just (Contracts.AllowedTokenGroups groups)
 
                                 "noHardcodedValues" ->
-                                    let props = getList "properties"
-                                    in if List.isEmpty props then Nothing else Just (Contracts.NoHardcodedValues props)
+                                    let
+                                        props =
+                                            getList "properties"
+                                    in
+                                    if List.isEmpty props then
+                                        Nothing
+
+                                    else
+                                        Just (Contracts.NoHardcodedValues props)
 
                                 "spacingOnScale" ->
                                     case ( getList "properties", getString "scale" ) of
                                         ( props, Just scaleStr ) ->
-                                            if List.isEmpty props then Nothing else Just (Contracts.SpacingOnScale props (String.split "." scaleStr))
-                                        _ -> Nothing
+                                            if List.isEmpty props then
+                                                Nothing
+
+                                            else
+                                                Just (Contracts.SpacingOnScale props (String.split "." scaleStr))
+
+                                        _ ->
+                                            Nothing
 
                                 "contrastThreshold" ->
                                     case ( getString "foreground", getString "background", getFloat "minimumRatio" ) of
                                         ( Just fg, Just bg, Just ratio ) ->
                                             Just (Contracts.ContrastThreshold { foreground = fg, background = bg, minimumRatio = ratio })
-                                        _ -> Nothing
 
-                                _ -> Nothing
+                                        _ ->
+                                            Nothing
+
+                                _ ->
+                                    Nothing
                     in
                     case maybeRule of
                         Just rule ->
                             let
-                                currentContracts = model.contracts |> Maybe.withDefault []
-                                existingContract = List.filter (\c -> c.component == compName) currentContracts |> List.head
-                                
+                                currentContracts =
+                                    model.contracts |> Maybe.withDefault []
+
+                                existingContract =
+                                    List.filter (\c -> c.component == compName) currentContracts |> List.head
+
                                 newContract =
                                     case existingContract of
-                                        Just c -> { c | rules = c.rules ++ [ rule ] }
-                                        Nothing -> { component = compName, rules = [ rule ] }
-                                        
+                                        Just c ->
+                                            { c | rules = c.rules ++ [ rule ] }
+
+                                        Nothing ->
+                                            { component = compName, rules = [ rule ] }
+
                                 newContracts =
                                     newContract :: List.filter (\c -> c.component /= compName) currentContracts
                             in
                             ( { model | contracts = Just newContracts, newContractRuleFields = Dict.empty }, Cmd.none )
+
                         Nothing ->
                             ( model, Cmd.none )
+
                 Nothing ->
                     ( model, Cmd.none )
 
@@ -1326,19 +1505,29 @@ update msg model =
             case model.selectedComponentName of
                 Just compName ->
                     let
-                        currentContracts = model.contracts |> Maybe.withDefault []
-                        existingContract = List.filter (\c -> c.component == compName) currentContracts |> List.head
+                        currentContracts =
+                            model.contracts |> Maybe.withDefault []
+
+                        existingContract =
+                            List.filter (\c -> c.component == compName) currentContracts |> List.head
                     in
                     case existingContract of
                         Just c ->
                             let
-                                newRules = List.take index c.rules ++ List.drop (index + 1) c.rules
-                                newContract = { c | rules = newRules }
-                                newContracts = newContract :: List.filter (\contract -> contract.component /= compName) currentContracts
+                                newRules =
+                                    List.take index c.rules ++ List.drop (index + 1) c.rules
+
+                                newContract =
+                                    { c | rules = newRules }
+
+                                newContracts =
+                                    newContract :: List.filter (\contract -> contract.component /= compName) currentContracts
                             in
                             ( { model | contracts = Just newContracts }, Cmd.none )
+
                         Nothing ->
                             ( model, Cmd.none )
+
                 Nothing ->
                     ( model, Cmd.none )
 
@@ -1361,6 +1550,7 @@ update msg model =
                                 actionType =
                                     if List.member activeName model.existingContracts then
                                         "update"
+
                                     else
                                         "create"
 
@@ -1380,7 +1570,9 @@ update msg model =
                             )
 
                         Nothing ->
-                            ( model, Cmd.none )
+                            -- No contract exists in the model yet, so there is nothing to
+                            -- commit. Say so rather than letting the button look broken.
+                            ( { model | commitStatus = Just ( Failed, "Add at least one rule before saving." ) }, Cmd.none )
 
                 _ ->
                     ( model, Cmd.none )
@@ -1399,7 +1591,7 @@ update msg model =
                                   }
                                 ]
                             }
-                        
+
                         currentContracts =
                             model.contracts |> Maybe.withDefault []
                     in
@@ -1424,7 +1616,7 @@ update msg model =
         SwitchBranch branchName ->
             case ( model.token, model.selectedProject ) of
                 ( Just token, Just project ) ->
-                    ( { model | currentBranch = Just branchName, repositoryTree = Nothing, originalComponents = Nothing, components = Nothing, originalTokens = Nothing, tokens = Nothing, themes = [], screens = Nothing, existingComponents = [], existingThemes = [], existingScreens = [], tokensFileExists = False, commitStatus = Just ( Done, "On branch " ++ branchName ), contracts = Nothing, existingContracts = [], newContractRuleType = "", newContractRuleFields = Dict.empty }
+                    ( { model | currentBranch = Just branchName, repositoryTree = Nothing, originalComponents = Nothing, components = Nothing, originalTokens = Nothing, tokens = Nothing, themes = [], screens = Nothing, existingComponents = [], existingThemes = [], existingScreens = [], tokensFileExists = False, commitStatus = Just ( Done, "On branch " ++ branchName ), contracts = Nothing, existingContracts = [], newContractRuleType = "allowedTokenGroups", newContractRuleFields = Dict.empty }
                     , Cmd.batch
                         [ GitLab.Files.listTree token project.id branchName GotTree
                         , GitLab.Files.getFileRaw token project.id branchName "tokens/tokens.json" GotTokensFile

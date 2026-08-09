@@ -1,4 +1,4 @@
-module Themes exposing (Theme, applyTheme, fromTokens, toTokens)
+module Themes exposing (Theme, applyTheme, fromTokens, resolve, toTokens)
 
 import Dict exposing (Dict)
 import Tokens exposing (DesignToken, FlatToken, TokenPath)
@@ -40,6 +40,26 @@ applyTheme base theme =
             Dict.union overridesDict baseDict
     in
     fromDict mergedDict
+
+
+{-| The tokens to show (and validate against) for a given active theme name.
+Falls back to the base tokens when no theme is active, or when the active name
+matches no known theme. Every surface that resolves tokens for display or for
+`Contracts.validate` goes through here, so they can't disagree.
+-}
+resolve : List FlatToken -> List Theme -> Maybe String -> List FlatToken
+resolve base themes activeThemeName =
+    case activeThemeName of
+        Nothing ->
+            base
+
+        Just name ->
+            case List.filter (\t -> t.name == name) themes |> List.head of
+                Just theme ->
+                    applyTheme base theme
+
+                Nothing ->
+                    base
 
 
 {-| Helper to create a theme from parsed tokens.

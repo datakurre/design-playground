@@ -3,6 +3,7 @@ module Main exposing (main)
 import Auth
 import Browser
 import Browser.Navigation as Nav
+import Dict
 import GitLab.Projects exposing (Project)
 import Html exposing (Html, a, button, div, h2, img, li, span, text, ul)
 import Html.Attributes exposing (href, src)
@@ -101,6 +102,10 @@ init flags url key =
             , exportTargets = [ "css", "tailwind" ]
             , pkceChallenge = flags.pkceChallenge
             , pkceVerifier = flags.pkceVerifier
+            , contracts = Nothing
+            , existingContracts = []
+            , newContractRuleType = "allowedTokenGroups"
+            , newContractRuleFields = Dict.empty
             }
 
         cmds =

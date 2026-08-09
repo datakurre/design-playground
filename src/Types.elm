@@ -4,6 +4,8 @@ import Auth
 import Browser
 import Browser.Navigation as Nav
 import Components exposing (Component)
+import Contracts
+import Dict exposing (Dict)
 import GitLab.Branches exposing (Branch)
 import GitLab.Commits
 import GitLab.Files exposing (TreeItem)
@@ -14,8 +16,6 @@ import Screens exposing (Screen)
 import Themes exposing (Theme)
 import Tokens
 import Url exposing (Url)
-import Contracts
-import Dict exposing (Dict)
 
 
 type alias Flags =

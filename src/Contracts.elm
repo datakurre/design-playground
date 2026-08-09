@@ -1,18 +1,18 @@
 module Contracts exposing (Contract, Rule(..), Violation, decoder, encoder, validate)
 
-import Components
 import Colors
+import Components
 import Dict exposing (Dict)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
 import Tokens exposing (TokenPath)
+
 
 type alias Violation =
     { path : List Int
     , property : Maybe String
     , message : String
     }
-
 
 
 type Rule

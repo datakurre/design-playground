@@ -1,11 +1,12 @@
 module Pages.GitWorkflows exposing (viewGitWorkflows)
 
+import Contracts
 import Html exposing (Html, a, button, div, h3, h4, input, li, option, select, span, strong, text, ul)
 import Html.Attributes exposing (href, value)
 import Html.Events exposing (onClick, onInput)
 import Tailwind as Tw exposing (classes)
-import Tailwind.Theme exposing (emerald, red, s1, s2, s3, s4, s6, s64, s600, s700, slate)
-import Contracts
+import Tailwind.Theme exposing (emerald, red, s1, s2, s3, s4, s6, s600, s64, s700, slate)
+import Themes
 import Tokens
 import Types exposing (..)
 import Ui
@@ -190,8 +191,11 @@ diffTokens orig current =
 viewContractCheck : Model -> Html Msg
 viewContractCheck model =
     let
+        -- Resolved through the active theme, the same way the Component
+        -- Registry resolves them, so the gate and the editor can't report
+        -- different violation counts for the same component.
         tokens =
-            model.tokens |> Maybe.withDefault []
+            Themes.resolve (Maybe.withDefault [] model.tokens) model.themes model.activeThemeName
 
         components =
             model.components |> Maybe.withDefault []
@@ -255,4 +259,3 @@ viewContractCheck model =
                     allViolations
                 )
         ]
-

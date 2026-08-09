@@ -15,6 +15,10 @@ build: gen
 dist-ci: gen
 	@vite build
 
+# elm-test only compiles the test modules and their dependencies, and elm-review
+# parses rather than type-checks — neither reaches src/Main.elm. Compile the app
+# entry point explicitly so a broken Model/view can't pass `make check`.
 check: gen
+	@elm make src/Main.elm --output=/dev/null
 	@elm-test
 	@elm-review

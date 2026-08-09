@@ -1,6 +1,7 @@
 module Pages.ComponentRegistry exposing (viewComponentRegistry)
 
 import Components
+import Contracts
 import CssProperties
 import Dict
 import Html exposing (Html, button, div, h3, h4, li, text, ul)
@@ -9,10 +10,9 @@ import Html.Events exposing (onClick, onInput)
 import Renderer
 import Tailwind as Tw exposing (classes)
 import Tailwind.Breakpoints exposing (hover)
-import Tailwind.Theme exposing (red, s0, s0_dot_5, s1, s2, s3, s4, s6, s24, s40, s50, s64, s100, s200, s700, s900, slate)
+import Tailwind.Theme exposing (red, s0, s0_dot_5, s1, s100, s2, s200, s24, s3, s4, s40, s50, s6, s64, s700, s900, slate)
 import Themes
 import Tokens
-import Contracts
 import Types exposing (..)
 import Ui exposing (PillTone(..))
 
@@ -159,7 +159,8 @@ viewComponentRegistry model =
 viewComponentList : Model -> List Components.Component -> Html Msg
 viewComponentList model components =
     let
-        displayTokens = resolveDisplayTokens model
+        displayTokens =
+            resolveDisplayTokens model
     in
     div [ Ui.panel, classes [ Tw.w s64 ] ]
         [ h3 [ Ui.pageTitle, classes [ Tw.mb s2 ] ] [ text "Components" ]
@@ -183,10 +184,17 @@ viewComponentList model components =
 
                                 Just contract ->
                                     let
-                                        violations = Contracts.validate displayTokens contract c
+                                        violations =
+                                            Contracts.validate displayTokens contract c
                                     in
-                                    if List.isEmpty violations then
+                                    -- Same three-way test as the editor's heading pill
+                                    -- (viewUsageContract), so the two never disagree.
+                                    if List.isEmpty contract.rules then
+                                        text ""
+
+                                    else if List.isEmpty violations then
                                         Ui.pill Positive "OK"
+
                                     else
                                         Ui.pill Negative (String.fromInt (List.length violations))
                     in
@@ -265,7 +273,8 @@ viewSelectedComponent model components =
                 activeComponent =
                     List.filter (\c -> c.name == activeName) components |> List.head
 
-                displayTokens = resolveDisplayTokens model
+                displayTokens =
+                    resolveDisplayTokens model
             in
             case activeComponent of
                 Just comp ->
@@ -373,25 +382,7 @@ viewComponentPreview model comp displayTokens =
 
 resolveDisplayTokens : Model -> List Tokens.FlatToken
 resolveDisplayTokens model =
-    let
-        baseTokens =
-            model.tokens |> Maybe.withDefault []
-    in
-    case model.activeThemeName of
-        Nothing ->
-            baseTokens
-
-        Just activeThemeNameStr ->
-            let
-                activeTheme =
-                    List.filter (\t -> t.name == activeThemeNameStr) model.themes |> List.head
-            in
-            case activeTheme of
-                Just theme ->
-                    Themes.applyTheme baseTokens theme
-
-                Nothing ->
-                    baseTokens
+    Themes.resolve (Maybe.withDefault [] model.tokens) model.themes model.activeThemeName
 
 
 viewUsageContract : Model -> Components.Component -> List Tokens.FlatToken -> Html Msg
@@ -403,15 +394,17 @@ viewUsageContract model comp displayTokens =
                 |> List.filter (\c -> c.component == comp.name)
                 |> List.head
                 |> Maybe.withDefault { component = comp.name, rules = [] }
-                
+
         violations =
             Contracts.validate displayTokens activeContract comp
 
         headingPill =
             if List.isEmpty activeContract.rules then
                 text ""
+
             else if List.isEmpty violations then
                 Ui.pill Positive "OK"
+
             else
                 Ui.pill Negative (String.fromInt (List.length violations))
     in
@@ -430,8 +423,10 @@ viewUsageContract model comp displayTokens =
                             ]
                     )
                     violations
+
              else if not (List.isEmpty activeContract.rules) then
                 [ div [ Ui.mutedSmall ] [ text "No contract violations." ] ]
+
              else
                 [ div [ Ui.mutedSmall ] [ text "No rules yet — add one below to start enforcing usage for this component." ] ]
             )
@@ -450,6 +445,7 @@ viewUsageContract model comp displayTokens =
                 [ Ui.selectInput
                 , value model.newContractRuleType
                 , onInput UpdateNewContractRuleType
+                , Html.Attributes.attribute "aria-label" "Rule type"
                 ]
                 [ Html.option [ value "allowedTokenGroups" ] [ text "Allowed token groups" ]
                 , Html.option [ value "noHardcodedValues" ] [ text "No hardcoded values" ]
@@ -459,81 +455,28 @@ viewUsageContract model comp displayTokens =
             , case model.newContractRuleType of
                 "allowedTokenGroups" ->
                     div []
-                        [ Html.input
-                            [ Ui.textInput
-                            , value (Dict.get "groups" model.newContractRuleFields |> Maybe.withDefault "")
-                            , onInput (UpdateNewContractRuleField "groups")
-                            , Html.Attributes.placeholder "interactive, spacing"
-                            , classes [ Tw.w_full, Tw.mb s1 ]
-                            ] []
-                        , div [ Ui.mutedSmall ] [ text "Comma-separated token group paths." ]
-                        ]
+                        [ viewRuleField model "groups" "Allowed token groups" "interactive, spacing" "Comma-separated token group paths." ]
 
                 "noHardcodedValues" ->
                     div []
-                        [ Html.input
-                            [ Ui.textInput
-                            , value (Dict.get "properties" model.newContractRuleFields |> Maybe.withDefault "")
-                            , onInput (UpdateNewContractRuleField "properties")
-                            , Html.Attributes.placeholder "color, background-color"
-                            , classes [ Tw.w_full, Tw.mb s1 ]
-                            ] []
-                        , div [ Ui.mutedSmall ] [ text "Comma-separated CSS property names." ]
-                        ]
+                        [ viewRuleField model "properties" "Properties" "color, background-color" "Comma-separated CSS property names." ]
 
                 "spacingOnScale" ->
                     div [ classes [ Tw.flex, Tw.gap s2, Tw.items_start ] ]
                         [ div [ classes [ Tw.flex_1 ] ]
-                            [ Html.input
-                                [ Ui.textInput
-                                , value (Dict.get "properties" model.newContractRuleFields |> Maybe.withDefault "")
-                                , onInput (UpdateNewContractRuleField "properties")
-                                , Html.Attributes.placeholder "padding, margin, gap"
-                                , classes [ Tw.w_full, Tw.mb s1 ]
-                                ] []
-                            ]
+                            [ viewRuleField model "properties" "Properties" "padding, margin, gap" "Comma-separated CSS property names." ]
                         , div [ classes [ Tw.flex_1 ] ]
-                            [ Html.input
-                                [ Ui.textInput
-                                , value (Dict.get "scale" model.newContractRuleFields |> Maybe.withDefault "")
-                                , onInput (UpdateNewContractRuleField "scale")
-                                , Html.Attributes.placeholder "spacing"
-                                , classes [ Tw.w_full, Tw.mb s1 ]
-                                ] []
-                            , div [ Ui.mutedSmall ] [ text "Token group path acting as the allowed scale." ]
-                            ]
+                            [ viewRuleField model "scale" "Scale" "spacing" "Token group path acting as the allowed scale." ]
                         ]
 
                 "contrastThreshold" ->
                     div [ classes [ Tw.flex, Tw.gap s2, Tw.items_start ] ]
                         [ div [ classes [ Tw.flex_1 ] ]
-                            [ Html.input
-                                [ Ui.textInput
-                                , value (Dict.get "foreground" model.newContractRuleFields |> Maybe.withDefault "")
-                                , onInput (UpdateNewContractRuleField "foreground")
-                                , Html.Attributes.placeholder "color"
-                                , classes [ Tw.w_full, Tw.mb s1 ]
-                                ] []
-                            ]
+                            [ viewRuleField model "foreground" "Foreground property" "color" "CSS property holding the text color." ]
                         , div [ classes [ Tw.flex_1 ] ]
-                            [ Html.input
-                                [ Ui.textInput
-                                , value (Dict.get "background" model.newContractRuleFields |> Maybe.withDefault "")
-                                , onInput (UpdateNewContractRuleField "background")
-                                , Html.Attributes.placeholder "background-color"
-                                , classes [ Tw.w_full, Tw.mb s1 ]
-                                ] []
-                            ]
+                            [ viewRuleField model "background" "Background property" "background-color" "CSS property holding the background color." ]
                         , div [ classes [ Tw.flex_1 ] ]
-                            [ Html.input
-                                [ Ui.textInput
-                                , value (Dict.get "minimumRatio" model.newContractRuleFields |> Maybe.withDefault "")
-                                , onInput (UpdateNewContractRuleField "minimumRatio")
-                                , Html.Attributes.placeholder "4.5"
-                                , classes [ Tw.w_full, Tw.mb s1 ]
-                                ] []
-                            , div [ Ui.mutedSmall ] [ text "A number, e.g. 4.5 for WCAG AA." ]
-                            ]
+                            [ viewRuleField model "minimumRatio" "Minimum ratio" "4.5" "A number, e.g. 4.5 for WCAG AA." ]
                         ]
 
                 _ ->
@@ -549,6 +492,27 @@ viewUsageContract model comp displayTokens =
                         []
                    )
             )
+        ]
+
+
+{-| One field of the add-rule form: a text input bound to
+`model.newContractRuleFields` under `key`, with a hint line underneath. The hint
+is a visible line rather than only a placeholder, which disappears as soon as
+the user starts typing and offers no help if they get the format wrong.
+-}
+viewRuleField : Model -> String -> String -> String -> String -> Html Msg
+viewRuleField model key label placeholder hint =
+    div []
+        [ Html.input
+            [ Ui.textInput
+            , value (Dict.get key model.newContractRuleFields |> Maybe.withDefault "")
+            , onInput (UpdateNewContractRuleField key)
+            , Html.Attributes.placeholder placeholder
+            , Html.Attributes.attribute "aria-label" label
+            , classes [ Tw.w_full, Tw.mb s1 ]
+            ]
+            []
+        , div [ Ui.mutedSmall ] [ text hint ]
         ]
 
 
