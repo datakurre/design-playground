@@ -160,6 +160,7 @@ type Msg
     | UpdateCompositeToken Tokens.TokenPath String String
     | AddCompositeProperty Tokens.TokenPath String
     | DeleteCompositeProperty Tokens.TokenPath String
+    | RevertToSingleValue Tokens.TokenPath
     | UpdateNewCompositePropertyName String
     | UpdateNewCompositePropertyValue String
     | SaveTokens

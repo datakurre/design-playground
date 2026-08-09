@@ -563,6 +563,8 @@ viewTokenEditor context path token =
                                     []
                                 , button [ Ui.btnSmall, onClick (AddCompositeProperty path context.newPartName) ]
                                     [ text "Add part" ]
+                                , button [ Ui.btnDanger, onClick (RevertToSingleValue path) ]
+                                    [ text "Revert to single value" ]
                                 ]
                            ]
                     )

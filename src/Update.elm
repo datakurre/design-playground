@@ -160,6 +160,9 @@ updateTokenPathLogic model msg path =
                 ( DeleteCompositeProperty _ prop, Tokens.CompositeValue dict ) ->
                     Tokens.CompositeValue (Dict.remove prop dict)
 
+                ( RevertToSingleValue _, Tokens.CompositeValue dict ) ->
+                    Tokens.StringValue (Dict.get "value" dict |> Maybe.withDefault "")
+
                 _ ->
                     currentVal
 
@@ -498,6 +501,9 @@ update msg model =
             updateTokenPathLogic model msg path
 
         DeleteCompositeProperty path _ ->
+            updateTokenPathLogic model msg path
+
+        RevertToSingleValue path ->
             updateTokenPathLogic model msg path
 
         UpdateNewCompositePropertyName name ->
