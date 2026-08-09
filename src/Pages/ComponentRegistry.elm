@@ -169,10 +169,7 @@ viewComponentList model components =
             resolveDisplayTokens model
     in
     div [ Ui.panel, classes [ Tw.w s64 ] ]
-        [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.mb s2 ] ]
-            [ h3 [ Ui.pageTitle ] [ text "Components" ]
-            , Ui.contextHelp Help.components
-            ]
+        [ h3 [ Ui.pageTitle, classes [ Tw.mb s2 ] ] [ text "Components" ]
         , ul [ classes [ Tw.list_none, Tw.p s0 ] ]
             (List.map
                 (\c ->

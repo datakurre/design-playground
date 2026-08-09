@@ -1,11 +1,10 @@
 module Pages.ExportPipeline exposing (viewExportPipeline)
 
-import Help
-import Html exposing (Html, button, div, h3, input, label, p, text)
+import Html exposing (Html, button, div, h3, input, label, text)
 import Html.Attributes exposing (checked, type_)
 import Html.Events exposing (onClick)
 import Tailwind as Tw exposing (classes)
-import Tailwind.Theme exposing (s1, s2, s3, s4)
+import Tailwind.Theme exposing (s2, s3, s4)
 import Types exposing (..)
 import Ui
 
@@ -13,12 +12,7 @@ import Ui
 viewExportPipeline : Model -> Html Msg
 viewExportPipeline model =
     div [ Ui.panel ]
-        [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.mb s1 ] ]
-            [ h3 [ Ui.pageTitle ] [ text "Export" ]
-            , Ui.contextHelp Help.export
-            ]
-        , p [ Ui.muted, classes [ Tw.mb s4 ] ]
-            [ text "Write your tokens out in other formats and commit them to the repository." ]
+        [ h3 [ Ui.pageTitle, classes [ Tw.mb s4 ] ] [ text "Export" ]
         , div [ classes [ Tw.flex, Tw.flex_col, Tw.gap s2, Tw.mb s4 ] ]
             [ viewTarget model "css" "CSS custom properties" "exports/variables.css"
             , viewTarget model "tailwind" "Tailwind config" "exports/tailwind.config.js"

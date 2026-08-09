@@ -5,6 +5,7 @@ import Browser
 import Browser.Navigation as Nav
 import Dict
 import GitLab.Projects exposing (Project)
+import Help
 import Html exposing (Html, a, button, div, h2, img, input, li, span, text, ul)
 import Html.Attributes exposing (href, src)
 import Html.Events exposing (onClick, onInput)
@@ -371,6 +372,11 @@ viewEditor : Model -> Project -> Html Msg
 viewEditor model project =
     div []
         [ viewTabs model
+
+        -- One line saying what this tab is for, in the one place every tab
+        -- passes through. The pages used to each carry their own "?" beside
+        -- their title; collapsed, that told a new user nothing.
+        , Ui.tabLede (Help.forTab model.activeTab)
         , div [ classes [ Tw.py s4 ] ] [ viewActiveTab model ]
         , viewRepositoryFiles model project
         ]

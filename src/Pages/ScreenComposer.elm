@@ -34,10 +34,7 @@ viewScreenComposer model =
 viewScreenList : Model -> List Screen -> Html Msg
 viewScreenList model screens =
     div [ Ui.panel, classes [ Tw.w s64 ] ]
-        [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.mb s2 ] ]
-            [ h3 [ Ui.pageTitle ] [ text "Screens" ]
-            , Ui.contextHelp Help.screens
-            ]
+        [ h3 [ Ui.pageTitle, classes [ Tw.mb s2 ] ] [ text "Screens" ]
         , ul [ classes [ Tw.list_none, Tw.p s0 ] ]
             (List.map
                 (\s ->

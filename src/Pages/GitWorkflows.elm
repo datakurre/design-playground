@@ -16,10 +16,7 @@ import Ui
 viewGitWorkflows : Model -> Html Msg
 viewGitWorkflows model =
     div [ Ui.panel ]
-        [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.mb s3 ] ]
-            [ h3 [ Ui.pageTitle ] [ text "Branches & Reviews" ]
-            , Ui.contextHelp Help.gitWorkflows
-            ]
+        [ h3 [ Ui.pageTitle, classes [ Tw.mb s3 ] ] [ text "Branches & Reviews" ]
         , case model.selectedProject of
             Just _ ->
                 div []
@@ -105,7 +102,10 @@ viewUnsavedChanges model =
                     []
     in
     div [ classes [ Tw.mb s6, Tw.pt s4 ], Ui.divider ]
-        [ h4 [ Ui.sectionTitle, classes [ Tw.mb s2 ] ] [ text "Unsaved changes" ]
+        [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.mb s2 ] ]
+            [ h4 [ Ui.sectionTitle ] [ text "Unsaved changes" ]
+            , Ui.contextHelp Help.unsavedChanges
+            ]
         , if List.isEmpty tokenDiffs && not componentsChanged then
             div [ Ui.mutedSmall ] [ text "Nothing changed since you last saved." ]
 

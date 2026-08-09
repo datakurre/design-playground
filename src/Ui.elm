@@ -6,7 +6,7 @@ module Ui exposing
     , tab, themePicker
     , PillTone(..), pill
     , previewSurface
-    , contextHelp
+    , contextHelp, tabLede
     )
 
 {-| The app's own chrome, in one place.
@@ -59,7 +59,7 @@ Three steps, and no more.
 
 # Help
 
-@docs contextHelp
+@docs contextHelp, tabLede
 
 -}
 
@@ -530,3 +530,27 @@ contextHelp topic =
                 :: List.map (\p -> Html.p [ muted, classes [ Tw.mt s1 ] ] [ Html.text p ]) topic.body
             )
         ]
+
+
+{-| The sentence under the tab bar saying what this tab is for, with the tab's
+own "?" beside it.
+
+Collapsed help alone meant a first-run user saw no guidance at all — fifteen
+topics, none of them on screen, and nothing anywhere stating that tokens come
+before components come before screens. One line per tab is the cheapest thing
+that is actually *read*, and it costs no `Model` state.
+
+Renders nothing for a topic without a `lede`, so section topics can share the
+`Topic` type without ever appearing here.
+-}
+tabLede : { r | title : String, lede : Maybe String, body : List String } -> Html msg
+tabLede topic =
+    case topic.lede of
+        Nothing ->
+            Html.text ""
+
+        Just sentence ->
+            Html.div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.mt s3 ] ]
+                [ Html.p [ muted ] [ Html.text sentence ]
+                , contextHelp topic
+                ]

@@ -69,12 +69,10 @@ viewToolbar : Model -> Html Msg
 viewToolbar model =
     div [ classes [ Tw.flex, Tw.justify_between, Tw.items_center, Tw.gap s4, Tw.flex_wrap ] ]
         [ div []
-            [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2 ] ]
-                [ h3 [ Ui.pageTitle ] [ text "Tokens" ]
-                , Ui.contextHelp Help.tokens
-                ]
+            [ h3 [ Ui.pageTitle ] [ text "Tokens" ]
             , div [ classes [ Tw.flex, Tw.gap s2, Tw.items_center, Tw.mt s2 ] ]
                 [ Ui.themePicker (List.map .name model.themes) model.activeThemeName SelectTheme
+                , Ui.contextHelp Help.themes
                 , Html.input
                     [ Ui.textInput
                     , value model.newThemeName
