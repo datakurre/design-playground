@@ -474,10 +474,16 @@ through `Model`/`Msg` for every topic.
 Takes any record with `title`/`body` fields (in practice, a `Help.Topic`)
 rather than importing `Help` here, so this module stays scoped to chrome —
 it has no opinion on what the help text says, only how it's disclosed.
+
+The panel is positioned rather than left in flow: every glyph sits in a
+`flex items-center` heading row, so an in-flow panel grew the row and shoved
+the whole section below it down each time someone opened one. It does not
+close on an outside click — `<details>` has no such thing, and adding it
+would mean the `Model`/`Msg` state this deliberately avoids.
 -}
 contextHelp : { r | title : String, body : List String } -> Html msg
 contextHelp topic =
-    Html.details [ classes [ Tw.inline_block ] ]
+    Html.details [ classes [ Tw.relative, Tw.inline_block ] ]
         [ Html.summary
             [ classes
                 [ Tw.inline_flex
@@ -500,7 +506,26 @@ contextHelp topic =
             , Html.Attributes.attribute "aria-label" ("Help: " ++ topic.title)
             ]
             [ Html.text "?" ]
-        , Html.div [ panelSunken, classes [ Tw.mt s2, Tw.raw "max-w-md" ] ]
+        , Html.div
+            [ panelSunken
+            , classes
+                [ Tw.absolute
+                , Tw.top_full
+                , Tw.raw "left-0"
+                , Tw.z_10
+                , Tw.mt s2
+
+                -- Out of flow it would otherwise shrink to the glyph's width,
+                -- so let it size to its text and cap that as before.
+                , Tw.w_max
+                , Tw.raw "max-w-md"
+
+                -- It floats over the content now, so it has to read as
+                -- something laid on top rather than part of the page.
+                -- `panelSunken` already supplies an opaque background.
+                , Tw.shadow_lg
+                ]
+            ]
             (Html.h4 [ fieldLabel, classes [ Tw.mb s1 ] ] [ Html.text topic.title ]
                 :: List.map (\p -> Html.p [ muted, classes [ Tw.mt s1 ] ] [ Html.text p ]) topic.body
             )
