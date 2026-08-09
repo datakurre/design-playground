@@ -11,6 +11,7 @@ import Renderer
 import Tailwind as Tw exposing (classes)
 import Tailwind.Breakpoints exposing (hover)
 import Tailwind.Theme exposing (red, s0, s0_dot_5, s1, s100, s2, s200, s24, s3, s4, s40, s50, s6, s64, s700, s900, slate)
+import Templates
 import Themes
 import Tokens
 import Types exposing (..)
@@ -251,10 +252,7 @@ viewComponentList model components =
                     , Html.Attributes.attribute "aria-label" "Start from"
                     , classes [ Tw.flex_1 ]
                     ]
-                    [ Html.option [ value "Empty" ] [ text "Empty" ]
-                    , Html.option [ value "Button" ] [ text "Button" ]
-                    , Html.option [ value "Card" ] [ text "Card" ]
-                    ]
+                    (List.map (\t -> Html.option [ value t.id ] [ text t.label ]) Templates.componentTemplates)
                 , button [ Ui.btnNeutral, onClick CreateComponent ] [ text "Add" ]
                 ]
             ]
