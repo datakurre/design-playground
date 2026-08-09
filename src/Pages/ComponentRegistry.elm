@@ -269,7 +269,17 @@ viewSelectedComponent model components =
     case model.selectedComponentName of
         Nothing ->
             div [ Ui.panel, Ui.muted, classes [ Tw.text_center, Tw.py s6 ] ]
-                [ text "Pick a component to edit it." ]
+                [ text
+                    -- "Pick a component to edit it" is a dead end when there
+                    -- are none to pick, which is exactly where a new user
+                    -- starts.
+                    (if List.isEmpty components then
+                        "No components yet. Name one on the left and pick a starting shape — Button, Card, Input, Badge or Alert."
+
+                     else
+                        "Pick a component to edit it."
+                    )
+                ]
 
         Just activeName ->
             let

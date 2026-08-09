@@ -290,6 +290,7 @@ viewWorkspace model =
                         [ div [ Ui.muted, classes [ Tw.mb s3 ] ]
                             [ text "Your design tokens, components and screens live in a GitLab repository." ]
                         , button [ Ui.btnPrimary, onClick FetchProjects ] [ text "Choose a repository" ]
+                        , viewOrderOfOperations
                         ]
 
                 Just projects ->
@@ -305,7 +306,36 @@ viewWorkspace model =
                 [ h2 [ Ui.pageTitle, classes [ Tw.mb s2 ] ] [ text "Design tokens, kept in Git" ]
                 , div [ Ui.muted ]
                     [ text "Connect your GitLab account to edit the tokens, components and screens in one of your repositories." ]
+                , viewOrderOfOperations
                 ]
+
+
+{-| The signed-out and no-repository screens are the only surfaces a user
+passes through exactly once, which makes them the right place for the two
+things that are true of the whole app and fit nowhere inside it: what order
+the tabs go in, and that editing without branching first commits to the
+default branch. Neither fits in a tab's one-line lede.
+-}
+viewOrderOfOperations : Html Msg
+viewOrderOfOperations =
+    div [ Ui.muted, classes [ Tw.mt s6, Tw.mx_auto, Tw.raw "max-w-xl", Tw.text_left ] ]
+        [ div [ classes [ Tw.mb s2 ] ]
+            [ text "The tabs run in the order you'd work in them: "
+            , span [ classes [ Tw.font_medium ] ] [ text "Tokens" ]
+            , text " define the values, "
+            , span [ classes [ Tw.font_medium ] ] [ text "Components" ]
+            , text " bundle them into reusable pieces, "
+            , span [ classes [ Tw.font_medium ] ] [ text "Screens" ]
+            , text " compose those into pages, and "
+            , span [ classes [ Tw.font_medium ] ] [ text "Export" ]
+            , text " writes the tokens out for other projects."
+            ]
+        , div []
+            [ text "There's no backend and no draft state: every save is a commit. Start on "
+            , span [ classes [ Tw.font_medium ] ] [ text "Branches & Reviews" ]
+            , text " and create a branch first, or your first save lands on the default branch."
+            ]
+        ]
 
 
 {-| Filters client-side over whatever pages of projects are already loaded —

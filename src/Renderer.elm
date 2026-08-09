@@ -80,7 +80,7 @@ renderScreenNode components screens visited tokens node =
                             previewProblem (props.componentName ++ " has no layout yet — add one on the Components tab.")
 
                 Nothing ->
-                    previewProblem ("There is no component called " ++ props.componentName ++ ".")
+                    previewProblem ("There is no component called " ++ props.componentName ++ " — create one with that name on the Components tab.")
 
         ScreenInstance props ->
             if List.member props.screenName visited then

@@ -97,7 +97,14 @@ viewSelectedScreen model screens =
     case model.selectedScreenName of
         Nothing ->
             div [ Ui.panel, Ui.muted, classes [ Tw.text_center, Tw.py s6 ] ]
-                [ text "Pick a screen to edit it." ]
+                [ text
+                    (if List.isEmpty screens then
+                        "No screens yet. Name one on the left and pick a starting shape — Login, Dashboard or Landing."
+
+                     else
+                        "Pick a screen to edit it."
+                    )
+                ]
 
         Just activeName ->
             let
