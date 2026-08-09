@@ -258,6 +258,9 @@ styleNodesHelp path layout =
         Components.Element props _ ->
             [ ( path, props.styles ) ]
 
+        Components.When _ children ->
+            List.concat (List.indexedMap (\i child -> styleNodesHelp (path ++ [ i ]) child) children)
+
 
 extractAliasPaths : String -> List Tokens.TokenPath
 extractAliasPaths value =

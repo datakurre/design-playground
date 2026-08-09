@@ -94,6 +94,8 @@ type alias Model =
     , newComponentVariant : String
     , newComponentSlot : String
     , newComponentState : String
+    , previewComponentVariant : Maybe String
+    , previewComponentState : Maybe String
     , newLayoutPropertyName : String
     , newLayoutPropertyValue : String
     , screens : Maybe (List Screen)
@@ -199,6 +201,12 @@ type Msg
     | AddLayoutText (List Int) String
     | AddLayoutStack (List Int)
     | AddLayoutGrid (List Int)
+    | AddLayoutWhen (List Int)
+    | AddLayoutSlot (List Int)
+    | ToggleLayoutNodeIsSlot (List Int) Bool
+    | UpdateLayoutWhenCondition (List Int) String String
+    | UpdatePreviewComponentVariant (Maybe String)
+    | UpdatePreviewComponentState (Maybe String)
     | UpdateNewLayoutPropertyName String
     | UpdateNewLayoutPropertyValue String
     | GotScreensTree String (Result Http.Error (List TreeItem))

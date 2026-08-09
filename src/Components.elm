@@ -9,6 +9,12 @@ type Layout
     = Stack StackProps (List Layout)
     | Grid GridProps (List Layout)
     | Element ElementProps String
+    | When WhenProps (List Layout)
+
+type alias WhenProps =
+    { variant : Maybe String
+    , state : Maybe String
+    }
 
 type alias StackProps =
     { direction : String
@@ -64,6 +70,14 @@ layoutDecoder =
                             )
                             (Decode.field "content" Decode.string)
 
+                    "when" ->
+                        Decode.map2 When
+                            (Decode.map2 WhenProps
+                                (Decode.maybe (Decode.field "variant" Decode.string))
+                                (Decode.maybe (Decode.field "state" Decode.string))
+                            )
+                            (Decode.field "children" (Decode.list (Decode.lazy (\_ -> layoutDecoder))))
+
                     _ ->
                         Decode.fail ("Unknown layout type: " ++ type_)
             )
@@ -98,6 +112,25 @@ layoutEncoder layout =
                 , ( "styles", Encode.dict identity Encode.string props.styles )
                 , ( "content", Encode.string content )
                 ]
+
+        When props children ->
+            let
+                baseFields =
+                    [ ( "type", Encode.string "when" )
+                    , ( "children", Encode.list layoutEncoder children )
+                    ]
+                
+                variantFields =
+                    case props.variant of
+                        Just v -> [ ( "variant", Encode.string v ) ]
+                        Nothing -> []
+                        
+                stateFields =
+                    case props.state of
+                        Just s -> [ ( "state", Encode.string s ) ]
+                        Nothing -> []
+            in
+            Encode.object (baseFields ++ variantFields ++ stateFields)
 
 decoder : Decoder Component
 decoder =

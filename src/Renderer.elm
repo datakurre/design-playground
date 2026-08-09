@@ -1,4 +1,4 @@
-module Renderer exposing (render, renderScreenNode)
+module Renderer exposing (render, renderLayoutWithSlots, renderScreenNode)
 
 import Components exposing (Component, Layout(..))
 import Dict exposing (Dict)
@@ -74,7 +74,7 @@ renderScreenNode components screens visited tokens node =
                                 slotDict =
                                     Dict.fromList props.slots
                             in
-                            renderLayoutWithSlots components screens visited tokens slotDict layout
+                            renderLayoutWithSlots components screens visited tokens slotDict props.variant props.state layout
 
                         Nothing ->
                             previewProblem (props.componentName ++ " has no layout yet — add one on the Components tab.")
@@ -104,8 +104,8 @@ renderScreenNode components screens visited tokens node =
             text content
 
 
-renderLayoutWithSlots : Dict String Component -> Dict String Screen -> List String -> List FlatToken -> Dict String (List ScreenNode) -> Layout -> Html msg
-renderLayoutWithSlots components screens visited tokens slots layout =
+renderLayoutWithSlots : Dict String Component -> Dict String Screen -> List String -> List FlatToken -> Dict String (List ScreenNode) -> Maybe String -> Maybe String -> Layout -> Html msg
+renderLayoutWithSlots components screens visited tokens slots activeVariant activeState layout =
     case layout of
         Stack props children ->
             div
@@ -113,7 +113,7 @@ renderLayoutWithSlots components screens visited tokens slots layout =
                   , style "flex-direction" props.direction
                   ] ++ renderStyles tokens props.styles
                 )
-                (List.map (renderLayoutWithSlots components screens visited tokens slots) children)
+                (List.map (renderLayoutWithSlots components screens visited tokens slots activeVariant activeState) children)
 
         Grid props children ->
             div
@@ -121,7 +121,25 @@ renderLayoutWithSlots components screens visited tokens slots layout =
                   , style "grid-template-columns" ("repeat(" ++ String.fromInt props.columns ++ ", 1fr)")
                   ] ++ renderStyles tokens props.styles
                 )
-                (List.map (renderLayoutWithSlots components screens visited tokens slots) children)
+                (List.map (renderLayoutWithSlots components screens visited tokens slots activeVariant activeState) children)
+
+        When props children ->
+            let
+                variantMatch =
+                    case props.variant of
+                        Just v -> Just v == activeVariant
+                        Nothing -> True
+
+                stateMatch =
+                    case props.state of
+                        Just s -> Just s == activeState
+                        Nothing -> True
+            in
+            if variantMatch && stateMatch then
+                div [ style "display" "contents" ]
+                    (List.map (renderLayoutWithSlots components screens visited tokens slots activeVariant activeState) children)
+            else
+                text ""
 
         Element props content ->
             if props.isSlot then
@@ -146,7 +164,7 @@ renderLayoutWithSlots components screens visited tokens slots layout =
 
 render : List FlatToken -> Layout -> Html msg
 render tokens layout =
-    renderLayoutWithSlots Dict.empty Dict.empty [] tokens Dict.empty layout
+    renderLayoutWithSlots Dict.empty Dict.empty [] tokens Dict.empty Nothing Nothing layout
 
 
 {-| Something in the design can't be drawn. This renders inside the preview

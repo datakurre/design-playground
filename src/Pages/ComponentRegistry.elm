@@ -7,11 +7,11 @@ import Dict
 import Help
 import Html exposing (Html, button, div, h3, h4, li, text, ul)
 import Html.Attributes exposing (value)
-import Html.Events exposing (onClick, onInput)
+import Html.Events exposing (onCheck, onClick, onInput)
 import Renderer
 import Tailwind as Tw exposing (classes)
 import Tailwind.Breakpoints exposing (hover)
-import Tailwind.Theme exposing (red, s0, s0_dot_5, s1, s100, s2, s200, s24, s3, s4, s40, s400, s50, s6, s64, s700, s800, s900, slate)
+import Tailwind.Theme exposing (red, s0, s0_dot_5, s1, s100, s2, s200, s24, s3, s300, s4, s40, s400, s50, s6, s600, s64, s700, s800, s900, slate)
 import Templates
 import Themes
 import TokenBrowse
@@ -22,19 +22,22 @@ import Ui exposing (PillTone(..))
 
 {-| One node in the layout tree. Layouts nest, so this recurses.
 -}
-viewLayoutEditorNode : Model -> List Int -> Components.Layout -> Html Msg
-viewLayoutEditorNode model path layout =
+viewLayoutEditorNode : Model -> Components.Component -> List Int -> Components.Layout -> Html Msg
+viewLayoutEditorNode model comp path layout =
     let
         ( nodeType, styles, childrenNodes ) =
             case layout of
                 Components.Stack props children ->
-                    ( "Stack", props.styles, children )
+                    ( "Stack", Just props.styles, children )
 
                 Components.Grid props children ->
-                    ( "Grid", props.styles, children )
+                    ( "Grid", Just props.styles, children )
 
                 Components.Element props content ->
-                    ( "Text", props.styles, [] )
+                    ( "Text", Just props.styles, [] )
+                    
+                Components.When _ children ->
+                    ( "When", Nothing, children )
     in
     div
         [ classes
@@ -66,86 +69,143 @@ viewLayoutEditorNode model path layout =
                 ]
                 [ text "×" ]
             ]
-        , div [ classes [ Tw.p s2 ] ]
-            [ div [ Ui.fieldLabel, classes [ Tw.mb s1 ] ] [ text "Styles" ]
-            , ul [ classes [ Tw.list_none, Tw.p s0, Tw.mb s1 ] ]
-                (List.map
-                    (\( key, val ) ->
-                        li [ classes [ Tw.flex, Tw.gap s2, Tw.items_center, Tw.mb s1 ] ]
-                            [ div [ Ui.mutedSmall, classes [ Tw.w s24, Tw.truncate ] ] [ text key ]
-                            , Html.input
-                                [ Ui.textInput
-                                , value val
-                                , onInput (UpdateLayoutProperty path key)
-                                , Html.Attributes.attribute "aria-label" key
-                                , Html.Attributes.attribute "list" "tokensList"
-                                , Html.Attributes.spellcheck False
-                                , classes [ Tw.flex_1 ]
-                                ]
-                                []
-                            , button
-                                [ Ui.iconButton
-                                , onClick (RemoveLayoutProperty path key)
-                                , Html.Attributes.attribute "aria-label" ("Remove " ++ key)
-                                , Html.Attributes.title ("Remove " ++ key)
-                                ]
-                                [ text "×" ]
+        , case styles of
+            Just s ->
+                div [ classes [ Tw.p s2 ] ]
+                    [ div [ Ui.fieldLabel, classes [ Tw.mb s1 ] ] [ text "Styles" ]
+                    , ul [ classes [ Tw.list_none, Tw.p s0, Tw.mb s1 ] ]
+                        (List.map
+                            (\( key, val ) ->
+                                li [ classes [ Tw.flex, Tw.gap s2, Tw.items_center, Tw.mb s1 ] ]
+                                    [ div [ Ui.mutedSmall, classes [ Tw.w s24, Tw.truncate ] ] [ text key ]
+                                    , Html.input
+                                        [ Ui.textInput
+                                        , value val
+                                        , onInput (UpdateLayoutProperty path key)
+                                        , Html.Attributes.attribute "aria-label" key
+                                        , Html.Attributes.attribute "list" "tokensList"
+                                        , Html.Attributes.spellcheck False
+                                        , classes [ Tw.flex_1 ]
+                                        ]
+                                        []
+                                    , button
+                                        [ Ui.iconButton
+                                        , onClick (RemoveLayoutProperty path key)
+                                        , Html.Attributes.attribute "aria-label" ("Remove " ++ key)
+                                        , Html.Attributes.title ("Remove " ++ key)
+                                        ]
+                                        [ text "×" ]
+                                    ]
+                            )
+                            (Dict.toList s)
+                        )
+                    , div [ classes [ Tw.flex, Tw.gap s2, Tw.items_center ] ]
+                        [ Html.input
+                            [ Ui.textInput
+                            , value model.newLayoutPropertyName
+                            , onInput UpdateNewLayoutPropertyName
+                            , Html.Attributes.placeholder "CSS property"
+                            , Html.Attributes.attribute "aria-label" "CSS property"
+                            , Html.Attributes.attribute "list" "css-properties-list"
+                            , Html.Attributes.spellcheck False
+                            , classes [ Tw.w s40 ]
                             ]
-                    )
-                    (Dict.toList styles)
-                )
-            , div [ classes [ Tw.flex, Tw.gap s2, Tw.items_center ] ]
-                [ Html.input
-                    [ Ui.textInput
-                    , value model.newLayoutPropertyName
-                    , onInput UpdateNewLayoutPropertyName
-                    , Html.Attributes.placeholder "CSS property"
-                    , Html.Attributes.attribute "aria-label" "CSS property"
-                    , Html.Attributes.attribute "list" "css-properties-list"
-                    , Html.Attributes.spellcheck False
-                    , classes [ Tw.w s40 ]
-                    ]
-                    []
-                , Html.input
-                    [ Ui.textInput
-                    , value model.newLayoutPropertyValue
-                    , onInput UpdateNewLayoutPropertyValue
-                    , Html.Attributes.placeholder "Value or {token}"
-                    , Html.Attributes.attribute "aria-label" "Value"
-                    , Html.Attributes.attribute "list" "tokensList"
-                    , Html.Attributes.spellcheck False
-                    , classes [ Tw.flex_1 ]
-                    ]
-                    []
-                , button [ Ui.btnSmall, onClick (UpdateLayoutProperty path model.newLayoutPropertyName model.newLayoutPropertyValue) ]
-                    [ text "Add style" ]
-                ]
-            ]
-        , case layout of
-            Components.Element _ content ->
-                div [ classes [ Tw.px s2, Tw.pb s2 ] ]
-                    [ div [ Ui.fieldLabel, classes [ Tw.mb s1 ] ] [ text "Text" ]
-                    , Html.input
-                        [ Ui.textInput
-                        , value content
-                        , onInput (UpdateLayoutText path)
-                        , Html.Attributes.attribute "aria-label" "Text content"
-                        , classes [ Tw.w_full ]
+                            []
+                        , Html.input
+                            [ Ui.textInput
+                            , value model.newLayoutPropertyValue
+                            , onInput UpdateNewLayoutPropertyValue
+                            , Html.Attributes.placeholder "Value or {token}"
+                            , Html.Attributes.attribute "aria-label" "Value"
+                            , Html.Attributes.attribute "list" "tokensList"
+                            , Html.Attributes.spellcheck False
+                            , classes [ Tw.flex_1 ]
+                            ]
+                            []
+                        , button [ Ui.btnSmall, onClick (UpdateLayoutProperty path model.newLayoutPropertyName model.newLayoutPropertyValue) ]
+                            [ text "Add style" ]
                         ]
-                        []
+                    ]
+            Nothing ->
+                text ""
+        , case layout of
+            Components.Element props content ->
+                div [ classes [ Tw.px s2, Tw.pb s2 ] ]
+                    [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.mb s2 ] ]
+                        [ Html.input 
+                            [ Html.Attributes.type_ "checkbox"
+                            , Html.Attributes.checked props.isSlot
+                            , onCheck (ToggleLayoutNodeIsSlot path)
+                            ] []
+                        , text "Is Slot Placeholder"
+                        ]
+                    , if props.isSlot then
+                        if List.isEmpty comp.slots then
+                            div [ Ui.mutedSmall, classes [ Tw.text_color (red s600) ] ]
+                                [ text "No slots defined. Add slots in the header above first." ]
+                        else
+                            Html.select
+                                [ onInput (UpdateLayoutText path)
+                                , classes [ Tw.w_full, Tw.p s1, Tw.border, Tw.border_color (slate s300), Tw.rounded_sm ]
+                                ]
+                                (Html.option [ value "" ] [ text "-- Select a slot --" ]
+                                    :: List.map (\s -> Html.option [ value s, Html.Attributes.selected (s == content) ] [ text s ]) comp.slots
+                                )
+                      else
+                        Html.input
+                            [ Ui.textInput
+                            , value content
+                            , onInput (UpdateLayoutText path)
+                            , Html.Attributes.placeholder "Text content"
+                            , classes [ Tw.w_full ]
+                            ]
+                            []
                     , div [ Ui.mutedSmall, classes [ Tw.mt s2 ] ]
                         [ text "Elements render text or slots and cannot contain other layout nodes (like Stack or Grid)." ]
+                    ]
+
+            Components.When props _ ->
+                div [ classes [ Tw.px s2, Tw.pb s2 ] ]
+                    [ div [ Ui.fieldLabel, classes [ Tw.mb s1 ] ] [ text "Condition" ]
+                    , div [ classes [ Tw.flex, Tw.gap s2, Tw.mb s2 ] ]
+                        [ Html.select
+                            [ onInput (UpdateLayoutWhenCondition path "variant")
+                            , classes [ Tw.w_full, Tw.p s1, Tw.border, Tw.border_color (slate s300), Tw.rounded_sm ]
+                            ]
+                            (Html.option [ value "" ] [ text "Any Variant" ]
+                                :: List.map (\s -> Html.option [ value s, Html.Attributes.selected (props.variant == Just s) ] [ text ("Variant: " ++ s) ]) comp.variants
+                            )
+                        , Html.select
+                            [ onInput (UpdateLayoutWhenCondition path "state")
+                            , classes [ Tw.w_full, Tw.p s1, Tw.border, Tw.border_color (slate s300), Tw.rounded_sm ]
+                            ]
+                            (Html.option [ value "" ] [ text "Any State" ]
+                                :: List.map (\s -> Html.option [ value s, Html.Attributes.selected (props.state == Just s) ] [ text ("State: " ++ s) ]) comp.states
+                            )
+                        ]
+                    , div [ Ui.fieldLabel, classes [ Tw.mb s1 ] ] [ text "Inside" ]
+                    , div [ classes [ Tw.pl s2, Tw.border_l_2, Tw.border_color (slate s100) ] ]
+                        (List.indexedMap (\i child -> viewLayoutEditorNode model comp (path ++ [ i ]) child) childrenNodes)
+                    , div [ classes [ Tw.flex, Tw.gap s2, Tw.mt s1 ] ]
+                        [ button [ Ui.btnSmall, onClick (AddLayoutStack path) ] [ text "+ Stack" ]
+                        , button [ Ui.btnSmall, onClick (AddLayoutGrid path) ] [ text "+ Grid" ]
+                        , button [ Ui.btnSmall, onClick (AddLayoutWhen path) ] [ text "+ When" ]
+                        , button [ Ui.btnSmall, onClick (AddLayoutText path "New Text") ] [ text "+ Text" ]
+                        , button [ Ui.btnSmall, onClick (AddLayoutSlot path) ] [ text "+ Slot" ]
+                        ]
                     ]
 
             _ ->
                 div [ classes [ Tw.px s2, Tw.pb s2 ] ]
                     [ div [ Ui.fieldLabel, classes [ Tw.mb s1 ] ] [ text "Inside" ]
                     , div [ classes [ Tw.pl s2, Tw.border_l_2, Tw.border_color (slate s100) ] ]
-                        (List.indexedMap (\i child -> viewLayoutEditorNode model (path ++ [ i ]) child) childrenNodes)
+                        (List.indexedMap (\i child -> viewLayoutEditorNode model comp (path ++ [ i ]) child) childrenNodes)
                     , div [ classes [ Tw.flex, Tw.gap s2, Tw.mt s1 ] ]
                         [ button [ Ui.btnSmall, onClick (AddLayoutStack path) ] [ text "+ Stack" ]
                         , button [ Ui.btnSmall, onClick (AddLayoutGrid path) ] [ text "+ Grid" ]
+                        , button [ Ui.btnSmall, onClick (AddLayoutWhen path) ] [ text "+ When" ]
                         , button [ Ui.btnSmall, onClick (AddLayoutText path "New Text") ] [ text "+ Text" ]
+                        , button [ Ui.btnSmall, onClick (AddLayoutSlot path) ] [ text "+ Slot" ]
                         ]
                     ]
         ]
@@ -317,7 +377,7 @@ viewComponentEditor model comp displayTokens =
             ]
         , viewNameList "Variants" Help.componentVariant commonVariantNames comp.variants model.newComponentVariant UpdateNewComponentVariant AddComponentVariant RemoveComponentVariant
         , viewNameList "States" Help.componentState commonStateNames comp.states model.newComponentState UpdateNewComponentState AddComponentState RemoveComponentState
-        , viewNameList "Slots" Help.componentSlot [] comp.slots model.newComponentSlot UpdateNewComponentSlot AddComponentSlot RemoveComponentSlot
+        , viewNameList "Slots" Help.componentSlot commonSlotNames comp.slots model.newComponentSlot UpdateNewComponentSlot AddComponentSlot RemoveComponentSlot
         , div [ classes [ Tw.mt s3, Tw.pt s3 ], Ui.divider ]
             [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.mb s2 ] ]
                 [ h4 [ Ui.sectionTitle ] [ text "Layout" ]
@@ -342,7 +402,7 @@ viewComponentEditor model comp displayTokens =
                         ]
 
                 Just layoutRoot ->
-                    viewLayoutEditorNode model [] layoutRoot
+                    viewLayoutEditorNode model comp [] layoutRoot
             ]
         , div [ classes [ Tw.mt s3, Tw.pt s3 ], Ui.divider ]
             [ viewUsageContract model comp displayTokens ]
@@ -363,6 +423,12 @@ commonStateNames : List String
 commonStateNames =
     [ "default", "hover", "focus", "active", "disabled", "loading", "selected", "error" ]
 
+{-| Common slot names for placing custom content.
+-}
+commonSlotNames : List String
+commonSlotNames =
+    [ "content", "header", "body", "footer", "icon-left", "icon-right", "media", "actions" ]
+
 
 {-| Variants, states and slots are all "a list of names you can add to".
 `suggestions` seeds a `<datalist>` for the draft input; pass `[]` (as Slots
@@ -373,6 +439,9 @@ viewNameList label helpTopic suggestions names draft onDraftChange onAdd onRemov
     let
         datalistId =
             "suggestions-" ++ label
+            
+        availableSuggestions =
+            List.filter (\s -> not (List.member s names)) suggestions
     in
     div [ classes [ Tw.mb s3 ] ]
         [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.mb s1 ] ]
@@ -411,12 +480,12 @@ viewNameList label helpTopic suggestions names draft onDraftChange onAdd onRemov
                     )
                     names
                 )
-        , if List.isEmpty suggestions then
+        , if List.isEmpty availableSuggestions then
             text ""
 
           else
             Html.datalist [ Html.Attributes.id datalistId ]
-                (List.map (\n -> Html.option [ value n ] []) suggestions)
+                (List.map (\n -> Html.option [ value n ] []) availableSuggestions)
         , div [ classes [ Tw.flex, Tw.gap s2 ] ]
             [ Html.input
                 ([ Ui.textInput
@@ -425,7 +494,7 @@ viewNameList label helpTopic suggestions names draft onDraftChange onAdd onRemov
                  , Html.Attributes.placeholder ("Add a " ++ String.toLower (String.dropRight 1 label))
                  , Html.Attributes.attribute "aria-label" ("New " ++ String.toLower (String.dropRight 1 label))
                  ]
-                    ++ (if List.isEmpty suggestions then
+                    ++ (if List.isEmpty availableSuggestions then
                             []
 
                         else
@@ -443,12 +512,34 @@ viewComponentPreview model comp displayTokens =
     div [ Ui.panelSunken, classes [ Tw.flex_1 ] ]
         [ div [ classes [ Tw.flex, Tw.justify_between, Tw.items_center, Tw.gap s2, Tw.mb s3 ] ]
             [ h3 [ Ui.sectionTitle ] [ text "Preview" ]
-            , Ui.themePicker (List.map .name model.themes) model.activeThemeName SelectTheme
+            , div [ classes [ Tw.flex, Tw.gap s2 ] ]
+                [ if List.isEmpty comp.variants then
+                    text ""
+                  else
+                    Html.select
+                        [ onInput (\v -> UpdatePreviewComponentVariant (if v == "" then Nothing else Just v))
+                        , classes [ Tw.p s1, Tw.border, Tw.border_color (slate s300), Tw.rounded_sm, Tw.text_sm ]
+                        ]
+                        (Html.option [ value "" ] [ text "Base Variant" ]
+                            :: List.map (\v -> Html.option [ value v, Html.Attributes.selected (model.previewComponentVariant == Just v) ] [ text v ]) comp.variants
+                        )
+                , if List.isEmpty comp.states then
+                    text ""
+                  else
+                    Html.select
+                        [ onInput (\v -> UpdatePreviewComponentState (if v == "" then Nothing else Just v))
+                        , classes [ Tw.p s1, Tw.border, Tw.border_color (slate s300), Tw.rounded_sm, Tw.text_sm ]
+                        ]
+                        (Html.option [ value "" ] [ text "Base State" ]
+                            :: List.map (\v -> Html.option [ value v, Html.Attributes.selected (model.previewComponentState == Just v) ] [ text v ]) comp.states
+                        )
+                , Ui.themePicker (List.map .name model.themes) model.activeThemeName SelectTheme
+                ]
             ]
         , case comp.layout of
             Just l ->
                 div [ Ui.previewSurface, classes [ Tw.min_h s24 ] ]
-                    [ Renderer.render displayTokens l ]
+                    [ Renderer.renderLayoutWithSlots Dict.empty Dict.empty [] displayTokens Dict.empty model.previewComponentVariant model.previewComponentState l ]
 
             Nothing ->
                 div [ Ui.muted ] [ text "Nothing to preview yet." ]

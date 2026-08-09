@@ -136,6 +136,19 @@ updateLayoutNode path updateFn layout =
                             children
                         )
 
+                Components.When props children ->
+                    Components.When props
+                        (List.indexedMap
+                            (\i c ->
+                                if i == index then
+                                    updateLayoutNode rest updateFn c
+
+                                else
+                                    c
+                            )
+                            children
+                        )
+
                 Components.Element _ _ ->
                     layout
 
@@ -280,7 +293,7 @@ update msg model =
                     )
 
         Logout ->
-            ( { model | token = Nothing, user = Nothing, error = Nothing, projects = Nothing, projectsPage = 1, projectSearch = "", selectedProject = Nothing, repositoryTree = Nothing, commitStatus = Nothing, originalTokens = Nothing, tokensFileExists = False, tokens = Nothing, themes = [], existingThemes = [], existingComponents = [], existingScreens = [], activeThemeName = Nothing, newThemeName = "", newTokenPath = "", newTokenType = "color", newTokenValue = "", tokenSearch = "", tokenTypeFilter = "", tokenOverriddenOnly = False, tokenChangedOnly = False, activeTab = TokenStudio, components = Nothing, selectedComponentName = Nothing, newComponentName = "", newComponentVariant = "", newComponentSlot = "", newComponentState = "", screens = Nothing, selectedScreenName = Nothing, newScreenName = "", contracts = Nothing, existingContracts = [], newContractRuleType = "allowedTokenGroups", newContractRuleFields = Dict.empty }
+            ( { model | token = Nothing, user = Nothing, error = Nothing, projects = Nothing, projectsPage = 1, projectSearch = "", selectedProject = Nothing, repositoryTree = Nothing, commitStatus = Nothing, originalTokens = Nothing, tokensFileExists = False, tokens = Nothing, themes = [], existingThemes = [], existingComponents = [], existingScreens = [], activeThemeName = Nothing, newThemeName = "", newTokenPath = "", newTokenType = "color", newTokenValue = "", tokenSearch = "", tokenTypeFilter = "", tokenOverriddenOnly = False, tokenChangedOnly = False, activeTab = TokenStudio, components = Nothing, selectedComponentName = Nothing, newComponentName = "", newComponentVariant = "", newComponentSlot = "", newComponentState = "", previewComponentVariant = Nothing, previewComponentState = Nothing, screens = Nothing, selectedScreenName = Nothing, newScreenName = "", contracts = Nothing, existingContracts = [], newContractRuleType = "allowedTokenGroups", newContractRuleFields = Dict.empty }
             , Ports.clearToken ()
             )
 
@@ -897,6 +910,9 @@ update msg model =
                                                                 Components.Element p content ->
                                                                     Components.Element { p | styles = Dict.insert prop value p.styles } content
 
+                                                                Components.When p children ->
+                                                                    Components.When p children
+
                                                         )
                                                         l
                                                     )
@@ -938,6 +954,9 @@ update msg model =
 
                                                                 Components.Element p content ->
                                                                     Components.Element { p | styles = Dict.remove prop p.styles } content
+
+                                                                Components.When p children ->
+                                                                    Components.When p children
 
                                                         )
                                                         l
@@ -984,6 +1003,53 @@ update msg model =
                                                                 Components.Grid p children ->
                                                                     Components.Grid p (children ++ [ Components.Element { isSlot = False, styles = Dict.empty } content ])
 
+                                                                Components.When p children ->
+                                                                    Components.When p (children ++ [ Components.Element { isSlot = False, styles = Dict.empty } content ])
+
+                                                                _ ->
+                                                                    node
+                                                        )
+                                                        l
+                                                    )
+                                        }
+
+                                    Nothing ->
+                                        c
+
+                            else
+                                c
+                    in
+                    ( { model | components = Just (List.map updateComponent currentComponents) }, Cmd.none )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        AddLayoutSlot path ->
+            case model.selectedComponentName of
+                Just name ->
+                    let
+                        currentComponents =
+                            model.components |> Maybe.withDefault []
+
+                        updateComponent c =
+                            if c.name == name then
+                                case c.layout of
+                                    Just l ->
+                                        { c
+                                            | layout =
+                                                Just
+                                                    (updateLayoutNode path
+                                                        (\node ->
+                                                            case node of
+                                                                Components.Stack p children ->
+                                                                    Components.Stack p (children ++ [ Components.Element { isSlot = True, styles = Dict.empty } "" ])
+
+                                                                Components.Grid p children ->
+                                                                    Components.Grid p (children ++ [ Components.Element { isSlot = True, styles = Dict.empty } "" ])
+
+                                                                Components.When p children ->
+                                                                    Components.When p (children ++ [ Components.Element { isSlot = True, styles = Dict.empty } "" ])
+
                                                                 _ ->
                                                                     node
                                                         )
@@ -1025,6 +1091,9 @@ update msg model =
                                                                 Components.Grid p children ->
                                                                     Components.Grid p (children ++ [ Components.Stack { direction = "column", styles = Dict.empty } [] ])
 
+                                                                Components.When p children ->
+                                                                    Components.When p (children ++ [ Components.Stack { direction = "column", styles = Dict.empty } [] ])
+
                                                                 _ ->
                                                                     node
                                                         )
@@ -1065,6 +1134,53 @@ update msg model =
 
                                                                 Components.Grid p children ->
                                                                     Components.Grid p (children ++ [ Components.Grid { columns = 2, styles = Dict.empty } [] ])
+
+                                                                Components.When p children ->
+                                                                    Components.When p (children ++ [ Components.Grid { columns = 2, styles = Dict.empty } [] ])
+
+                                                                _ ->
+                                                                    node
+                                                        )
+                                                        l
+                                                    )
+                                        }
+
+                                    Nothing ->
+                                        c
+
+                            else
+                                c
+                    in
+                    ( { model | components = Just (List.map updateComponent currentComponents) }, Cmd.none )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        AddLayoutWhen path ->
+            case model.selectedComponentName of
+                Just name ->
+                    let
+                        currentComponents =
+                            model.components |> Maybe.withDefault []
+
+                        updateComponent c =
+                            if c.name == name then
+                                case c.layout of
+                                    Just l ->
+                                        { c
+                                            | layout =
+                                                Just
+                                                    (updateLayoutNode path
+                                                        (\node ->
+                                                            case node of
+                                                                Components.Stack p children ->
+                                                                    Components.Stack p (children ++ [ Components.When { variant = Nothing, state = Nothing } [] ])
+
+                                                                Components.Grid p children ->
+                                                                    Components.Grid p (children ++ [ Components.When { variant = Nothing, state = Nothing } [] ])
+
+                                                                Components.When p children ->
+                                                                    Components.When p (children ++ [ Components.When { variant = Nothing, state = Nothing } [] ])
 
                                                                 _ ->
                                                                     node
@@ -1121,6 +1237,96 @@ update msg model =
 
                 Nothing ->
                     ( model, Cmd.none )
+
+        ToggleLayoutNodeIsSlot path isSlot ->
+            case model.selectedComponentName of
+                Just name ->
+                    let
+                        currentComponents =
+                            model.components |> Maybe.withDefault []
+
+                        updateComponent c =
+                            if c.name == name then
+                                case c.layout of
+                                    Just l ->
+                                        { c
+                                            | layout =
+                                                Just
+                                                    (updateLayoutNode path
+                                                        (\node ->
+                                                            case node of
+                                                                Components.Element p content ->
+                                                                    Components.Element { p | isSlot = isSlot } (if isSlot then "" else content)
+
+                                                                _ ->
+                                                                    node
+                                                        )
+                                                        l
+                                                    )
+                                        }
+
+                                    Nothing ->
+                                        c
+
+                            else
+                                c
+                    in
+                    ( { model | components = Just (List.map updateComponent currentComponents) }, Cmd.none )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        UpdateLayoutWhenCondition path field value ->
+            case model.selectedComponentName of
+                Just name ->
+                    let
+                        currentComponents =
+                            model.components |> Maybe.withDefault []
+
+                        updateComponent c =
+                            if c.name == name then
+                                case c.layout of
+                                    Just l ->
+                                        { c
+                                            | layout =
+                                                Just
+                                                    (updateLayoutNode path
+                                                        (\node ->
+                                                            case node of
+                                                                Components.When p children ->
+                                                                    let
+                                                                        newValue = if value == "" then Nothing else Just value
+                                                                    in
+                                                                    if field == "variant" then
+                                                                        Components.When { p | variant = newValue } children
+                                                                    else if field == "state" then
+                                                                        Components.When { p | state = newValue } children
+                                                                    else
+                                                                        node
+
+                                                                _ ->
+                                                                    node
+                                                        )
+                                                        l
+                                                    )
+                                        }
+
+                                    Nothing ->
+                                        c
+
+                            else
+                                c
+                    in
+                    ( { model | components = Just (List.map updateComponent currentComponents) }, Cmd.none )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        UpdatePreviewComponentVariant variant ->
+            ( { model | previewComponentVariant = variant }, Cmd.none )
+            
+        UpdatePreviewComponentState state ->
+            ( { model | previewComponentState = state }, Cmd.none )
 
         DeleteLayoutNode path ->
             case model.selectedComponentName of
