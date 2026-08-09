@@ -16,10 +16,10 @@ import Json.Decode as Decode
 import Json.Encode as Encode
 import Ports
 import Screens exposing (ScreenNode(..))
+import Templates
 import Themes
 import Tokens
 import TokenScale
-import Templates
 import Types exposing (..)
 import Url
 
