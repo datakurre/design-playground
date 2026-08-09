@@ -9,12 +9,12 @@ import Html exposing (Html, button, div, h3, h4, li, text, ul)
 import Html.Attributes exposing (value)
 import Html.Events exposing (onClick, onInput)
 import Renderer
-import Set
 import Tailwind as Tw exposing (classes)
 import Tailwind.Breakpoints exposing (hover)
 import Tailwind.Theme exposing (red, s0, s0_dot_5, s1, s100, s2, s200, s24, s3, s4, s40, s50, s6, s64, s700, s900, slate)
 import Templates
 import Themes
+import TokenBrowse
 import Tokens
 import Types exposing (..)
 import Ui exposing (PillTone(..))
@@ -326,7 +326,7 @@ viewComponentEditor model comp displayTokens =
             , Html.datalist [ Html.Attributes.id "css-properties-list" ]
                 (List.map (\prop -> Html.option [ value prop ] []) CssProperties.allProperties)
             , Html.datalist [ Html.Attributes.id "token-groups-list" ]
-                (List.map (\p -> Html.option [ value p ] []) (tokenGroupPaths displayTokens))
+                (List.map (\p -> Html.option [ value p ] []) (TokenBrowse.groupPaths displayTokens))
             , case comp.layout of
                 Nothing ->
                     div []
@@ -438,26 +438,6 @@ viewComponentPreview model comp displayTokens =
 resolveDisplayTokens : Model -> List Tokens.FlatToken
 resolveDisplayTokens model =
     Themes.resolve (Maybe.withDefault [] model.tokens) model.themes model.activeThemeName
-
-
-{-| The unique group prefixes of every token path, e.g. `color.primary.500`
-contributes `color` and `color.primary` (but not the full leaf path). Used to
-suggest values for contract rule fields ("groups", "scale") that name a group
-rather than a specific token.
--}
-tokenGroupPaths : List Tokens.FlatToken -> List String
-tokenGroupPaths tokens =
-    tokens
-        |> List.concatMap (\( path, _ ) -> properPrefixes path)
-        |> List.map (String.join ".")
-        |> Set.fromList
-        |> Set.toList
-
-
-properPrefixes : List String -> List (List String)
-properPrefixes path =
-    List.range 1 (List.length path - 1)
-        |> List.map (\n -> List.take n path)
 
 
 viewUsageContract : Model -> Components.Component -> List Tokens.FlatToken -> Html Msg

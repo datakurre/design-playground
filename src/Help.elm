@@ -1,7 +1,7 @@
 module Help exposing
     ( Topic
     , forTab
-    , tokens, themes, newToken
+    , tokens, themes, tokenFilters, newToken
     , components, componentLayout, usageContract, componentEditor
     , screens, addComponentToScreen, addScreenToScreen, screenEditor
     , gitWorkflows, branch, unsavedChanges, mergeRequests, contractCheck
@@ -28,7 +28,7 @@ broken once.
 
 @docs forTab
 
-@docs tokens, themes, newToken
+@docs tokens, themes, tokenFilters, newToken
 
 @docs components, componentLayout, usageContract, componentEditor
 
@@ -104,6 +104,20 @@ themes =
         [ "A theme is a set of overrides layered on top of the base tokens, so a dark variant only has to state what differs rather than copy the whole list."
         , "With a theme selected, editing a token changes that theme's override and saves to its own file. Every preview in the app renders through whichever theme is active here."
         , "You can only override tokens that already exist: switch back to the base theme to add a new one."
+        ]
+    }
+
+
+{-| -}
+tokenFilters : Topic
+tokenFilters =
+    { id = "token-filters"
+    , title = "Finding a token"
+    , lede = Nothing
+    , body =
+        [ "Unfiltered, tokens are grouped by their dotted path: open color to find brand, open brand to find its steps. The number beside a group is how many tokens are under it."
+        , "Searching replaces the groups with a flat list of everything that matches, in the path or in the value — so \"brand\" also finds whatever is aliased to {color.brand.500}, and a hex finds whatever is set to it."
+        , "\"Overridden only\" appears with a theme selected and narrows to what that theme changes. \"Unsaved changes only\" appears on the base theme and narrows to what differs from the last commit."
         ]
     }
 
@@ -311,6 +325,7 @@ all : List Topic
 all =
     [ tokens
     , themes
+    , tokenFilters
     , newToken
     , components
     , componentLayout

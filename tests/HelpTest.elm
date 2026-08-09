@@ -14,6 +14,7 @@ suite =
                 Expect.equal
                     [ "tokens"
                     , "themes"
+                    , "token-filters"
                     , "new-token"
                     , "components"
                     , "component-layout"

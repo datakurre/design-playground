@@ -254,7 +254,7 @@ update msg model =
                     )
 
         Logout ->
-            ( { model | token = Nothing, user = Nothing, error = Nothing, projects = Nothing, projectsPage = 1, projectSearch = "", selectedProject = Nothing, repositoryTree = Nothing, commitStatus = Nothing, originalTokens = Nothing, tokensFileExists = False, tokens = Nothing, themes = [], existingThemes = [], existingComponents = [], existingScreens = [], activeThemeName = Nothing, newThemeName = "", newTokenPath = "", newTokenType = "color", newTokenValue = "", activeTab = TokenStudio, components = Nothing, selectedComponentName = Nothing, newComponentName = "", newComponentVariant = "", newComponentSlot = "", newComponentState = "", screens = Nothing, selectedScreenName = Nothing, newScreenName = "", contracts = Nothing, existingContracts = [], newContractRuleType = "allowedTokenGroups", newContractRuleFields = Dict.empty }
+            ( { model | token = Nothing, user = Nothing, error = Nothing, projects = Nothing, projectsPage = 1, projectSearch = "", selectedProject = Nothing, repositoryTree = Nothing, commitStatus = Nothing, originalTokens = Nothing, tokensFileExists = False, tokens = Nothing, themes = [], existingThemes = [], existingComponents = [], existingScreens = [], activeThemeName = Nothing, newThemeName = "", newTokenPath = "", newTokenType = "color", newTokenValue = "", tokenSearch = "", tokenTypeFilter = "", tokenOverriddenOnly = False, tokenChangedOnly = False, activeTab = TokenStudio, components = Nothing, selectedComponentName = Nothing, newComponentName = "", newComponentVariant = "", newComponentSlot = "", newComponentState = "", screens = Nothing, selectedScreenName = Nothing, newScreenName = "", contracts = Nothing, existingContracts = [], newContractRuleType = "allowedTokenGroups", newContractRuleFields = Dict.empty }
             , Ports.clearToken ()
             )
 
@@ -437,7 +437,11 @@ update msg model =
                     ( model, Cmd.none )
 
         SelectTheme themeName ->
-            ( { model | activeThemeName = themeName }, Cmd.none )
+            -- Each of these two filters is only meaningful in one of the two
+            -- modes, and the checkbox for it is only rendered there, so leaving
+            -- one ticked across a switch would narrow the list with no visible
+            -- control to un-narrow it.
+            ( { model | activeThemeName = themeName, tokenOverriddenOnly = False, tokenChangedOnly = False }, Cmd.none )
 
         UpdateNewThemeName name ->
             ( { model | newThemeName = name, commitStatus = Naming.clearFailure model.commitStatus }, Cmd.none )
@@ -525,6 +529,21 @@ update msg model =
 
                 Nothing ->
                     ( model, Cmd.none )
+
+        UpdateTokenSearch search ->
+            ( { model | tokenSearch = search }, Cmd.none )
+
+        UpdateTokenTypeFilter type_ ->
+            ( { model | tokenTypeFilter = type_ }, Cmd.none )
+
+        ToggleTokenOverriddenOnly ->
+            ( { model | tokenOverriddenOnly = not model.tokenOverriddenOnly }, Cmd.none )
+
+        ToggleTokenChangedOnly ->
+            ( { model | tokenChangedOnly = not model.tokenChangedOnly }, Cmd.none )
+
+        ClearTokenFilters ->
+            ( { model | tokenSearch = "", tokenTypeFilter = "", tokenOverriddenOnly = False, tokenChangedOnly = False }, Cmd.none )
 
         SaveTokens ->
             case ( model.token, model.selectedProject ) of

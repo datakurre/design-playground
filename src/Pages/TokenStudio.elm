@@ -1,14 +1,26 @@
-module Pages.TokenStudio exposing (viewTokenStudio)
+module Pages.TokenStudio exposing (RowContext, viewTokenList, viewTokenStudio)
+
+{-| The Tokens tab.
+
+`viewTokenList` and the `RowContext` it takes are exposed for `TokenStudioTest`.
+Everything that takes a `Model` is unreachable from a test — it would need a
+`Nav.Key` — so the list, which is the part with behaviour worth locking down,
+takes what it actually needs instead. `Renderer.renderScreenNode` is exposed for
+the same reason.
+
+-}
 
 import Dict
 import Help
-import Html exposing (Html, button, div, h3, li, span, text, ul)
+import Html exposing (Html, button, div, h3, li, span, text)
 import Html.Attributes exposing (style, value)
-import Html.Events exposing (onClick, onInput)
+import Html.Events exposing (onCheck, onClick, onInput)
+import Html.Keyed
 import Set
 import Tailwind as Tw exposing (classes)
-import Tailwind.Theme exposing (amber, s0, s0_dot_5, s1, s100, s2, s24, s300, s32, s4, s48, s6, s8, s800, slate)
+import Tailwind.Theme exposing (amber, s0, s0_dot_5, s1, s100, s2, s200, s24, s3, s300, s32, s4, s48, s500, s6, s64, s700, s8, s800, slate)
 import Themes exposing (Theme)
+import TokenBrowse exposing (Node(..))
 import Tokens
 import Templates
 import Types exposing (..)
@@ -23,39 +35,51 @@ viewTokenStudio model =
 
         Just baseTokens ->
             let
-                -- Determine which tokens to show based on active theme
-                displayTokens =
-                    case model.activeThemeName of
-                        Nothing ->
-                            baseTokens
-
-                        Just activeName ->
-                            let
-                                activeTheme =
-                                    List.filter (\t -> t.name == activeName) model.themes |> List.head
-                            in
-                            case activeTheme of
-                                Just theme ->
-                                    Themes.applyTheme baseTokens theme
-
-                                Nothing ->
-                                    baseTokens
-
                 activeThemeObj =
                     model.activeThemeName |> Maybe.andThen (\name -> List.filter (\t -> t.name == name) model.themes |> List.head)
+
+                displayTokens =
+                    Themes.resolve baseTokens model.themes model.activeThemeName
+
+                -- The two questions a token can't answer about itself. `changed`
+                -- compares the base list, because `originalTokens` is the last
+                -- committed *base* file — themes are never snapshotted, which is
+                -- why that filter is offered on the base theme only.
+                marks =
+                    { overridden = TokenBrowse.pathSet (Maybe.withDefault [] (Maybe.map .overrides activeThemeObj))
+                    , changed = TokenBrowse.changedPaths (Maybe.withDefault [] model.originalTokens) baseTokens
+                    }
+
+                filters =
+                    { search = model.tokenSearch
+                    , type_ = model.tokenTypeFilter
+                    , overriddenOnly = model.tokenOverriddenOnly
+                    , changedOnly = model.tokenChangedOnly
+                    }
+
+                visibleTokens =
+                    TokenBrowse.apply marks filters displayTokens
+
+                rowContext =
+                    { newPartName = model.newCompositePropertyName
+                    , activeTheme = activeThemeObj
+                    , displayTokens = displayTokens
+                    }
             in
             div [ Ui.panel ]
                 [ viewToolbar model
                 , Html.datalist [ Html.Attributes.id "token-alias-list" ]
                     (List.map (\( p, _ ) -> Html.option [ value ("{" ++ String.join "." p ++ "}") ] []) displayTokens)
                 , Html.datalist [ Html.Attributes.id "token-groups-list" ]
-                    (List.map (\p -> Html.option [ value p ] []) (tokenGroupPaths displayTokens))
+                    (List.map (\p -> Html.option [ value p ] []) (TokenBrowse.groupPaths displayTokens))
                 , if List.isEmpty displayTokens then
                     viewEmptyState model
 
                   else
-                    ul [ classes [ Tw.list_none, Tw.p s0, Tw.mt s4 ] ]
-                        (List.map (\( path, token ) -> viewTokenEditor model path token activeThemeObj displayTokens) displayTokens)
+                    div []
+                        [ viewFilters model filters (List.length visibleTokens) (List.length displayTokens)
+                        , viewTokenList rowContext filters marks visibleTokens
+                        ]
                 , if model.activeThemeName == Nothing then
                     viewNewToken model
 
@@ -133,6 +157,192 @@ viewEmptyState model =
         ]
 
 
+{-| What a row needs, which is much less than the whole `Model`. Passing the
+model made every row look like it depended on all of it.
+-}
+type alias RowContext =
+    { newPartName : String
+    , activeTheme : Maybe Theme
+    , displayTokens : List Tokens.FlatToken
+    }
+
+
+{-| The row of controls that narrows the list. A design system runs to hundreds
+of tokens, and until this existed the only way to reach one was to scroll.
+-}
+viewFilters : Model -> TokenBrowse.Filters -> Int -> Int -> Html Msg
+viewFilters model filters shown total =
+    div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.flex_wrap, Tw.mt s4 ] ]
+        [ Html.input
+            [ Ui.textInput
+            , Html.Attributes.type_ "search"
+            , value model.tokenSearch
+            , onInput UpdateTokenSearch
+            , Html.Attributes.placeholder "Find a token"
+            , Html.Attributes.attribute "aria-label" "Find a token"
+            , Html.Attributes.spellcheck False
+            , classes [ Tw.w s64 ]
+            ]
+            []
+        , Html.select
+            [ Ui.selectInput
+            , onInput UpdateTokenTypeFilter
+            , Html.Attributes.attribute "aria-label" "Filter by type"
+            ]
+            (List.map
+                (\( optionValue, label ) ->
+                    Html.option [ value optionValue, Html.Attributes.selected (model.tokenTypeFilter == optionValue) ]
+                        [ text label ]
+                )
+                [ ( "", "All types" ), ( "color", "Color" ), ( "dimension", "Dimension" ), ( "typography", "Typography" ) ]
+            )
+
+        -- Each of these only has an answer in one of the two modes, so only one
+        -- of them is ever on screen. See `Model.tokenChangedOnly`.
+        , if model.activeThemeName == Nothing then
+            viewFilterCheckbox "Unsaved changes only" model.tokenChangedOnly ToggleTokenChangedOnly
+
+          else
+            viewFilterCheckbox "Overridden only" model.tokenOverriddenOnly ToggleTokenOverriddenOnly
+        , Ui.contextHelp Help.tokenFilters
+        , if TokenBrowse.filtersActive filters then
+            span [ Ui.mutedSmall ]
+                [ text (String.fromInt shown ++ " of " ++ String.fromInt total ++ " tokens") ]
+
+          else
+            text ""
+        ]
+
+
+viewFilterCheckbox : String -> Bool -> Msg -> Html Msg
+viewFilterCheckbox label isOn toMsg =
+    Html.label
+        [ classes
+            [ Tw.inline_flex
+            , Tw.items_center
+            , Tw.gap s1
+            , Tw.text_xs
+            , Tw.text_color (slate s500)
+            , Tw.cursor_pointer
+            ]
+        ]
+        [ Html.input
+            [ Html.Attributes.type_ "checkbox"
+            , Html.Attributes.checked isOn
+            , onCheck (\_ -> toMsg)
+            , classes [ Tw.cursor_pointer ]
+            ]
+            []
+        , text label
+        ]
+
+
+{-| Grouped while you're browsing, flat while you're searching.
+
+Filtering deliberately drops the groups rather than expanding the ones that
+contain a match: a `<details>` is open or closed in the DOM, so once someone has
+toggled one by hand the vdom's `open` attribute no longer moves it, and a tree
+that only *sometimes* expands to your match is worse than no tree.
+
+-}
+viewTokenList : RowContext -> TokenBrowse.Filters -> TokenBrowse.Marks -> List Tokens.FlatToken -> Html Msg
+viewTokenList context filters marks visibleTokens =
+    if TokenBrowse.filtersActive filters then
+        if List.isEmpty visibleTokens then
+            viewNoMatches filters marks
+
+        else
+            Html.Keyed.ul [ classes [ Tw.list_none, Tw.p s0, Tw.mt s2 ] ]
+                (List.map (viewLeaf context) visibleTokens)
+
+    else
+        Html.Keyed.ul [ classes [ Tw.list_none, Tw.p s0, Tw.mt s2 ] ]
+            (List.map (viewNode context (List.length visibleTokens)) (TokenBrowse.tree visibleTokens))
+
+
+{-| Keyed, because a group's open/closed state lives in the DOM rather than in
+the model: without keys, deleting a token shifts the list and the wrong group
+stays open.
+-}
+viewNode : RowContext -> Int -> Node -> ( String, Html Msg )
+viewNode context total node =
+    case node of
+        Leaf token ->
+            viewLeaf context token
+
+        Group group ->
+            ( "group:" ++ String.join "." group.path
+            , li []
+                [ Html.details
+                    (if total <= smallEnoughToShowInFull then
+                        [ Html.Attributes.attribute "open" "" ]
+
+                     else
+                        []
+                    )
+                    [ Html.summary
+                        [ classes
+                            [ Tw.flex
+                            , Tw.items_center
+                            , Tw.gap s2
+                            , Tw.py s2
+                            , Tw.cursor_pointer
+                            , Tw.select_none
+                            , Tw.font_mono
+                            , Tw.text_xs
+                            , Tw.font_medium
+                            , Tw.text_color (slate s700)
+                            ]
+                        ]
+                        [ text group.label
+                        , span [ Ui.mutedSmall ] [ text ("(" ++ String.fromInt group.count ++ ")") ]
+                        ]
+                    , Html.Keyed.ul
+                        [ classes
+                            [ Tw.list_none
+                            , Tw.p s0
+                            , Tw.pl s3
+                            , Tw.ml s2
+                            , Tw.border_l
+                            , Tw.border_color (slate s200)
+                            ]
+                        ]
+                        (List.map (viewNode context total) group.children)
+                    ]
+                ]
+            )
+
+
+viewLeaf : RowContext -> Tokens.FlatToken -> ( String, Html Msg )
+viewLeaf context ( path, token ) =
+    ( String.join "." path, viewTokenEditor context path token )
+
+
+{-| A list that fits on screen shouldn't be hidden behind folders; a list that
+doesn't should open with the shape of the system rather than a wall of rows.
+-}
+smallEnoughToShowInFull : Int
+smallEnoughToShowInFull =
+    12
+
+
+viewNoMatches : TokenBrowse.Filters -> TokenBrowse.Marks -> Html Msg
+viewNoMatches filters marks =
+    div [ classes [ Tw.py s6, Tw.text_center ] ]
+        [ div [ Ui.muted ]
+            [ text
+                (if filters.changedOnly && Set.isEmpty marks.changed then
+                    "Nothing has changed since the last commit."
+
+                 else
+                    "No token matches what you're filtering by."
+                )
+            ]
+        , div [ classes [ Tw.mt s2 ] ]
+            [ button [ Ui.btnNeutral, onClick ClearTokenFilters ] [ text "Clear filters" ] ]
+        ]
+
+
 viewNewToken : Model -> Html Msg
 viewNewToken model =
     div [ classes [ Tw.mt s6, Tw.pt s4 ], Ui.divider ]
@@ -180,27 +390,6 @@ viewNewToken model =
         ]
 
 
-{-| The unique group prefixes of every token path, e.g. `color.primary.500`
-contributes `color` and `color.primary` (but not the full leaf path). Used to
-suggest consistent, nested names when creating a new token. Mirrors the
-identically-named helper in `Pages.ComponentRegistry`, which needs the same
-computation for its contract-rule suggestions.
--}
-tokenGroupPaths : List Tokens.FlatToken -> List String
-tokenGroupPaths tokens =
-    tokens
-        |> List.concatMap (\( path, _ ) -> properPrefixes path)
-        |> List.map (String.join ".")
-        |> Set.fromList
-        |> Set.toList
-
-
-properPrefixes : List String -> List (List String)
-properPrefixes path =
-    List.range 1 (List.length path - 1)
-        |> List.map (\n -> List.take n path)
-
-
 {-| The native colour input, sized to match the text inputs beside it.
 -}
 viewColorWell : String -> (String -> Msg) -> Html Msg
@@ -229,14 +418,14 @@ viewColorWell currentValue toMsg =
         []
 
 
-viewTokenEditor : Model -> Tokens.TokenPath -> Tokens.DesignToken -> Maybe Theme -> List Tokens.FlatToken -> Html Msg
-viewTokenEditor model path token activeThemeObj displayTokens =
+viewTokenEditor : RowContext -> Tokens.TokenPath -> Tokens.DesignToken -> Html Msg
+viewTokenEditor context path token =
     let
         pathString =
             String.join "." path
 
         isOverridden =
-            case activeThemeObj of
+            case context.activeTheme of
                 Just theme ->
                     List.any (\( p, _ ) -> p == path) theme.overrides
 
@@ -247,7 +436,7 @@ viewTokenEditor model path token activeThemeObj displayTokens =
             if token.type_ == "color" then
                 case token.value of
                     Tokens.StringValue s ->
-                        case Tokens.resolveAliasValue displayTokens (Tokens.StringValue s) of
+                        case Tokens.resolveAliasValue context.displayTokens (Tokens.StringValue s) of
                             Tokens.StringValue r ->
                                 r
 
@@ -291,21 +480,13 @@ viewTokenEditor model path token activeThemeObj displayTokens =
 
                           else
                             text ""
-                        , Html.select
-                            [ Ui.selectInput
-                            , Html.Attributes.attribute "aria-label" ("Point " ++ pathString ++ " at another token")
-                            , onInput
-                                (\v ->
-                                    if v /= "" then
-                                        UpdateToken path ("{" ++ v ++ "}")
 
-                                    else
-                                        UpdateToken path s
-                                )
-                            ]
-                            (Html.option [ value "" ] [ text "Use another token..." ]
-                                :: List.map (\( p, _ ) -> Html.option [ value (String.join "." p) ] [ text (String.join "." p) ]) displayTokens
-                            )
+                        -- There used to be a "Use another token..." <select>
+                        -- here, listing every token, on every row: quadratic
+                        -- markup, and the single reason a few hundred tokens
+                        -- brought the tab to a stop. The value input beside it
+                        -- already offers the same `{path}` completions from
+                        -- `#token-alias-list`, which is built once.
                         ]
 
                 Tokens.CompositeValue _ ->
@@ -374,13 +555,13 @@ viewTokenEditor model path token activeThemeObj displayTokens =
                                     [ Ui.textInput
                                     , Html.Attributes.placeholder "Part name"
                                     , Html.Attributes.attribute "aria-label" "New part name"
-                                    , value model.newCompositePropertyName
+                                    , value context.newPartName
                                     , onInput UpdateNewCompositePropertyName
                                     , Html.Attributes.spellcheck False
                                     , classes [ Tw.w s32 ]
                                     ]
                                     []
-                                , button [ Ui.btnSmall, onClick (AddCompositeProperty path model.newCompositePropertyName) ]
+                                , button [ Ui.btnSmall, onClick (AddCompositeProperty path context.newPartName) ]
                                     [ text "Add part" ]
                                 ]
                            ]

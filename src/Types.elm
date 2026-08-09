@@ -73,6 +73,16 @@ type alias Model =
     , newTokenPath : String
     , newTokenType : String
     , newTokenValue : String
+
+    -- How the token list is narrowed. A real design system runs to hundreds of
+    -- tokens, so the list is grouped and searchable rather than flat; see
+    -- `TokenBrowse`. `tokenOverriddenOnly` only means anything with a theme
+    -- active, and `tokenChangedOnly` only on the base theme, since
+    -- `originalTokens` snapshots the base file and nothing else.
+    , tokenSearch : String
+    , tokenTypeFilter : String
+    , tokenOverriddenOnly : Bool
+    , tokenChangedOnly : Bool
     , newCompositePropertyName : String
     , newCompositePropertyValue : String
     , activeTab : Tab
@@ -158,6 +168,11 @@ type Msg
     | UpdateNewTokenValue String
     | CreateToken
     | ApplyStarterTokenScale
+    | UpdateTokenSearch String
+    | UpdateTokenTypeFilter String
+    | ToggleTokenOverriddenOnly
+    | ToggleTokenChangedOnly
+    | ClearTokenFilters
     | SwitchTab Tab
     | GotComponentsTree String (Result Http.Error (List TreeItem))
     | GotComponentFile String (Result Http.Error String)
