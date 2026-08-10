@@ -4,6 +4,8 @@ module Components exposing
     , StyleContext, StyleLayer, Styling, baseContext
     , matchesContext, resolveStyles, styleContexts
     , styling, mapContextStyles, mapOverrides
+    , updateLayoutNode, mapLayout
+    , forgetVariant, forgetState, forgetSlot
     , decoder, encoder, layoutDecoder, layoutEncoder
     )
 
@@ -30,6 +32,16 @@ changes the _look_.
 @docs StyleContext, StyleLayer, Styling, baseContext
 @docs matchesContext, resolveStyles, styleContexts
 @docs styling, mapContextStyles, mapOverrides
+
+
+# Editing the tree
+
+Tree surgery, addressed either by index path or across every node. These lived
+in `Update.elm` until it became clear that nothing in them needs a `Model` — and
+that being unreachable from a test was the only reason they had never had one.
+
+@docs updateLayoutNode, mapLayout
+@docs forgetVariant, forgetState, forgetSlot
 
 
 # Codecs
@@ -344,6 +356,125 @@ mapOverrides f layout =
 
         Just node ->
             setStyling { node | overrides = f node.overrides } layout
+
+
+{-| Apply a function to the one node at `path`, an index path from the root.
+
+An index that doesn't exist, or a path that descends into an `Element`, leaves
+the tree alone rather than failing — the editor addresses nodes by position, so
+a path can go stale between render and click.
+
+-}
+updateLayoutNode : List Int -> (Layout -> Layout) -> Layout -> Layout
+updateLayoutNode path updateFn layout =
+    case path of
+        [] ->
+            updateFn layout
+
+        index :: rest ->
+            let
+                descend =
+                    List.indexedMap
+                        (\i c ->
+                            if i == index then
+                                updateLayoutNode rest updateFn c
+
+                            else
+                                c
+                        )
+            in
+            case layout of
+                Stack props children_ ->
+                    Stack props (descend children_)
+
+                Grid props children_ ->
+                    Grid props (descend children_)
+
+                When props children_ ->
+                    When props (descend children_)
+
+                Element _ _ ->
+                    layout
+
+
+{-| Rewrites every node in the tree. `updateLayoutNode` addresses one node by
+path; this is for the edits that have to touch all of them, like forgetting a
+variant that no longer exists.
+-}
+mapLayout : (Layout -> Layout) -> Layout -> Layout
+mapLayout f layout =
+    case f layout of
+        Stack props children_ ->
+            Stack props (List.map (mapLayout f) children_)
+
+        Grid props children_ ->
+            Grid props (List.map (mapLayout f) children_)
+
+        When props children_ ->
+            When props (List.map (mapLayout f) children_)
+
+        (Element _ _) as element ->
+            element
+
+
+{-| A `When` that named the removed variant becomes one that doesn't ask about
+variants at all, rather than one that can never be true — and the styles written
+for that variant go with it. A layer left behind would be invisible in the
+editor and would come back to life the moment someone added the name again.
+
+Apply it to every node with `mapLayout`; on its own it only rewrites the node it
+is given.
+
+-}
+forgetVariant : String -> Layout -> Layout
+forgetVariant name layout =
+    (case layout of
+        When props children_ ->
+            if props.variant == Just name then
+                When { props | variant = Nothing } children_
+
+            else
+                layout
+
+        _ ->
+            layout
+    )
+        |> mapOverrides (List.filter (\layer -> layer.variant /= Just name))
+
+
+{-| As `forgetVariant`, for the other half of a condition.
+-}
+forgetState : String -> Layout -> Layout
+forgetState name layout =
+    (case layout of
+        When props children_ ->
+            if props.state == Just name then
+                When { props | state = Nothing } children_
+
+            else
+                layout
+
+        _ ->
+            layout
+    )
+        |> mapOverrides (List.filter (\layer -> layer.state /= Just name))
+
+
+{-| A placeholder for a slot that no longer exists goes back to being an ordinary
+empty text element — visible, and something you can type into.
+-}
+forgetSlot : String -> Layout -> Layout
+forgetSlot name layout =
+    case layout of
+        Element props content ->
+            if props.isSlot && content == name then
+                Element { props | isSlot = False } ""
+
+            else
+                layout
+
+        _ ->
+            layout
 
 
 {-| -}

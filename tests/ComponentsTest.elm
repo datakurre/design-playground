@@ -312,6 +312,149 @@ suite =
                         |> Components.mapContextStyles Components.baseContext (Dict.insert "color" "black")
                         |> Expect.equal (When { variant = Just "primary", state = Nothing } [ text "Go" ])
             ]
+        , describe "updateLayoutNode" <|
+            let
+                tree =
+                    Stack (stack "vertical")
+                        [ text "first"
+                        , Grid (grid 2) [ text "a", text "b" ]
+                        ]
+
+                shout =
+                    Components.mapLayout
+                        (\node ->
+                            case node of
+                                Element props content ->
+                                    Element props (String.toUpper content)
+
+                                _ ->
+                                    node
+                        )
+            in
+            [ test "the empty path rewrites the root itself" <|
+                \_ ->
+                    text "hi"
+                        |> Components.updateLayoutNode [] (always (text "bye"))
+                        |> Expect.equal (text "bye")
+            , test "descends an index path to one node and leaves its siblings alone" <|
+                \_ ->
+                    tree
+                        |> Components.updateLayoutNode [ 1, 0 ] (always (text "replaced"))
+                        |> Expect.equal
+                            (Stack (stack "vertical")
+                                [ text "first"
+                                , Grid (grid 2) [ text "replaced", text "b" ]
+                                ]
+                            )
+            , test "an index past the end of the children changes nothing" <|
+                \_ ->
+                    tree
+                        |> Components.updateLayoutNode [ 7 ] (always (text "replaced"))
+                        |> Expect.equal tree
+            , test "a negative index changes nothing" <|
+                \_ ->
+                    tree
+                        |> Components.updateLayoutNode [ -1 ] (always (text "replaced"))
+                        |> Expect.equal tree
+            , test "descending into an Element stops rather than rewriting it" <|
+                \_ ->
+                    -- The editor addresses nodes by position, so a path can go
+                    -- stale between render and click. Going nowhere is the
+                    -- right answer; rewriting the wrong node is not.
+                    tree
+                        |> Components.updateLayoutNode [ 0, 0 ] (always (text "replaced"))
+                        |> Expect.equal tree
+            , test "mapLayout rewrites every node, at every depth" <|
+                \_ ->
+                    shout tree
+                        |> Expect.equal
+                            (Stack (stack "vertical")
+                                [ text "FIRST"
+                                , Grid (grid 2) [ text "A", text "B" ]
+                                ]
+                            )
+            ]
+        , describe "forgetting a name the layout still points at"
+            [ test "forgetVariant drops the condition, not the subtree" <|
+                \_ ->
+                    When { variant = Just "primary", state = Nothing } [ text "Go" ]
+                        |> Components.forgetVariant "primary"
+                        |> Expect.equal
+                            (When { variant = Nothing, state = Nothing } [ text "Go" ])
+            , test "forgetVariant leaves a When about a different variant alone" <|
+                \_ ->
+                    When { variant = Just "secondary", state = Nothing } [ text "Go" ]
+                        |> Components.forgetVariant "primary"
+                        |> Expect.equal
+                            (When { variant = Just "secondary", state = Nothing } [ text "Go" ])
+            , test "forgetVariant drops that variant's style layer too" <|
+                \_ ->
+                    -- A layer left behind is invisible in the editor and comes
+                    -- back to life the moment someone re-adds the name.
+                    Element
+                        { isSlot = False
+                        , styles = Dict.empty
+                        , overrides =
+                            [ layer (Just "primary") Nothing [ ( "color", "white" ) ]
+                            , layer (Just "secondary") Nothing [ ( "color", "black" ) ]
+                            ]
+                        }
+                        "Go"
+                        |> Components.forgetVariant "primary"
+                        |> Expect.equal
+                            (Element
+                                { isSlot = False
+                                , styles = Dict.empty
+                                , overrides = [ layer (Just "secondary") Nothing [ ( "color", "black" ) ] ]
+                                }
+                                "Go"
+                            )
+            , test "forgetState drops the other half of the condition" <|
+                \_ ->
+                    When { variant = Just "primary", state = Just "hover" } [ text "Go" ]
+                        |> Components.forgetState "hover"
+                        |> Expect.equal
+                            (When { variant = Just "primary", state = Nothing } [ text "Go" ])
+            , test "forgetState drops that state's style layer" <|
+                \_ ->
+                    Element
+                        { isSlot = False
+                        , styles = Dict.empty
+                        , overrides = [ layer Nothing (Just "hover") [ ( "color", "white" ) ] ]
+                        }
+                        "Go"
+                        |> Components.forgetState "hover"
+                        |> Expect.equal
+                            (Element { isSlot = False, styles = Dict.empty, overrides = [] } "Go")
+            , test "forgetSlot turns the placeholder back into an empty element" <|
+                \_ ->
+                    Element { isSlot = True, styles = Dict.empty, overrides = [] } "icon"
+                        |> Components.forgetSlot "icon"
+                        |> Expect.equal
+                            (Element { isSlot = False, styles = Dict.empty, overrides = [] } "")
+            , test "forgetSlot leaves a placeholder for a different slot alone" <|
+                \_ ->
+                    Element { isSlot = True, styles = Dict.empty, overrides = [] } "header"
+                        |> Components.forgetSlot "icon"
+                        |> Expect.equal
+                            (Element { isSlot = True, styles = Dict.empty, overrides = [] } "header")
+            , test "forgetSlot leaves ordinary text that happens to match alone" <|
+                \_ ->
+                    text "icon"
+                        |> Components.forgetSlot "icon"
+                        |> Expect.equal (text "icon")
+            , test "through mapLayout it reaches a nested When" <|
+                \_ ->
+                    -- How Update actually calls it: the name can be pointed at
+                    -- from anywhere in the tree, not just the root.
+                    Stack (stack "vertical")
+                        [ When { variant = Just "primary", state = Nothing } [ text "Go" ] ]
+                        |> Components.mapLayout (Components.forgetVariant "primary")
+                        |> Expect.equal
+                            (Stack (stack "vertical")
+                                [ When { variant = Nothing, state = Nothing } [ text "Go" ] ]
+                            )
+            ]
         ]
 
 
@@ -327,6 +470,16 @@ layoutRoundTrips ( description, layout ) =
 text : String -> Layout
 text content =
     Element { isSlot = False, styles = Dict.empty, overrides = [] } content
+
+
+stack : String -> Components.StackProps
+stack direction =
+    { direction = direction, styles = Dict.empty, overrides = [] }
+
+
+grid : Int -> Components.GridProps
+grid columns =
+    { columns = columns, styles = Dict.empty, overrides = [] }
 
 
 layer : Maybe String -> Maybe String -> List ( String, String ) -> Components.StyleLayer

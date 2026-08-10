@@ -103,136 +103,9 @@ removeNameFromComponent config name model =
                 stripped =
                     config.set (List.filter (\n -> n /= name) (config.get c)) c
             in
-            { stripped | layout = Maybe.map (mapLayout (config.forget name)) stripped.layout }
+            { stripped | layout = Maybe.map (Components.mapLayout (config.forget name)) stripped.layout }
         )
         model
-
-
-{-| A `When` that named the removed variant becomes one that doesn't ask about
-variants at all, rather than one that can never be true — and the styles written
-for that variant go with it. A layer left behind would be invisible in the
-editor and would come back to life the moment someone added the name again.
--}
-forgetVariant : String -> Components.Layout -> Components.Layout
-forgetVariant name layout =
-    (case layout of
-        Components.When props children ->
-            if props.variant == Just name then
-                Components.When { props | variant = Nothing } children
-
-            else
-                layout
-
-        _ ->
-            layout
-    )
-        |> Components.mapOverrides (List.filter (\layer -> layer.variant /= Just name))
-
-
-{-| As `forgetVariant`, for the other half of a condition.
--}
-forgetState : String -> Components.Layout -> Components.Layout
-forgetState name layout =
-    (case layout of
-        Components.When props children ->
-            if props.state == Just name then
-                Components.When { props | state = Nothing } children
-
-            else
-                layout
-
-        _ ->
-            layout
-    )
-        |> Components.mapOverrides (List.filter (\layer -> layer.state /= Just name))
-
-
-{-| A placeholder for a slot that no longer exists goes back to being an ordinary
-empty text element — visible, and something you can type into.
--}
-forgetSlot : String -> Components.Layout -> Components.Layout
-forgetSlot name layout =
-    case layout of
-        Components.Element props content ->
-            if props.isSlot && content == name then
-                Components.Element { props | isSlot = False } ""
-
-            else
-                layout
-
-        _ ->
-            layout
-
-
-updateLayoutNode : List Int -> (Components.Layout -> Components.Layout) -> Components.Layout -> Components.Layout
-updateLayoutNode path updateFn layout =
-    case path of
-        [] ->
-            updateFn layout
-
-        index :: rest ->
-            case layout of
-                Components.Stack props children ->
-                    Components.Stack props
-                        (List.indexedMap
-                            (\i c ->
-                                if i == index then
-                                    updateLayoutNode rest updateFn c
-
-                                else
-                                    c
-                            )
-                            children
-                        )
-
-                Components.Grid props children ->
-                    Components.Grid props
-                        (List.indexedMap
-                            (\i c ->
-                                if i == index then
-                                    updateLayoutNode rest updateFn c
-
-                                else
-                                    c
-                            )
-                            children
-                        )
-
-                Components.When props children ->
-                    Components.When props
-                        (List.indexedMap
-                            (\i c ->
-                                if i == index then
-                                    updateLayoutNode rest updateFn c
-
-                                else
-                                    c
-                            )
-                            children
-                        )
-
-                Components.Element _ _ ->
-                    layout
-
-
-{-| Rewrites every node in the tree. `updateLayoutNode` addresses one node by
-path; this is for the edits that have to touch all of them, like forgetting a
-variant that no longer exists.
--}
-mapLayout : (Components.Layout -> Components.Layout) -> Components.Layout -> Components.Layout
-mapLayout f layout =
-    case f layout of
-        Components.Stack props children ->
-            Components.Stack props (List.map (mapLayout f) children)
-
-        Components.Grid props children ->
-            Components.Grid props (List.map (mapLayout f) children)
-
-        Components.When props children ->
-            Components.When props (List.map (mapLayout f) children)
-
-        (Components.Element _ _) as element ->
-            element
 
 
 {-| The component being edited, changed. Twelve messages used to open with the
@@ -265,7 +138,7 @@ with no layout yet has nothing to address, and is left alone.
 -}
 updateLayoutAt : List Int -> (Components.Layout -> Components.Layout) -> Model -> ( Model, Cmd Msg )
 updateLayoutAt path f model =
-    updateSelectedComponent (\c -> { c | layout = Maybe.map (updateLayoutNode path f) c.layout }) model
+    updateSelectedComponent (\c -> { c | layout = Maybe.map (Components.updateLayoutNode path f) c.layout }) model
 
 
 {-| Deleting the variant you were editing drops you back to the base, rather
@@ -1200,7 +1073,7 @@ update msg model =
             removeNameFromComponent
                 { get = .variants
                 , set = \names c -> { c | variants = names }
-                , forget = forgetVariant
+                , forget = Components.forgetVariant
                 }
                 name
                 model
@@ -1224,7 +1097,7 @@ update msg model =
             removeNameFromComponent
                 { get = .slots
                 , set = \names c -> { c | slots = names }
-                , forget = forgetSlot
+                , forget = Components.forgetSlot
                 }
                 name
                 model
@@ -1247,7 +1120,7 @@ update msg model =
             removeNameFromComponent
                 { get = .states
                 , set = \names c -> { c | states = names }
-                , forget = forgetState
+                , forget = Components.forgetState
                 }
                 name
                 model
