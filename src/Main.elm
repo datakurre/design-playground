@@ -3,7 +3,6 @@ module Main exposing (main)
 import Auth
 import Browser
 import Browser.Navigation as Nav
-import Dict
 import GitLab.Projects exposing (Project)
 import Help
 import Html exposing (Html, a, button, div, h2, img, input, li, span, text, ul)
@@ -51,73 +50,8 @@ init flags url key =
         urlCode =
             Auth.parseCode url
 
-        -- Determine the final token
-        finalToken =
-            flags.token
-
         initialModel =
-            { key = key
-            , url = url
-            , token = finalToken
-            , user = Nothing
-            , error = Nothing
-            , projects = Nothing
-            , projectsPage = 1
-            , projectSearch = ""
-            , selectedProject = Nothing
-            , repositoryTree = Nothing
-            , commitStatus = Nothing
-            , originalTokens = Nothing
-            , tokensFileExists = False
-            , tokens = Nothing
-            , themes = []
-            , existingThemes = []
-            , existingComponents = []
-            , existingScreens = []
-            , activeThemeName = Nothing
-            , newThemeName = ""
-            , newThemeTemplate = "empty"
-            , newTokenPath = ""
-            , newTokenType = "color"
-            , newTokenValue = ""
-            , tokenSearch = ""
-            , tokenTypeFilter = ""
-            , tokenOverriddenOnly = False
-            , tokenChangedOnly = False
-            , newCompositePropertyName = ""
-            , newCompositePropertyValue = ""
-            , activeTab = TokenStudio
-            , originalComponents = Nothing
-            , components = Nothing
-            , selectedComponentName = Nothing
-            , newComponentName = ""
-            , newComponentTemplate = "empty"
-            , newComponentVariant = ""
-            , newComponentSlot = ""
-            , newComponentState = ""
-            , previewComponentVariant = Nothing
-            , previewComponentState = Nothing
-            , newLayoutPropertyName = ""
-            , newLayoutPropertyValue = ""
-            , screens = Nothing
-            , selectedScreenName = Nothing
-            , newScreenName = ""
-            , newScreenTemplate = "empty"
-            , branches = Nothing
-            , currentBranch = Nothing
-            , newBranchName = ""
-            , commitMessage = ""
-            , stagedActions = []
-            , mrTitle = ""
-            , mergeRequests = Nothing
-            , exportTargets = [ "css", "tailwind" ]
-            , pkceChallenge = flags.pkceChallenge
-            , pkceVerifier = flags.pkceVerifier
-            , contracts = Nothing
-            , existingContracts = []
-            , newContractRuleType = "allowedTokenGroups"
-            , newContractRuleFields = Dict.empty
-            }
+            Types.initial key url flags
 
         cmds =
             case urlCode of
@@ -125,7 +59,7 @@ init flags url key =
                     [ Auth.exchangeToken code flags.pkceVerifier GotTokenResult ]
 
                 Nothing ->
-                    case finalToken of
+                    case flags.token of
                         Just t ->
                             [ Auth.fetchProfile t GotProfile ]
 

@@ -7,7 +7,6 @@ import Components exposing (Component)
 import Contracts
 import Dict exposing (Dict)
 import GitLab.Branches exposing (Branch)
-import GitLab.Commits
 import GitLab.Files exposing (TreeItem)
 import GitLab.MergeRequests exposing (MergeRequest)
 import GitLab.Projects exposing (Project)
@@ -105,8 +104,6 @@ type alias Model =
     , branches : Maybe (List Branch)
     , currentBranch : Maybe String
     , newBranchName : String
-    , commitMessage : String
-    , stagedActions : List GitLab.Commits.Action
     , mrTitle : String
     , mergeRequests : Maybe (List MergeRequest)
     , exportTargets : List String
@@ -116,6 +113,75 @@ type alias Model =
     , existingContracts : List String
     , newContractRuleType : String
     , newContractRuleFields : Dict String String
+    }
+
+
+{-| The model with nothing open. `Main.init` builds the app from it, and
+`Update.clearProjectState` rebuilds from it every time a repository is left,
+carrying over the handful of fields that outlive one — see the note there for
+why the list runs that way round.
+-}
+initial : Nav.Key -> Url -> Flags -> Model
+initial key url flags =
+    { key = key
+    , url = url
+    , token = flags.token
+    , user = Nothing
+    , error = Nothing
+    , projects = Nothing
+    , projectsPage = 1
+    , projectSearch = ""
+    , selectedProject = Nothing
+    , repositoryTree = Nothing
+    , commitStatus = Nothing
+    , originalTokens = Nothing
+    , tokensFileExists = False
+    , tokens = Nothing
+    , themes = []
+    , existingThemes = []
+    , existingComponents = []
+    , existingScreens = []
+    , activeThemeName = Nothing
+    , newThemeName = ""
+    , newThemeTemplate = "empty"
+    , newTokenPath = ""
+    , newTokenType = "color"
+    , newTokenValue = ""
+    , tokenSearch = ""
+    , tokenTypeFilter = ""
+    , tokenOverriddenOnly = False
+    , tokenChangedOnly = False
+    , newCompositePropertyName = ""
+    , newCompositePropertyValue = ""
+    , activeTab = TokenStudio
+    , originalComponents = Nothing
+    , components = Nothing
+    , selectedComponentName = Nothing
+    , newComponentName = ""
+    , newComponentTemplate = "empty"
+    , newComponentVariant = ""
+    , newComponentSlot = ""
+    , newComponentState = ""
+    , previewComponentVariant = Nothing
+    , previewComponentState = Nothing
+    , newLayoutPropertyName = ""
+    , newLayoutPropertyValue = ""
+    , screens = Nothing
+    , selectedScreenName = Nothing
+    , newScreenName = ""
+    , newScreenTemplate = "empty"
+    , branches = Nothing
+    , currentBranch = Nothing
+    , newBranchName = ""
+    , mrTitle = ""
+    , mergeRequests = Nothing
+    , exportTargets = [ "css", "tailwind" ]
+    , pkceChallenge = flags.pkceChallenge
+    , pkceVerifier = flags.pkceVerifier
+    , contracts = Nothing
+    , existingContracts = []
+    , newContractRuleType = "allowedTokenGroups"
+    , newContractRuleFields = Dict.empty
     }
 
 
@@ -232,6 +298,7 @@ type Msg
     | DeleteScreen String
     | GotBranches (Result Http.Error (List Branch))
     | GotMRResult (Result Http.Error MergeRequest)
+    | GotMergeRequests (Result Http.Error (List MergeRequest))
     | ToggleExportTarget String
     | RunExportPipeline
     | GotContractFile String (Result Http.Error String)

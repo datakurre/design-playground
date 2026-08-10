@@ -3,6 +3,7 @@ module GitLabDecodersTest exposing (suite)
 import Expect
 import GitLab.Branches exposing (branchDecoder)
 import GitLab.Files exposing (treeItemDecoder)
+import GitLab.MergeRequests
 import GitLab.Projects exposing (projectDecoder)
 import Json.Decode as Decode
 import Test exposing (Test, describe, test)
@@ -88,6 +89,61 @@ suite =
                                 , \b -> Expect.equal "7b5c3df" b.commitId
                                 ]
                                 branch
+
+                        Err err ->
+                            Expect.fail (Decode.errorToString err)
+            ]
+        , describe "mergeRequestDecoder"
+            [ test "decodes the list GitLab returns for a project" <|
+                \_ ->
+                    let
+                        json =
+                            """
+                            [
+                                {
+                                    "id": 900001,
+                                    "iid": 7,
+                                    "title": "Warmer button colors",
+                                    "state": "opened",
+                                    "web_url": "https://gitlab.com/acme/design/-/merge_requests/7"
+                                },
+                                {
+                                    "id": 900002,
+                                    "iid": 8,
+                                    "title": "Add spacing scale",
+                                    "state": "opened",
+                                    "web_url": "https://gitlab.com/acme/design/-/merge_requests/8"
+                                }
+                            ]
+                            """
+                    in
+                    case Decode.decodeString (Decode.list GitLab.MergeRequests.decoder) json of
+                        Ok mrs ->
+                            Expect.equal
+                                [ ( 7, "Warmer button colors", "opened" )
+                                , ( 8, "Add spacing scale", "opened" )
+                                ]
+                                (List.map (\mr -> ( mr.iid, mr.title, mr.state )) mrs)
+
+                        Err err ->
+                            Expect.fail (Decode.errorToString err)
+            , test "keeps web_url, which is the only way back to GitLab" <|
+                \_ ->
+                    let
+                        json =
+                            """
+                            {
+                                "id": 900001,
+                                "iid": 7,
+                                "title": "Warmer button colors",
+                                "state": "merged",
+                                "web_url": "https://gitlab.com/acme/design/-/merge_requests/7"
+                            }
+                            """
+                    in
+                    case Decode.decodeString GitLab.MergeRequests.decoder json of
+                        Ok mr ->
+                            Expect.equal "https://gitlab.com/acme/design/-/merge_requests/7" mr.webUrl
 
                         Err err ->
                             Expect.fail (Decode.errorToString err)

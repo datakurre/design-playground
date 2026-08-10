@@ -276,7 +276,7 @@ gitWorkflows =
     , lede = Just "Every save is a commit. Create a branch here before editing if you don't want changes landing on the default branch."
     , body =
         [ "This app has no backend of its own — every save is a commit, and every change set becomes a Git branch and, eventually, a merge request."
-        , "Pick or create a branch below, then commit your staged changes and open a merge request when you're ready for review."
+        , "Pick or create a branch below, then save your changes on the tab you made them and open a merge request here when you're ready for review."
         ]
     }
 

@@ -240,52 +240,35 @@ mapLayout f layout =
             element
 
 
-{-| Everything in the model that belongs to a repository rather than to the app.
-Opening a project, closing one and logging out all have to forget the same set;
-each used to spell it out inline, and each was missing something different.
+{-| Forgets the repository. Opening a project, closing one and logging out all
+have to forget the same set, and listing what to _forget_ never worked: each
+call site used to spell it out inline and each was missing something different,
+then the shared helper inherited the same problem — a merge request from the
+last repository would still be sitting in the panel under the next one.
+
+So it runs the other way round. Rebuild from `Types.initial` and name only what
+survives leaving a repository, which is the session (who you are, which projects
+you can see) and where you are looking. Anything added to the model from now on
+is forgotten by default, which is the safe direction to be wrong in.
+
 -}
 clearProjectState : Model -> Model
 clearProjectState model =
-    { model
-        | selectedProject = Nothing
-        , repositoryTree = Nothing
-        , commitStatus = Nothing
-        , originalTokens = Nothing
-        , tokensFileExists = False
-        , tokens = Nothing
-        , themes = []
-        , existingThemes = []
-        , existingComponents = []
-        , existingScreens = []
-        , activeThemeName = Nothing
-        , originalComponents = Nothing
-        , components = Nothing
-        , selectedComponentName = Nothing
-        , screens = Nothing
-        , selectedScreenName = Nothing
-        , branches = Nothing
-        , currentBranch = Nothing
-        , exportTargets = [ "css", "tailwind" ]
-        , contracts = Nothing
-        , existingContracts = []
-        , newContractRuleType = "allowedTokenGroups"
-        , newContractRuleFields = Dict.empty
-        , newThemeName = ""
-        , newTokenPath = ""
-        , newTokenValue = ""
-        , tokenSearch = ""
-        , tokenTypeFilter = ""
-        , tokenOverriddenOnly = False
-        , tokenChangedOnly = False
-        , newComponentName = ""
-        , newComponentVariant = ""
-        , newComponentSlot = ""
-        , newComponentState = ""
-        , previewComponentVariant = Nothing
-        , previewComponentState = Nothing
-        , newLayoutPropertyName = ""
-        , newLayoutPropertyValue = ""
-        , newScreenName = ""
+    let
+        fresh =
+            Types.initial model.key
+                model.url
+                { token = model.token
+                , pkceChallenge = model.pkceChallenge
+                , pkceVerifier = model.pkceVerifier
+                }
+    in
+    { fresh
+        | user = model.user
+        , projects = model.projects
+        , projectsPage = model.projectsPage
+        , projectSearch = model.projectSearch
+        , activeTab = model.activeTab
     }
 
 
@@ -429,6 +412,7 @@ fetchProjectData token project =
         , GitLab.Files.listTreeAtPath token project.id project.defaultBranch "components" (GotComponentsTree project.defaultBranch)
         , GitLab.Files.listTreeAtPath token project.id project.defaultBranch "layouts" (GotScreensTree project.defaultBranch)
         , GitLab.Branches.listBranches token project.id GotBranches
+        , GitLab.MergeRequests.listMergeRequests token project.id GotMergeRequests
         , GitLab.Files.getFileRaw token project.id project.defaultBranch "contracts.json" (GotContractFile "contracts.json")
         ]
 
@@ -586,7 +570,6 @@ update msg model =
                     , projects = Nothing
                     , projectsPage = 1
                     , projectSearch = ""
-                    , newTokenType = "color"
                     , activeTab = TokenStudio
                 }
             , Cmd.batch
@@ -2225,6 +2208,18 @@ update msg model =
             case result of
                 Ok branchList ->
                     ( { model | branches = Just branchList }, Cmd.none )
+
+                Err _ ->
+                    ( model, Cmd.none )
+
+        -- Merge requests belong to the project, not the branch, so this arrives
+        -- once with the rest of the repository and `SwitchBranch` leaves it be.
+        -- A repository can perfectly well have none, and failing to list them
+        -- is no reason to put an error across the page.
+        GotMergeRequests result ->
+            case result of
+                Ok mrs ->
+                    ( { model | mergeRequests = Just mrs }, Cmd.none )
 
                 Err _ ->
                     ( model, Cmd.none )
