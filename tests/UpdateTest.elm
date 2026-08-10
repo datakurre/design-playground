@@ -15,8 +15,10 @@ than better.
 
 -}
 
+import Browser
 import Effect exposing (Effect)
 import Expect
+import GitLab.Files
 import GitLab.Request
 import Json.Decode as Decode
 import Json.Encode as Encode
@@ -155,6 +157,151 @@ suite =
                         |> List.filter (String.contains "/projects/acme")
                         |> Expect.equal [ "https://gitlab.com/api/v4/projects/acme%2Fdesign" ]
             ]
+        , describe "switching branches"
+            [ test "refetches everything at the new ref" <|
+                \_ ->
+                    -- Not project.defaultBranch. The Msg comment in Types
+                    -- records that this exact bug already happened once:
+                    -- switching branches showed the default branch's contents
+                    -- under the new branch's name.
+                    let
+                        ( _, effect ) =
+                            Update.update (SwitchBranch "feature-x") signedIn
+                    in
+                    Effect.requests effect
+                        |> List.map .url
+                        |> List.filter (\u -> not (String.contains "feature-x" u))
+                        |> Expect.equal []
+            , test "forgets the branch you were on before" <|
+                \_ ->
+                    let
+                        ( model, _ ) =
+                            Update.update (SwitchBranch "feature-x")
+                                (withComponent "Button" signedIn
+                                    |> (\m -> { m | existingComponents = [ "Button" ], tokensFileExists = True })
+                                )
+                    in
+                    ( model.components, model.existingComponents, model.tokensFileExists )
+                        |> Expect.equal ( Nothing, [], False )
+            ]
+        , describe "listing the components directory"
+            [ test "fetches every component and contract at the ref it was listed from" <|
+                \_ ->
+                    let
+                        ( _, effect ) =
+                            Update.update
+                                (GotComponentsTree "feature-x"
+                                    (Ok
+                                        [ treeItem "Button.json"
+                                        , treeItem "Button.contract.json"
+                                        , treeItem "README.md"
+                                        ]
+                                    )
+                                )
+                                signedIn
+                    in
+                    Effect.requests effect
+                        |> List.map .url
+                        |> Expect.equal
+                            [ "https://gitlab.com/api/v4/projects/7/repository/files/components%2FButton.json/raw?ref=feature-x"
+                            , "https://gitlab.com/api/v4/projects/7/repository/files/components%2FButton.contract.json/raw?ref=feature-x"
+                            ]
+            , test "tells a contract apart from the component it belongs to" <|
+                \_ ->
+                    let
+                        ( model, _ ) =
+                            Update.update
+                                (GotComponentsTree "main"
+                                    (Ok
+                                        [ treeItem "Button.json"
+                                        , treeItem "Button.contract.json"
+                                        , treeItem "README.md"
+                                        ]
+                                    )
+                                )
+                                signedIn
+                    in
+                    ( model.existingComponents, model.existingContracts )
+                        |> Expect.equal ( [ "Button" ], [ "Button" ] )
+            ]
+        , describe "opening a merge request"
+            [ test "refuses on the default branch, with a remedy, and sends nothing" <|
+                \_ ->
+                    let
+                        ( model, effect ) =
+                            Update.update CreateMergeRequest
+                                { signedIn | currentBranch = Just "main", mrTitle = "Title" }
+                    in
+                    ( Maybe.map Tuple.first model.commitStatus, Effect.requests effect |> List.length )
+                        |> Expect.equal ( Just Failed, 0 )
+            , test "refuses an untitled merge request differently, and sends nothing" <|
+                \_ ->
+                    -- Two refusals with different remedies: being on the default
+                    -- branch takes three steps to fix. Collapsing them into one
+                    -- message would lose that.
+                    let
+                        ( onBranch, _ ) =
+                            Update.update CreateMergeRequest
+                                { signedIn | currentBranch = Just "main", mrTitle = "Title" }
+
+                        ( untitled, effect ) =
+                            Update.update CreateMergeRequest
+                                { signedIn | currentBranch = Just "feature-x", mrTitle = "  " }
+                    in
+                    ( Maybe.map Tuple.second untitled.commitStatus /= Maybe.map Tuple.second onBranch.commitStatus
+                    , Maybe.map Tuple.first untitled.commitStatus
+                    , Effect.requests effect |> List.length
+                    )
+                        |> Expect.equal ( True, Just Failed, 0 )
+            , test "opens from the current branch onto the default one" <|
+                \_ ->
+                    let
+                        ( _, effect ) =
+                            Update.update CreateMergeRequest
+                                { signedIn | currentBranch = Just "feature-x", mrTitle = "Nicer buttons" }
+                    in
+                    Effect.requests effect
+                        |> List.head
+                        |> Maybe.andThen (.body >> GitLab.Request.bodyValue)
+                        |> Maybe.map
+                            (Decode.decodeValue
+                                (Decode.map2 Tuple.pair
+                                    (Decode.field "source_branch" Decode.string)
+                                    (Decode.field "target_branch" Decode.string)
+                                )
+                            )
+                        |> Expect.equal (Just (Ok ( "feature-x", "main" )))
+            ]
+        , describe "the export pipeline"
+            [ test "creates a file the repository does not have yet" <|
+                \_ ->
+                    exporting { targets = [ "css" ], tree = [] }
+                        |> commitField (Decode.at [ "actions", "0", "action" ] Decode.string)
+                        |> Expect.equal (Ok "create")
+            , test "updates one it does" <|
+                \_ ->
+                    -- The branch builds every action as "update" and rewrites it
+                    -- in a second pass. The create case depends entirely on that
+                    -- pass surviving future edits.
+                    exporting { targets = [ "css" ], tree = [ "exports/variables.css" ] }
+                        |> commitField (Decode.at [ "actions", "0", "action" ] Decode.string)
+                        |> Expect.equal (Ok "update")
+            , test "writes one file per selected target and no more" <|
+                \_ ->
+                    exporting { targets = [ "css" ], tree = [] }
+                        |> commitField (Decode.field "actions" (Decode.list (Decode.field "file_path" Decode.string)))
+                        |> Expect.equal (Ok [ "exports/variables.css" ])
+            ]
+        , describe "navigation"
+            [ test "an external link loads, rather than being pushed into the fragment router" <|
+                \_ ->
+                    -- This is the OAuth sign-in path. Pushing it would put a
+                    -- gitlab.com URL into our own history and never leave.
+                    Update.update (LinkClicked (Browser.External "https://gitlab.com/oauth/authorize")) signedIn
+                        |> Tuple.second
+                        |> Effect.toList
+                        |> Expect.equal [ Effect.LoadUrl "https://gitlab.com/oauth/authorize" ]
+            ]
         , describe "refusals do not reach the network"
             [ test "creating a token with a blank name says so and sends nothing" <|
                 \_ ->
@@ -234,6 +381,18 @@ withComponent name model =
     }
 
 
+{-| A tree entry as GitLab lists it. Only `name` and `path` matter here.
+-}
+treeItem : String -> GitLab.Files.TreeItem
+treeItem name =
+    { id = "abc123"
+    , name = name
+    , type_ = "blob"
+    , path = "components/" ++ name
+    , mode = "100644"
+    }
+
+
 url : String -> Url.Url
 url fragment =
     { protocol = Url.Https
@@ -265,6 +424,28 @@ save model =
                 pending
     in
     effect
+
+
+{-| Runs the export pipeline with a given selection, against a repository whose
+tree already contains `tree`.
+-}
+exporting : { targets : List String, tree : List String } -> Effect Msg
+exporting { targets, tree } =
+    Update.update RunExportPipeline
+        { signedIn
+            | exportTargets = targets
+            , tokens = Just []
+            , currentBranch = Just "main"
+            , repositoryTree =
+                Just
+                    (List.map
+                        (\path ->
+                            { id = "abc123", name = path, type_ = "blob", path = path, mode = "100644" }
+                        )
+                        tree
+                    )
+        }
+        |> Tuple.second
 
 
 commitField : Decode.Decoder a -> Effect Msg -> Result Decode.Error a
