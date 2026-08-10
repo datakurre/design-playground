@@ -4,6 +4,7 @@ import Auth
 import Browser
 import Browser.Navigation as Nav
 import GitLab.Projects exposing (Project)
+import GitLab.Request
 import Help
 import Html exposing (Html, a, button, div, h2, img, input, li, span, text, ul)
 import Html.Attributes exposing (href, src)
@@ -56,12 +57,12 @@ init flags url key =
         cmds =
             case urlCode of
                 Just code ->
-                    [ Auth.exchangeToken code flags.pkceVerifier GotTokenResult ]
+                    [ Auth.exchangeToken code flags.pkceVerifier GotTokenResult |> GitLab.Request.toCmd ]
 
                 Nothing ->
                     case flags.token of
                         Just t ->
-                            [ Auth.fetchProfile t GotProfile ]
+                            [ Auth.fetchProfile t GotProfile |> GitLab.Request.toCmd ]
 
                         Nothing ->
                             []

@@ -12,6 +12,7 @@ import GitLab.Commits
 import GitLab.Files
 import GitLab.MergeRequests
 import GitLab.Projects
+import GitLab.Request
 import Http
 import Json.Decode as Decode
 import Json.Encode as Encode
@@ -378,7 +379,7 @@ openProject path model =
 
                     Nothing ->
                         ( { model | selectedProject = Nothing, commitStatus = Just ( Working, "Loading repository..." ) }
-                        , GitLab.Projects.getProject token path GotProject
+                        , GitLab.Projects.getProject token path GotProject |> GitLab.Request.toCmd
                         )
 
 
@@ -401,14 +402,14 @@ projectErrorMessage error =
 fetchProjectData : String -> GitLab.Projects.Project -> Cmd Msg
 fetchProjectData token project =
     Cmd.batch
-        [ GitLab.Files.listTree token project.id project.defaultBranch GotTree
-        , GitLab.Files.getFileRaw token project.id project.defaultBranch "tokens/tokens.json" GotTokensFile
-        , GitLab.Files.listTreeAtPath token project.id project.defaultBranch "themes" (GotThemesTree project.defaultBranch)
-        , GitLab.Files.listTreeAtPath token project.id project.defaultBranch "components" (GotComponentsTree project.defaultBranch)
-        , GitLab.Files.listTreeAtPath token project.id project.defaultBranch "layouts" (GotScreensTree project.defaultBranch)
-        , GitLab.Branches.listBranches token project.id GotBranches
-        , GitLab.MergeRequests.listMergeRequests token project.id GotMergeRequests
-        , GitLab.Files.getFileRaw token project.id project.defaultBranch "contracts.json" (GotContractFile "contracts.json")
+        [ GitLab.Files.listTree token project.id project.defaultBranch GotTree |> GitLab.Request.toCmd
+        , GitLab.Files.getFileRaw token project.id project.defaultBranch "tokens/tokens.json" GotTokensFile |> GitLab.Request.toCmd
+        , GitLab.Files.listTreeAtPath token project.id project.defaultBranch "themes" (GotThemesTree project.defaultBranch) |> GitLab.Request.toCmd
+        , GitLab.Files.listTreeAtPath token project.id project.defaultBranch "components" (GotComponentsTree project.defaultBranch) |> GitLab.Request.toCmd
+        , GitLab.Files.listTreeAtPath token project.id project.defaultBranch "layouts" (GotScreensTree project.defaultBranch) |> GitLab.Request.toCmd
+        , GitLab.Branches.listBranches token project.id GotBranches |> GitLab.Request.toCmd
+        , GitLab.MergeRequests.listMergeRequests token project.id GotMergeRequests |> GitLab.Request.toCmd
+        , GitLab.Files.getFileRaw token project.id project.defaultBranch "contracts.json" (GotContractFile "contracts.json") |> GitLab.Request.toCmd
         ]
 
 
@@ -530,7 +531,7 @@ update msg model =
                     ( { model | token = Just token, error = Nothing }
                     , Cmd.batch
                         [ Ports.cacheToken token
-                        , Auth.fetchProfile token GotProfile
+                        , Auth.fetchProfile token GotProfile |> GitLab.Request.toCmd
                         , Nav.replaceUrl model.key (Url.toString newUrl)
                         ]
                     )
@@ -544,7 +545,7 @@ update msg model =
                     ( { model | user = Just user, error = Nothing }
                     , case model.token of
                         Just t ->
-                            GitLab.Projects.listProjects t 1 GotProjects
+                            GitLab.Projects.listProjects t 1 GotProjects |> GitLab.Request.toCmd
 
                         Nothing ->
                             Cmd.none
@@ -576,7 +577,7 @@ update msg model =
         FetchProjects ->
             case model.token of
                 Just token ->
-                    ( model, GitLab.Projects.listProjects token 1 GotProjects )
+                    ( model, GitLab.Projects.listProjects token 1 GotProjects |> GitLab.Request.toCmd )
 
                 Nothing ->
                     ( model, Cmd.none )
@@ -592,7 +593,7 @@ update msg model =
         LoadMoreProjects ->
             case ( model.token, model.projectsPage ) of
                 ( Just token, page ) ->
-                    ( model, GitLab.Projects.listProjects token (page + 1) GotMoreProjects )
+                    ( model, GitLab.Projects.listProjects token (page + 1) GotMoreProjects |> GitLab.Request.toCmd )
 
                 _ ->
                     ( model, Cmd.none )
@@ -663,7 +664,7 @@ update msg model =
                                         }
                                 in
                                 ( { model | pendingCommit = Nothing, commitStatus = Just ( Working, "Saving..." ) }
-                                , GitLab.Commits.createCommit token project.id payload (GotCommitResult pending.commitContext)
+                                , GitLab.Commits.createCommit token project.id payload (GotCommitResult pending.commitContext) |> GitLab.Request.toCmd
                                 )
 
                             _ ->
@@ -752,7 +753,7 @@ update msg model =
                             case ( model.token, model.selectedProject ) of
                                 ( Just token, Just project ) ->
                                     List.map
-                                        (\file -> GitLab.Files.getFileRaw token project.id ref file.path (GotThemeFile file.name))
+                                        (\file -> GitLab.Files.getFileRaw token project.id ref file.path (GotThemeFile file.name) |> GitLab.Request.toCmd)
                                         jsonFiles
 
                                 _ ->
@@ -992,10 +993,10 @@ update msg model =
                             case ( model.token, model.selectedProject ) of
                                 ( Just token, Just project ) ->
                                     List.map
-                                        (\file -> GitLab.Files.getFileRaw token project.id ref file.path (GotComponentFile file.name))
+                                        (\file -> GitLab.Files.getFileRaw token project.id ref file.path (GotComponentFile file.name) |> GitLab.Request.toCmd)
                                         jsonFiles
                                         ++ List.map
-                                            (\file -> GitLab.Files.getFileRaw token project.id ref file.path (GotContractFile file.name))
+                                            (\file -> GitLab.Files.getFileRaw token project.id ref file.path (GotContractFile file.name) |> GitLab.Request.toCmd)
                                             contractFiles
 
                                 _ ->
@@ -1293,7 +1294,7 @@ update msg model =
                             case ( model.token, model.selectedProject ) of
                                 ( Just token, Just project ) ->
                                     List.map
-                                        (\file -> GitLab.Files.getFileRaw token project.id ref file.path (GotScreenFile file.name))
+                                        (\file -> GitLab.Files.getFileRaw token project.id ref file.path (GotScreenFile file.name) |> GitLab.Request.toCmd)
                                         jsonFiles
 
                                 _ ->
@@ -1515,7 +1516,7 @@ update msg model =
                             }
                     in
                     ( { model | themes = List.filter (\t -> t.name /= name) model.themes, activeThemeName = Nothing, commitStatus = Just ( Working, "Deleting " ++ name ++ "..." ) }
-                    , GitLab.Commits.createCommit token project.id payload (GotCommitResult (CommitDeleteTheme name))
+                    , GitLab.Commits.createCommit token project.id payload (GotCommitResult (CommitDeleteTheme name)) |> GitLab.Request.toCmd
                     )
 
                 _ ->
@@ -1540,7 +1541,7 @@ update msg model =
                             model.components |> Maybe.withDefault []
                     in
                     ( { model | components = Just (List.filter (\c -> c.name /= name) currentComponents), selectedComponentName = Nothing, commitStatus = Just ( Working, "Deleting " ++ name ++ "..." ) }
-                    , GitLab.Commits.createCommit token project.id payload (GotCommitResult (CommitDeleteComponent name))
+                    , GitLab.Commits.createCommit token project.id payload (GotCommitResult (CommitDeleteComponent name)) |> GitLab.Request.toCmd
                     )
 
                 _ ->
@@ -1565,7 +1566,7 @@ update msg model =
                             model.screens |> Maybe.withDefault []
                     in
                     ( { model | screens = Just (List.filter (\s -> s.name /= name) currentScreens), selectedScreenName = Nothing, commitStatus = Just ( Working, "Deleting " ++ name ++ "..." ) }
-                    , GitLab.Commits.createCommit token project.id payload (GotCommitResult (CommitDeleteScreen name))
+                    , GitLab.Commits.createCommit token project.id payload (GotCommitResult (CommitDeleteScreen name)) |> GitLab.Request.toCmd
                     )
 
                 _ ->
@@ -1788,7 +1789,7 @@ update msg model =
                             model.contracts |> Maybe.withDefault []
                     in
                     ( { model | contracts = Just (List.filter (\c -> c.component /= name) currentContracts), commitStatus = Just ( Working, "Deleting contract for " ++ name ++ "..." ) }
-                    , GitLab.Commits.createCommit token project.id payload (GotCommitResult (CommitDeleteContract name))
+                    , GitLab.Commits.createCommit token project.id payload (GotCommitResult (CommitDeleteContract name)) |> GitLab.Request.toCmd
                     )
 
                 _ ->
@@ -1822,11 +1823,11 @@ update msg model =
                 ( Just token, Just project ) ->
                     ( { model | currentBranch = Just branchName, repositoryTree = Nothing, originalComponents = Nothing, components = Nothing, originalTokens = Nothing, tokens = Nothing, themes = [], screens = Nothing, existingComponents = [], existingThemes = [], existingScreens = [], tokensFileExists = False, commitStatus = Just ( Done, "On branch " ++ branchName ), contracts = Nothing, existingContracts = [], newContractRuleType = "allowedTokenGroups", newContractRuleFields = Dict.empty }
                     , Cmd.batch
-                        [ GitLab.Files.listTree token project.id branchName GotTree
-                        , GitLab.Files.getFileRaw token project.id branchName "tokens/tokens.json" GotTokensFile
-                        , GitLab.Files.listTreeAtPath token project.id branchName "themes" (GotThemesTree branchName)
-                        , GitLab.Files.listTreeAtPath token project.id branchName "components" (GotComponentsTree branchName)
-                        , GitLab.Files.listTreeAtPath token project.id branchName "layouts" (GotScreensTree branchName)
+                        [ GitLab.Files.listTree token project.id branchName GotTree |> GitLab.Request.toCmd
+                        , GitLab.Files.getFileRaw token project.id branchName "tokens/tokens.json" GotTokensFile |> GitLab.Request.toCmd
+                        , GitLab.Files.listTreeAtPath token project.id branchName "themes" (GotThemesTree branchName) |> GitLab.Request.toCmd
+                        , GitLab.Files.listTreeAtPath token project.id branchName "components" (GotComponentsTree branchName) |> GitLab.Request.toCmd
+                        , GitLab.Files.listTreeAtPath token project.id branchName "layouts" (GotScreensTree branchName) |> GitLab.Request.toCmd
                         ]
                     )
 
@@ -1853,7 +1854,7 @@ update msg model =
 
                         Ok branchName ->
                             ( { model | commitStatus = Just ( Working, "Creating branch..." ) }
-                            , GitLab.Branches.createBranch token project.id branchName currentBranch GotCreateBranchResult
+                            , GitLab.Branches.createBranch token project.id branchName currentBranch GotCreateBranchResult |> GitLab.Request.toCmd
                             )
 
                 _ ->
@@ -1893,7 +1894,7 @@ update msg model =
 
                     else
                         ( { model | commitStatus = Just ( Working, "Opening merge request..." ) }
-                        , GitLab.MergeRequests.createMergeRequest token project.id currentBranch project.defaultBranch model.mrTitle GotMRResult
+                        , GitLab.MergeRequests.createMergeRequest token project.id currentBranch project.defaultBranch model.mrTitle GotMRResult |> GitLab.Request.toCmd
                         )
 
                 _ ->
@@ -1981,7 +1982,7 @@ update msg model =
 
                             else
                                 ( { model | commitStatus = Just ( Working, "Exporting..." ) }
-                                , GitLab.Commits.createCommit token project.id payload (GotCommitResult CommitOther)
+                                , GitLab.Commits.createCommit token project.id payload (GotCommitResult CommitOther) |> GitLab.Request.toCmd
                                 )
 
                         Nothing ->

@@ -1,5 +1,6 @@
 module Auth exposing (User, exchangeToken, fetchProfile, loginUrl, parseCode, userDecoder)
 
+import GitLab.Request exposing (Body(..), Request)
 import Http
 import Json.Decode as Decode exposing (Decoder)
 import Url exposing (Url)
@@ -89,26 +90,28 @@ userDecoder =
 
 {-| Fetches the current authenticated user's profile from GitLab API.
 -}
-fetchProfile : String -> (Result Http.Error User -> msg) -> Cmd msg
+fetchProfile : String -> (Result Http.Error User -> msg) -> Request msg
 fetchProfile token toMsg =
-    Http.request
-        { method = "GET"
-        , headers = [ Http.header "Authorization" ("Bearer " ++ token) ]
-        , url = "https://gitlab.com/api/v4/user"
-        , body = Http.emptyBody
-        , expect = Http.expectJson toMsg userDecoder
-        , timeout = Nothing
-        , tracker = Nothing
-        }
+    { method = "GET"
+    , url = "https://gitlab.com/api/v4/user"
+    , headers = GitLab.Request.authorized token
+    , body = EmptyBody
+    , expect = Http.expectJson toMsg userDecoder
+    }
 
 
 {-| Exchanges an authorization code for an access token.
 -}
-exchangeToken : String -> String -> (Result Http.Error String -> msg) -> Cmd msg
+exchangeToken : String -> String -> (Result Http.Error String -> msg) -> Request msg
 exchangeToken code verifier toMsg =
-    let
-        body =
-            "client_id="
+    { method = "POST"
+    , url = "https://gitlab.com/oauth/token"
+
+    -- The one call with no bearer token: this is what obtains it.
+    , headers = []
+    , body =
+        FormBody
+            ("client_id="
                 ++ clientId
                 ++ "&code="
                 ++ code
@@ -117,9 +120,6 @@ exchangeToken code verifier toMsg =
                 ++ Url.percentEncode redirectUri
                 ++ "&code_verifier="
                 ++ verifier
-    in
-    Http.post
-        { url = "https://gitlab.com/oauth/token"
-        , body = Http.stringBody "application/x-www-form-urlencoded" body
-        , expect = Http.expectJson toMsg (Decode.field "access_token" Decode.string)
-        }
+            )
+    , expect = Http.expectJson toMsg (Decode.field "access_token" Decode.string)
+    }

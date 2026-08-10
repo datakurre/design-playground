@@ -1,5 +1,6 @@
 module GitLab.Commits exposing (Action, CommitPayload, createCommit)
 
+import GitLab.Request exposing (Body(..), Request)
 import Http
 import Json.Encode as Encode
 
@@ -46,14 +47,11 @@ encodeCommitPayload payload =
         ]
 
 
-createCommit : String -> Int -> CommitPayload -> (Result Http.Error () -> msg) -> Cmd msg
+createCommit : String -> Int -> CommitPayload -> (Result Http.Error () -> msg) -> Request msg
 createCommit token projectId payload toMsg =
-    Http.request
-        { method = "POST"
-        , headers = [ Http.header "Authorization" ("Bearer " ++ token) ]
-        , url = "https://gitlab.com/api/v4/projects/" ++ String.fromInt projectId ++ "/repository/commits"
-        , body = Http.jsonBody (encodeCommitPayload payload)
-        , expect = Http.expectWhatever toMsg
-        , timeout = Nothing
-        , tracker = Nothing
-        }
+    { method = "POST"
+    , url = "https://gitlab.com/api/v4/projects/" ++ String.fromInt projectId ++ "/repository/commits"
+    , headers = GitLab.Request.authorized token
+    , body = JsonBody (encodeCommitPayload payload)
+    , expect = Http.expectWhatever toMsg
+    }
