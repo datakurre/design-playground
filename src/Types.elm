@@ -11,6 +11,7 @@ import GitLab.Files exposing (TreeItem)
 import GitLab.MergeRequests exposing (MergeRequest)
 import GitLab.Projects exposing (Project)
 import Http
+import Json.Decode
 import Screens exposing (Screen)
 import Themes exposing (Theme)
 import Tokens
@@ -118,6 +119,16 @@ type alias Model =
     , existingContracts : List String
     , newContractRuleType : String
     , newContractRuleFields : Dict String String
+    , pendingCommit : Maybe PendingCommit
+    }
+
+
+type alias PendingCommit =
+    { commitContext : CommitContext
+    , actionType : String
+    , filePath : String
+    , commitMessage : String
+    , jsonString : String
     }
 
 
@@ -187,6 +198,7 @@ initial key url flags =
     , existingContracts = []
     , newContractRuleType = "allowedTokenGroups"
     , newContractRuleFields = Dict.empty
+    , pendingCommit = Nothing
     }
 
 
@@ -229,6 +241,7 @@ type Msg
     | GotProject (Result Http.Error Project)
     | GotTree (Result Http.Error (List TreeItem))
     | GotCommitResult CommitContext (Result Http.Error ())
+    | GotSchemaValidationResult { valid : Bool, errors : List String, context : Json.Decode.Value }
     | GotTokensFile (Result Http.Error String)
       -- The three tree listings carry the git ref they were listed from, so the
       -- per-file fetches they fan out into read the same branch. They used to

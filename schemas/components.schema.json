@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-playground.internal/components.schema.json",
+  "title": "Component",
+  "type": "object",
+  "properties": {
+    "name": { "type": "string" },
+    "description": { "type": "string" },
+    "variants": { "type": "array", "items": { "type": "string" } },
+    "slots": { "type": "array", "items": { "type": "string" } },
+    "states": { "type": "array", "items": { "type": "string" } },
+    "layout": { "type": "object" }
+  },
+  "required": ["name", "variants", "slots", "states"],
+  "additionalProperties": false
+}

@@ -26,4 +26,5 @@ check: gen
 	@elm-format --validate src/ tests/
 	@elm make src/Main.elm --output=/dev/null
 	@elm-test
+	@node --test tests/schemas.test.js
 	@elm-review

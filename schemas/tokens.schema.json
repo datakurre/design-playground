@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-playground.internal/tokens.schema.json",
+  "title": "Design Tokens",
+  "type": "object",
+  "patternProperties": {
+    "^[a-zA-Z0-9_-]+$": {
+      "$ref": "#/$defs/tokenOrGroup"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "tokenOrGroup": {
+      "type": "object",
+      "properties": {
+        "$value": {},
+        "$type": { "type": "string" },
+        "$description": { "type": "string" }
+      },
+      "patternProperties": {
+        "^[a-zA-Z0-9_-]+$": {
+          "$ref": "#/$defs/tokenOrGroup"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

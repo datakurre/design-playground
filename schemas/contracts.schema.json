@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-playground.internal/contracts.schema.json",
+  "title": "Contract",
+  "type": "object",
+  "properties": {
+    "component": { "type": "string" },
+    "rules": {
+      "type": "array",
+      "items": { "type": "object" }
+    }
+  },
+  "required": ["component", "rules"],
+  "additionalProperties": false
+}

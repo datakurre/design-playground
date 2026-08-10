@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://design-playground.internal/screens.schema.json",
+  "title": "Screen",
+  "type": "object",
+  "properties": {
+    "name": { "type": "string" },
+    "path": { "type": "string" },
+    "root": { "type": "object" }
+  },
+  "required": ["name", "path", "root"],
+  "additionalProperties": false
+}

@@ -771,6 +771,37 @@ update msg model =
                 Err _ ->
                     ( { model | error = Just "Failed to fetch repository tree." }, Cmd.none )
 
+        GotSchemaValidationResult { valid, errors } ->
+            case model.pendingCommit of
+                Just pending ->
+                    if valid then
+                        case ( model.token, model.selectedProject ) of
+                            ( Just token, Just project ) ->
+                                let
+                                    payload =
+                                        { branch = Maybe.withDefault project.defaultBranch model.currentBranch
+                                        , commitMessage = pending.commitMessage
+                                        , actions =
+                                            [ { action = pending.actionType
+                                              , filePath = pending.filePath
+                                              , content = Just pending.jsonString
+                                              }
+                                            ]
+                                        }
+                                in
+                                ( { model | pendingCommit = Nothing, commitStatus = Just ( Working, "Saving..." ) }
+                                , GitLab.Commits.createCommit token project.id payload (GotCommitResult pending.commitContext)
+                                )
+
+                            _ ->
+                                ( { model | pendingCommit = Nothing }, Cmd.none )
+
+                    else
+                        ( { model | pendingCommit = Nothing, commitStatus = Just ( Failed, "Schema validation failed: " ++ String.join ", " errors ) }, Cmd.none )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
         GotCommitResult context result ->
             case result of
                 Ok () ->
@@ -1002,27 +1033,27 @@ update msg model =
                             case model.tokens of
                                 Just tokensList ->
                                     let
+                                        jsonValue =
+                                            Tokens.encoder tokensList
+
                                         jsonString =
-                                            Encode.encode 2 (Tokens.encoder tokensList)
+                                            Encode.encode 2 jsonValue
 
-                                        payload =
-                                            { branch = Maybe.withDefault project.defaultBranch model.currentBranch
+                                        pending =
+                                            { commitContext = CommitTokens
+                                            , actionType =
+                                                if model.tokensFileExists then
+                                                    "update"
+
+                                                else
+                                                    "create"
+                                            , filePath = "tokens/tokens.json"
                                             , commitMessage = "Update base design tokens"
-                                            , actions =
-                                                [ { action =
-                                                        if model.tokensFileExists then
-                                                            "update"
-
-                                                        else
-                                                            "create"
-                                                  , filePath = "tokens/tokens.json"
-                                                  , content = Just jsonString
-                                                  }
-                                                ]
+                                            , jsonString = jsonString
                                             }
                                     in
-                                    ( { model | commitStatus = Just ( Working, "Saving tokens..." ) }
-                                    , GitLab.Commits.createCommit token project.id payload (GotCommitResult CommitTokens)
+                                    ( { model | commitStatus = Just ( Working, "Validating tokens..." ), pendingCommit = Just pending }
+                                    , Ports.validateSchema { schema = "tokens", data = jsonValue, context = Encode.null }
                                     )
 
                                 Nothing ->
@@ -1036,27 +1067,27 @@ update msg model =
                             case activeTheme of
                                 Just theme ->
                                     let
+                                        jsonValue =
+                                            Tokens.encoder theme.overrides
+
                                         jsonString =
-                                            Encode.encode 2 (Tokens.encoder theme.overrides)
+                                            Encode.encode 2 jsonValue
 
-                                        payload =
-                                            { branch = Maybe.withDefault project.defaultBranch model.currentBranch
+                                        pending =
+                                            { commitContext = CommitTheme activeName
+                                            , actionType =
+                                                if List.member activeName model.existingThemes then
+                                                    "update"
+
+                                                else
+                                                    "create"
+                                            , filePath = "themes/" ++ activeName ++ ".json"
                                             , commitMessage = "Update " ++ activeName ++ " theme"
-                                            , actions =
-                                                [ { action =
-                                                        if List.member activeName model.existingThemes then
-                                                            "update"
-
-                                                        else
-                                                            "create"
-                                                  , filePath = "themes/" ++ activeName ++ ".json"
-                                                  , content = Just jsonString
-                                                  }
-                                                ]
+                                            , jsonString = jsonString
                                             }
                                     in
-                                    ( { model | commitStatus = Just ( Working, "Saving theme..." ) }
-                                    , GitLab.Commits.createCommit token project.id payload (GotCommitResult (CommitTheme activeName))
+                                    ( { model | commitStatus = Just ( Working, "Validating theme..." ), pendingCommit = Just pending }
+                                    , Ports.validateSchema { schema = "tokens", data = jsonValue, context = Encode.null }
                                     )
 
                                 Nothing ->
@@ -1235,21 +1266,12 @@ update msg model =
                     case activeComponent of
                         Just comp ->
                             let
-                                jsonString =
-                                    Encode.encode 2 (Components.encoder comp)
+                                jsonValue =
+                                    Components.encoder comp
 
-                                -- Wait, how to know if we should create or update?
-                                -- Since we fetched components, if the tree had it, it's an update, else create.
-                                -- Let's just use create and fall back?
-                                -- Actually, GitLab allows create, but fails if it exists.
-                                -- Let's just use "create" if it doesn't exist in repo tree.
-                                -- The user's code just says "createCommit", let's use "create" because we didn't handle saving new tokens. Wait, the old code used "update" for saving token/theme overrides.
-                                -- If we just created it, maybe it's not in the tree yet.
-                                -- I will just write action = "update" and if it fails, the user will see an error. But actually for a brand new component we should use "create".
-                                -- Let's determine based on `model.repositoryTree`. Actually, `model.repositoryTree` has `components/name.json`? No, it's `GotComponentsTree` that gave us `tree`. But we don't save that tree.
-                                -- For simplicity, let's just use "create". If they edit it later, it should be "update". Let's assume it's always "create" for now since the test says "Save the component and verify the structured data file is committed". Wait, the prompt says "Save the component".
-                                -- I will use "create" for now, or maybe the Commits API has a force push?
-                                -- No. Let's just do `create`. Wait, if we use `update` and it doesn't exist, it fails.
+                                jsonString =
+                                    Encode.encode 2 jsonValue
+
                                 actionType =
                                     if List.member activeName model.existingComponents then
                                         "update"
@@ -1257,19 +1279,16 @@ update msg model =
                                     else
                                         "create"
 
-                                payload =
-                                    { branch = Maybe.withDefault project.defaultBranch model.currentBranch
+                                pending =
+                                    { commitContext = CommitComponent comp.name
+                                    , actionType = actionType
+                                    , filePath = "components/" ++ comp.name ++ ".json"
                                     , commitMessage = "Save component " ++ comp.name
-                                    , actions =
-                                        [ { action = actionType
-                                          , filePath = "components/" ++ comp.name ++ ".json"
-                                          , content = Just jsonString
-                                          }
-                                        ]
+                                    , jsonString = jsonString
                                     }
                             in
-                            ( { model | commitStatus = Just ( Working, "Saving " ++ comp.name ++ "..." ) }
-                            , GitLab.Commits.createCommit token project.id payload (GotCommitResult (CommitComponent comp.name))
+                            ( { model | commitStatus = Just ( Working, "Validating " ++ comp.name ++ "..." ), pendingCommit = Just pending }
+                            , Ports.validateSchema { schema = "components", data = jsonValue, context = Encode.null }
                             )
 
                         Nothing ->
@@ -1474,27 +1493,27 @@ update msg model =
                     case activeScreen of
                         Just screen ->
                             let
+                                jsonValue =
+                                    Screens.encoder screen
+
                                 jsonString =
-                                    Encode.encode 2 (Screens.encoder screen)
+                                    Encode.encode 2 jsonValue
 
-                                payload =
-                                    { branch = Maybe.withDefault project.defaultBranch model.currentBranch
+                                pending =
+                                    { commitContext = CommitScreen screen.name
+                                    , actionType =
+                                        if List.member activeName model.existingScreens then
+                                            "update"
+
+                                        else
+                                            "create"
+                                    , filePath = "layouts/" ++ screen.name ++ ".json"
                                     , commitMessage = "Save screen " ++ screen.name
-                                    , actions =
-                                        [ { action =
-                                                if List.member activeName model.existingScreens then
-                                                    "update"
-
-                                                else
-                                                    "create"
-                                          , filePath = "layouts/" ++ screen.name ++ ".json"
-                                          , content = Just jsonString
-                                          }
-                                        ]
+                                    , jsonString = jsonString
                                     }
                             in
-                            ( { model | commitStatus = Just ( Working, "Saving " ++ screen.name ++ "..." ) }
-                            , GitLab.Commits.createCommit token project.id payload (GotCommitResult (CommitScreen screen.name))
+                            ( { model | commitStatus = Just ( Working, "Validating " ++ screen.name ++ "..." ), pendingCommit = Just pending }
+                            , Ports.validateSchema { schema = "screens", data = jsonValue, context = Encode.null }
                             )
 
                         Nothing ->
@@ -1844,8 +1863,11 @@ update msg model =
                     case activeContract of
                         Just contract ->
                             let
+                                jsonValue =
+                                    Contracts.encoder contract
+
                                 jsonString =
-                                    Encode.encode 2 (Contracts.encoder contract)
+                                    Encode.encode 2 jsonValue
 
                                 actionType =
                                     if List.member activeName model.existingContracts then
@@ -1854,19 +1876,16 @@ update msg model =
                                     else
                                         "create"
 
-                                payload =
-                                    { branch = Maybe.withDefault project.defaultBranch model.currentBranch
+                                pending =
+                                    { commitContext = CommitContract activeName
+                                    , actionType = actionType
+                                    , filePath = "components/" ++ activeName ++ ".contract.json"
                                     , commitMessage = "Save contract for " ++ activeName
-                                    , actions =
-                                        [ { action = actionType
-                                          , filePath = "components/" ++ activeName ++ ".contract.json"
-                                          , content = Just jsonString
-                                          }
-                                        ]
+                                    , jsonString = jsonString
                                     }
                             in
-                            ( { model | commitStatus = Just ( Working, "Saving contract for " ++ activeName ++ "..." ) }
-                            , GitLab.Commits.createCommit token project.id payload (GotCommitResult (CommitContract activeName))
+                            ( { model | commitStatus = Just ( Working, "Validating contract for " ++ activeName ++ "..." ), pendingCommit = Just pending }
+                            , Ports.validateSchema { schema = "contracts", data = jsonValue, context = Encode.null }
                             )
 
                         Nothing ->
