@@ -2,7 +2,6 @@ module Types exposing (..)
 
 import Auth
 import Browser
-import Browser.Navigation as Nav
 import Components exposing (Component)
 import Contracts
 import Dict exposing (Dict)
@@ -49,8 +48,7 @@ type alias Status =
 
 
 type alias Model =
-    { key : Nav.Key
-    , url : Url
+    { url : Url
     , token : Maybe String
     , user : Maybe Auth.User
     , error : Maybe String
@@ -137,10 +135,9 @@ type alias PendingCommit =
 carrying over the handful of fields that outlive one — see the note there for
 why the list runs that way round.
 -}
-initial : Nav.Key -> Url -> Flags -> Model
-initial key url flags =
-    { key = key
-    , url = url
+initial : Url -> Flags -> Model
+initial url flags =
+    { url = url
     , token = flags.token
     , user = Nothing
     , error = Nothing

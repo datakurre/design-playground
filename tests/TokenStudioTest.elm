@@ -12,9 +12,9 @@ import Tokens
 import Types
 
 
-{-| The token list is the one part of this tab reachable from a test:
-`viewTokenStudio` takes a `Model`, and a `Model` needs a `Nav.Key`. See the same
-note on `RendererTest`.
+{-| The token list, tested through the function that takes the list rather than
+through `viewTokenStudio`, which takes a whole `Model`. See the same note on
+`RendererTest`.
 
 What's locked here is what makes the tab survive a real design system — the list
 is grouped rather than flat, searching flattens it again, and a row does not

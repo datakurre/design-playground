@@ -14,6 +14,7 @@ import Pages.ExportPipeline exposing (viewExportPipeline)
 import Pages.GitWorkflows exposing (viewGitWorkflows)
 import Pages.ScreenComposer exposing (viewScreenComposer)
 import Pages.TokenStudio exposing (viewTokenStudio)
+import Ports
 import Route
 import Tailwind as Tw exposing (classes)
 import Tailwind.Breakpoints exposing (hover)
@@ -28,13 +29,34 @@ import Url exposing (Url)
 -- MAIN
 
 
-main : Program Flags Model Msg
+{-| The `Nav.Key` lives here rather than in `Types.Model`, and this wrapper is
+what makes that possible.
+
+A key cannot be constructed outside a running `Browser.application`, so while it
+was a field of the `Model`, `Types.initial` could not be called from a test —
+and neither could anything taking a `Model`, which is to say the whole of
+`Update`. Holding it out here costs one indirection and buys back every state
+transition in the app as something a test can run.
+
+`Browser.application` fixes `update : msg -> model -> ( model, Cmd msg )`, so
+there is nowhere else to put it: `main` is a value, and the update function is
+built before `init` ever runs, so there is no scope in which the key exists and
+`update` is in scope.
+
+-}
+type alias AppModel =
+    { key : Nav.Key
+    , app : Model
+    }
+
+
+main : Program Flags AppModel Msg
 main =
     Browser.application
         { init = init
-        , view = view
+        , view = \model -> view model.app
         , update = updateWithEffects
-        , subscriptions = subscriptions
+        , subscriptions = \model -> subscriptions model.app
         , onUrlChange = UrlChanged
         , onUrlRequest = LinkClicked
         }
@@ -44,7 +66,7 @@ main =
 -- MODEL
 
 
-init : Flags -> Url -> Nav.Key -> ( Model, Cmd Msg )
+init : Flags -> Url -> Nav.Key -> ( AppModel, Cmd Msg )
 init flags url key =
     let
         -- Check if the URL has an authorization code
@@ -52,7 +74,7 @@ init flags url key =
             Auth.parseCode url
 
         initialModel =
-            Types.initial key url flags
+            Types.initial url flags
 
         effects =
             case urlCode of
@@ -79,19 +101,21 @@ init flags url key =
                 Nothing ->
                     ( initialModel, Effect.none )
     in
-    ( routedModel, Effect.perform key (Effect.batch (routeEffect :: effects)) )
+    ( { key = key, app = routedModel }
+    , Effect.perform key (Effect.batch (routeEffect :: effects))
+    )
 
 
 {-| The one place an `Effect` becomes a `Cmd`. `Update.update` deals in effects
 as data so that a test can read them; this is where they are actually run.
 -}
-updateWithEffects : Msg -> Model -> ( Model, Cmd Msg )
+updateWithEffects : Msg -> AppModel -> ( AppModel, Cmd Msg )
 updateWithEffects msg model =
     let
         ( updated, effect ) =
-            update msg model
+            update msg model.app
     in
-    ( updated, Effect.perform model.key effect )
+    ( { model | app = updated }, Effect.perform model.key effect )
 
 
 
@@ -99,9 +123,13 @@ updateWithEffects msg model =
 -- SUBSCRIPTIONS
 
 
+{-| Every save goes out as `Effect.ValidateSchema` and waits for the result
+before it commits, so without this subscription nothing can be saved at all: the
+status pill sticks on "Validating..." and the pending commit is never issued.
+-}
 subscriptions : Model -> Sub Msg
 subscriptions _ =
-    Sub.none
+    Ports.schemaValidationResult GotSchemaValidationResult
 
 
 

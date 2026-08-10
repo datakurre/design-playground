@@ -3,10 +3,13 @@ module Pages.TokenStudio exposing (RowContext, viewTokenList, viewTokenStudio)
 {-| The Tokens tab.
 
 `viewTokenList` and the `RowContext` it takes are exposed for `TokenStudioTest`.
-Everything that takes a `Model` is unreachable from a test — it would need a
-`Nav.Key` — so the list, which is the part with behaviour worth locking down,
-takes what it actually needs instead. `Renderer.renderScreenNode` is exposed for
-the same reason.
+It takes what it actually needs rather than a whole `Model`, which keeps the
+part with behaviour worth locking down easy to test and easy to read.
+`Renderer.renderScreenNode` is shaped the same way.
+
+This started as a workaround: a `Model` carried a `Nav.Key`, so nothing taking
+one was reachable from a test at all. `Effect` fixed that, and the shape stayed
+because it was the better one anyway.
 
 -}
 

@@ -17,8 +17,8 @@ is the only thing that tells them what happened. So the wording is behavior,
 and it's locked here.
 
 `renderScreenNode` takes dictionaries and a node rather than a `Model`, which
-is what makes it reachable from a test at all — everything in `update` and
-every `Model`-taking view is behind a `Nav.Key`.
+keeps these assertions about the thing being rendered rather than about how a
+model got into that state.
 
 -}
 suite : Test

@@ -224,8 +224,7 @@ clearProjectState : Model -> Model
 clearProjectState model =
     let
         fresh =
-            Types.initial model.key
-                model.url
+            Types.initial model.url
                 { token = model.token
                 , pkceChallenge = model.pkceChallenge
                 , pkceVerifier = model.pkceVerifier

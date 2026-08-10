@@ -6,8 +6,11 @@ Every "Add" form in the app used to answer this inline with a bare
 `if name /= "" && not (List.any ...)` whose else-branch was `( model, Cmd.none )`.
 Seven forms that did nothing, silently, and never said why — the single worst
 thing the app did for a first-time user. Pulling the decision out here gets it
-under test (`Model` carries a `Nav.Key`, so nothing in `update` can be), and
-leaves each `Msg` branch as two lines of glue.
+under test and leaves each `Msg` branch as two lines of glue.
+
+It was extracted when `update` itself was unreachable from a test, because
+`Model` carried a `Nav.Key`. That is no longer true — see `Effect` — but one
+place deciding one thing is still the right shape.
 
 @docs Problem, check, clearFailure, describe
 
