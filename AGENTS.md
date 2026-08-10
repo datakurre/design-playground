@@ -139,9 +139,11 @@ Where things live, so you don't have to guess:
 
 **Shell and plumbing**
 
-- `src/Main.elm` — entry point, app bar, tab chrome, project picker
-- `src/Update.elm` — the single `update` loop (~2100 lines; the Refactor Agent's
+- `src/Main.elm` — entry point, app bar, tab chrome, project picker. Also holds
+  the `Nav.Key` in its `AppModel` wrapper and runs effects via `Effect.perform`
+- `src/Update.elm` — the single `update` loop (~2000 lines; the Refactor Agent's
   standing assignment)
+- `src/Effect.elm` — what `update` asks the runtime to do, as inspectable data
 - `src/Types.elm` — `Model`, `Msg`, `Tab`
 - `src/Route.elm` — fragment-based URL routing (`#/namespace/project/tab/item`);
   fragments, not paths, because GitHub Pages has no history fallback
@@ -167,7 +169,9 @@ Where things live, so you don't have to guess:
 **Boundaries**
 
 - `src/GitLab/` — REST bindings: `Branches`, `Commits`, `Files`,
-  `MergeRequests`, `Projects`
+  `MergeRequests`, `Projects`. They return a `GitLab.Request.Request` — method,
+  url, headers and body as data — and `GitLab.Request.toCmd` is the only place
+  `Http.request` is called
 - `src/Auth.elm` + `src/Ports.elm` — OAuth PKCE and the `localStorage` token cache
 - `src/Ports.elm` also carries `validateSchema`/`schemaValidationResult`, the ajv
   bridge wired up in `src/main.js` against the JSON Schemas in `schemas/`.
@@ -185,38 +189,32 @@ Where things live, so you don't have to guess:
 Read this before deciding where new code goes. It is the difference between work
 a test can hold onto and work only the compiler ever sees.
 
-**What a test can reach today.** The domain layer — `Tokens`, `Themes`,
-`Screens`, `Components`, `Contracts`, `Colors`, `Naming`, `Export`, `TokenScale`,
-`TokenBrowse`, `Templates`, `Route`, `Help`, and the `GitLab/*` decoders — is
-pure and freely testable. View helpers that take plain data are testable through
-`Test.Html.Query`.
+**All of it is reachable.** The domain layer is pure. View helpers that take
+plain data go through `Test.Html.Query`. And `update` runs directly in a test —
+see `tests/UpdateTest.elm` — because effects are data and the `Nav.Key` lives in
+`Main`, not the `Model`.
 
-**What no test can reach.** `src/Update.elm` and `src/Main.elm`. `Types.Model`
-carries `key : Nav.Key`, and a `Nav.Key` cannot be constructed outside a running
-`Browser.application`, so `Types.initial` cannot be called from a test and
-neither can anything taking a `Model`. That is roughly a quarter of the source
-where type-checking is the only feedback: every state transition, every
-commit payload, every create-vs-update decision.
+The rules that keep it that way:
 
-So:
-
-1. **Keep decisions out of `Update.elm`.** A non-trivial `case` inside an
-   `update` branch belongs in the relevant domain module, called from the branch.
-   `src/Naming.elm` exists for precisely this reason — its docstring says so.
-2. **Give view helpers data, not `Model`.** Both existing view tests
-   (`tests/RendererTest.elm`, `tests/TokenStudioTest.elm`) target the
-   data-taking sub-function for exactly this reason. Make new views the same
-   shape.
-3. **Do not fake your way around the barrier.** No `Maybe Nav.Key`, no exposing
-   internals solely for tests, and no asserting on `Cmd`s — a `Cmd` is opaque and
-   carries no inspectable information.
-
-The standing fix is to move `update` onto an `Effect` type: `update` returns
-inspectable effect *data*, a single `perform` in `Main` turns it into `Cmd`, and
-`Nav.Key` leaves the `Model`. That also requires `GitLab/*` to return a request
-description rather than a `Cmd`, because `Http.Body` is opaque and a commit
-payload cannot otherwise be asserted. Until that lands, rule 1 is what keeps new
-work testable.
+1. **`update` returns an `Effect`, never a `Cmd`.** `Nav.Key`, `Ports` and
+   `Http.request` appear only in `src/Main.elm`, `src/Effect.elm` and
+   `src/GitLab/Request.elm`. Adding a new kind of side effect means adding an
+   `Effect` constructor, not reaching for `Cmd` in `Update`.
+2. **`GitLab/*` functions return a `Request`, never a `Cmd`.** The body travels
+   as a `Json.Encode.Value` so a test can decode it. This is what makes "did that
+   save become a create or an update, on which branch" answerable at all.
+3. **Never `Expect.equal` a whole `Effect`.** `SendRequest` carries an
+   `Http.Expect`, which contains a function, and Elm's `==` throws at runtime on
+   functions. It works fine for `PushUrl` and `ClearToken`, which makes the trap
+   worse rather than better. Use `Effect.requests` and `Effect.toList`.
+4. **Do not put `Nav.Key` back in the `Model`.** It is the one thing that would
+   undo all of this. `Main.AppModel` holds it; its docstring explains why that is
+   the only place it can go.
+5. **Give view helpers data, not `Model`,** where they can take it. Not a
+   testability constraint any more, just the better shape — the assertions end up
+   about the thing being rendered rather than about how a model got that way.
+6. **Every new `Msg` branch ships a test** asserting both the model change and
+   the resulting `Effect`.
 
 ## Skills
 
@@ -273,14 +271,13 @@ When an agent is summoned, it should adopt one of the following personas dependi
 - Extract shared logic into utility modules.
 - Ensure `elm-review` passes without warnings.
 - Break down massive `update` functions into smaller, composable helpers to keep the cognitive load low. `src/Update.elm` is the standing target.
-- The standing assignment is the `Effect` migration described under **Testability
-  rules**, in this order, each stage its own commit with `make check` green:
-  (1) move the pure helpers that only happen to live in `Update.elm` —
-  `updateLayoutNode`, `mapLayout`, `forgetVariant`/`forgetState`/`forgetSlot`,
-  `addNameToComponent`, `removeNameFromComponent` — into `src/Components.elm`
-  with tests; (2) make `GitLab/*` return a request description instead of a
-  `Cmd`; (3) introduce `Effect` and convert `update`; (4) remove `key` from the
-  `Model`, with `Main` holding it in a wrapper. Do not start it on a dirty tree.
+- The `Effect` migration is done; `update` is testable. What remains is volume:
+  `src/Update.elm` is still ~2000 lines and most of its 116 branches have no
+  test. Adding them is incremental and parallelisable — partition by area
+  (tokens / components / screens and contracts / git workflows / routing and
+  auth) and follow the shape in `tests/UpdateTest.elm`.
+- `addNameToComponent` and `removeNameFromComponent` still take a `Model`
+  because they always did; they are now testable and worth covering.
 
 ### 5. The Export Agent
 **Responsibility:** Build target generators for *external* consumers of the design system.

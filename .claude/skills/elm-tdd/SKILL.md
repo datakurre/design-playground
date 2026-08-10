@@ -1,6 +1,6 @@
 ---
 name: elm-tdd
-description: Write tests for this Elm codebase — where they go, the house style, what is reachable from a test and what is not, and how to work around the Nav.Key barrier. Use when adding or changing behaviour in src/, or when a change seems untestable.
+description: Write tests for this Elm codebase — where they go, the house style, and how to test an update branch by asserting on the Effect it returns. Use when adding or changing behaviour in src/, or when a change seems untestable.
 ---
 
 # Testing design-playground
@@ -38,29 +38,48 @@ for a view test. The conventions actually followed here:
 where most new logic should live.
 
 **Testable through `Test.Html.Query`**: view helpers that take plain data. Both
-existing view tests deliberately target the sub-function that takes dictionaries
-rather than the `Model`-taking entry point.
+existing view tests target the sub-function that takes dictionaries rather than
+the `Model`-taking entry point.
 
-**Not reachable at all**: `src/Update.elm` and `src/Main.elm`. `Types.Model` has
-a `key : Nav.Key` field, and a `Nav.Key` cannot be constructed outside a running
-`Browser.application`. So `Types.initial` cannot be called from a test, and
-neither can anything that takes a `Model`.
+**`update` itself.** `Types.initial` is callable from a test, so any `Model` can
+be built and any `Msg` run through `Update.update`. See `tests/UpdateTest.elm`.
 
-## Working with the Nav.Key barrier
+## Testing an update branch
 
-Until the planned `Effect` refactor lands, the way to make new logic testable is
-to keep it out of `Update.elm`:
+`update` returns `( Model, Effect Msg )`, and an `Effect` is data you can read.
 
-- Put the decision in a pure function in the relevant domain module, and have the
-  `update` branch call it. `src/Naming.elm` exists for exactly this reason — its
-  docstring says so.
-- Give view helpers the data they need, not the `Model`.
-- If you find yourself about to write a non-trivial `case` inside an `update`
-  branch, that is the signal: extract it.
+```elm
+let
+    ( model, effect ) =
+        Update.update SaveComponent someModel
+in
+Effect.requests effect
+    |> List.head
+    |> Maybe.andThen (.body >> GitLab.Request.bodyValue)
+    |> Maybe.map (Decode.decodeValue (Decode.at [ "actions", "0", "action" ] Decode.string))
+    |> Expect.equal (Just (Ok "create"))
+```
 
-Do **not** work around the barrier by adding a `Maybe Nav.Key`, by exposing
-internals just for tests, or by asserting on `Cmd`s — a `Cmd` is opaque and
-cannot be inspected.
+- `Effect.requests` gives the GitLab calls, with `.method`, `.url`, `.headers`
+  and `.body`. `GitLab.Request.bodyValue` gives the JSON to decode.
+- `Effect.toList` flattens `Batch` and drops `None`, for navigation and port
+  effects: `Expect.equal [ Effect.ClearToken, Effect.PushUrl "#/" ]`.
+- **Never `Expect.equal` a whole `Effect` containing `SendRequest`.** It carries
+  an `Http.Expect`, which contains a function, and Elm's `==` throws at runtime
+  on functions. It works for `PushUrl` and `ClearToken`, which makes the trap
+  worse rather than better.
+- Saving is two steps: the branch records a pending commit and emits
+  `ValidateSchema`, then `GotSchemaValidationResult` issues the commit. Run both.
+
+Keep effects as data all the way: `update` must never return a `Cmd`, and
+`Nav.Key` must never go back into the `Model` — that is what made all of this
+untestable before.
+
+## Where new logic goes
+
+Still prefer a pure function in the relevant domain module over a non-trivial
+`case` inside an `update` branch — `src/Naming.elm` is the model for this. It is
+now a readability argument rather than a testability one, but it holds.
 
 ## Fuzz tests
 
