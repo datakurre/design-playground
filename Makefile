@@ -1,4 +1,4 @@
-.PHONY: gen check dev build dist-ci test test-js fmt review watch smoke clean distclean
+.PHONY: gen check dev build dist-ci test test-js fmt review review-test watch smoke clean distclean
 
 # elm-tailwind-classes generates the type-safe Tailwind API into .elm-tailwind/,
 # which elm.json lists as a source directory. It must exist before elm, elm-test
@@ -28,6 +28,7 @@ check: gen
 	@elm-test
 	@node --test tests/schemas.test.js
 	@elm-review
+	@$(MAKE) review-test
 
 # The targets below exist so you don't have to run the whole of `check` to learn
 # one thing. `check` is still the gate — it is what the pre-commit hook and CI
@@ -54,6 +55,12 @@ fmt:
 
 review: gen
 	@elm-review
+
+# review/ is its own Elm project (see review/elm.json), so its custom rules'
+# own tests run via elm-test from inside that directory rather than through
+# the top-level `elm-test`, which only knows about tests/.
+review-test:
+	@cd review && elm-test
 
 # Re-runs the tests whenever an Elm file changes. entr exits when the file list
 # it was given goes stale, so adding a new module means restarting the watch.

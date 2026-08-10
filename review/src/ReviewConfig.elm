@@ -1,6 +1,9 @@
 module ReviewConfig exposing (config)
 
+import NoIconButtonWithoutAriaLabel
+import NoImgWithoutAlt
 import NoMissingTypeAnnotation
+import NoOnClickOnNonInteractiveElement
 import NoUnused.Dependencies
 import NoUnused.Variables
 import Review.Rule exposing (Rule)
@@ -12,6 +15,9 @@ config =
         [ NoUnused.Variables.rule
         , NoUnused.Dependencies.rule
         , NoMissingTypeAnnotation.rule
+        , NoIconButtonWithoutAriaLabel.rule
+        , NoOnClickOnNonInteractiveElement.rule
+        , NoImgWithoutAlt.rule
         ]
 
 
