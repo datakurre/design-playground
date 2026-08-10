@@ -143,7 +143,25 @@ suite =
 
                         _ ->
                             Expect.fail "Expected 1 violation"
-            , test "NoHardcodedValues: fails with mixed string on listed property" <|
+            , test "NoHardcodedValues: fails with a raw hex colour on listed property" <|
+                \_ ->
+                    -- The rule used to look only for hex literals. It now looks
+                    -- for anything that isn't a token reference, which has to
+                    -- still catch what it originally caught.
+                    let
+                        component =
+                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.singleton "color" "#ff0000" } "content") }
+
+                        contract =
+                            { component = "Test", rules = [ NoHardcodedValues [ "color" ] ] }
+                    in
+                    case Contracts.validate [] contract component of
+                        [ _ ] ->
+                            Expect.pass
+
+                        _ ->
+                            Expect.fail "Expected 1 violation"
+            , test "NoHardcodedValues: names the part of a mixed value that is hardcoded" <|
                 \_ ->
                     let
                         component =
@@ -151,6 +169,35 @@ suite =
 
                         contract =
                             { component = "Test", rules = [ NoHardcodedValues [ "border" ] ] }
+                    in
+                    case Contracts.validate [] contract component of
+                        [ violation ] ->
+                            -- Saying which part to replace is the difference
+                            -- between a report and an instruction.
+                            Expect.equal "Hardcoded value: 1px solid" violation.message
+
+                        _ ->
+                            Expect.fail "Expected 1 violation"
+            , test "NoHardcodedValues: reads through a conditional node" <|
+                \_ ->
+                    -- `when` nodes hold no styles of their own, so the rule has
+                    -- to look past them at what they contain.
+                    let
+                        component =
+                            { name = "Test"
+                            , description = Nothing
+                            , variants = [ "primary" ]
+                            , slots = []
+                            , states = []
+                            , layout =
+                                Just
+                                    (When { variant = Just "primary", state = Nothing }
+                                        [ Element { isSlot = False, styles = Dict.singleton "color" "#ff0000" } "content" ]
+                                    )
+                            }
+
+                        contract =
+                            { component = "Test", rules = [ NoHardcodedValues [ "color" ] ] }
                     in
                     case Contracts.validate [] contract component of
                         [ _ ] ->

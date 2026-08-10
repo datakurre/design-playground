@@ -13,7 +13,7 @@ module Help exposing
 
 Each topic is a plain value, not a runtime lookup — every call site already
 knows which topic it wants at compile time, so there's no `Dict`/`Maybe` layer
-to thread through (unlike `Templates`, where the *user* picks at runtime).
+to thread through (unlike `Templates`, where the _user_ picks at runtime).
 `Ui.contextHelp` renders any of these as a collapsed "?" disclosure, and
 `Ui.tabLede` renders a tab topic's `lede` as the one line that's always on
 screen; see there for the widgets themselves.

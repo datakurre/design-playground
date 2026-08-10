@@ -7,9 +7,7 @@ import Dict
 import Help
 import Html exposing (Html, button, div, h3, h4, li, text, ul)
 import Html.Attributes exposing (value)
-import Html.Events exposing (onCheck, onClick, onInput, stopPropagationOn)
-import Json.Decode
-import Naming
+import Html.Events exposing (onCheck, onClick, onInput)
 import Renderer
 import Route
 import Tailwind as Tw exposing (classes)
@@ -38,7 +36,7 @@ viewLayoutEditorNode model comp path layout =
 
                 Components.Element props content ->
                     ( "Text", Just props.styles, [] )
-                    
+
                 Components.When _ children ->
                     ( "When", Nothing, children )
     in
@@ -129,23 +127,26 @@ viewLayoutEditorNode model comp path layout =
                             [ text "Add style" ]
                         ]
                     ]
+
             Nothing ->
                 text ""
         , case layout of
             Components.Element props content ->
                 div [ classes [ Tw.px s2, Tw.pb s2 ] ]
                     [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.mb s2 ] ]
-                        [ Html.input 
+                        [ Html.input
                             [ Html.Attributes.type_ "checkbox"
                             , Html.Attributes.checked props.isSlot
                             , onCheck (ToggleLayoutNodeIsSlot path)
-                            ] []
+                            ]
+                            []
                         , text "Is Slot Placeholder"
                         ]
                     , if props.isSlot then
                         if List.isEmpty comp.slots then
                             div [ Ui.mutedSmall, classes [ Tw.text_color (red s600) ] ]
                                 [ text "No slots defined. Add slots in the header above first." ]
+
                         else
                             Html.select
                                 [ onInput (UpdateLayoutText path)
@@ -154,6 +155,7 @@ viewLayoutEditorNode model comp path layout =
                                 (Html.option [ value "" ] [ text "-- Select a slot --" ]
                                     :: List.map (\s -> Html.option [ value s, Html.Attributes.selected (s == content) ] [ text s ]) comp.slots
                                 )
+
                       else
                         Html.input
                             [ Ui.textInput
@@ -386,9 +388,36 @@ viewComponentEditor model comp displayTokens =
                 , button [ Ui.btnDanger, onClick (DeleteComponent comp.name) ] [ text "Delete" ]
                 ]
             ]
-        , viewNameList "Variants" Help.componentVariant commonVariantNames comp.variants model.newComponentVariant UpdateNewComponentVariant AddComponentVariant RemoveComponentVariant
-        , viewNameList "States" Help.componentState commonStateNames comp.states model.newComponentState UpdateNewComponentState AddComponentState RemoveComponentState
-        , viewNameList "Slots" Help.componentSlot commonSlotNames comp.slots model.newComponentSlot UpdateNewComponentSlot AddComponentSlot RemoveComponentSlot
+        , viewNameList
+            { label = "Variants"
+            , helpTopic = Help.componentVariant
+            , suggestions = commonVariantNames
+            , names = comp.variants
+            , draft = model.newComponentVariant
+            , onDraftChange = UpdateNewComponentVariant
+            , onAdd = AddComponentVariant
+            , onRemove = RemoveComponentVariant
+            }
+        , viewNameList
+            { label = "States"
+            , helpTopic = Help.componentState
+            , suggestions = commonStateNames
+            , names = comp.states
+            , draft = model.newComponentState
+            , onDraftChange = UpdateNewComponentState
+            , onAdd = AddComponentState
+            , onRemove = RemoveComponentState
+            }
+        , viewNameList
+            { label = "Slots"
+            , helpTopic = Help.componentSlot
+            , suggestions = commonSlotNames
+            , names = comp.slots
+            , draft = model.newComponentSlot
+            , onDraftChange = UpdateNewComponentSlot
+            , onAdd = AddComponentSlot
+            , onRemove = RemoveComponentSlot
+            }
         , div [ classes [ Tw.mt s3, Tw.pt s3 ], Ui.divider ]
             [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.mb s2 ] ]
                 [ h4 [ Ui.sectionTitle ] [ text "Layout" ]
@@ -406,9 +435,9 @@ viewComponentEditor model comp displayTokens =
                         [ div [ Ui.muted, classes [ Tw.mb s2 ] ]
                             [ text "This component has nothing in it yet. Choose a root layout node:" ]
                         , div [ classes [ Tw.flex, Tw.gap s2 ] ]
-                            [ button [ Ui.btnNeutral, onClick (InitComponentLayout "stack") ] [ text "+ Stack" ]
-                            , button [ Ui.btnNeutral, onClick (InitComponentLayout "grid") ] [ text "+ Grid" ]
-                            , button [ Ui.btnNeutral, onClick (InitComponentLayout "element") ] [ text "+ Element" ]
+                            [ button [ Ui.btnNeutral, onClick (InitComponentLayout (Components.Stack { direction = "column", styles = Dict.empty } [])) ] [ text "+ Stack" ]
+                            , button [ Ui.btnNeutral, onClick (InitComponentLayout (Components.Grid { columns = 1, styles = Dict.empty } [])) ] [ text "+ Grid" ]
+                            , button [ Ui.btnNeutral, onClick (InitComponentLayout (Components.Element { isSlot = False, styles = Dict.empty } "New Element")) ] [ text "+ Element" ]
                             ]
                         ]
 
@@ -434,6 +463,7 @@ commonStateNames : List String
 commonStateNames =
     [ "default", "hover", "focus", "active", "disabled", "loading", "selected", "error" ]
 
+
 {-| Common slot names for placing custom content.
 -}
 commonSlotNames : List String
@@ -442,15 +472,30 @@ commonSlotNames =
 
 
 {-| Variants, states and slots are all "a list of names you can add to".
-`suggestions` seeds a `<datalist>` for the draft input; pass `[]` (as Slots
-does) when there's no established vocabulary worth suggesting.
+`suggestions` seeds a `<datalist>` for the draft input, minus whatever has
+already been added — a suggestion you can't use isn't one.
+
+A record rather than eight positional arguments, three of which are `Msg`s of
+much the same shape: `Update.addNameToComponent` describes the other half of
+these three forms the same way.
+
 -}
-viewNameList : String -> Help.Topic -> List String -> List String -> String -> (String -> Msg) -> Msg -> (String -> Msg) -> Html Msg
-viewNameList label helpTopic suggestions names draft onDraftChange onAdd onRemove =
+viewNameList :
+    { label : String
+    , helpTopic : Help.Topic
+    , suggestions : List String
+    , names : List String
+    , draft : String
+    , onDraftChange : String -> Msg
+    , onAdd : Msg
+    , onRemove : String -> Msg
+    }
+    -> Html Msg
+viewNameList { label, helpTopic, suggestions, names, draft, onDraftChange, onAdd, onRemove } =
     let
         datalistId =
             "suggestions-" ++ label
-            
+
         availableSuggestions =
             List.filter (\s -> not (List.member s names)) suggestions
     in
@@ -479,7 +524,7 @@ viewNameList label helpTopic suggestions names draft onDraftChange onAdd onRemov
                                 , Tw.gap s1
                                 ]
                             ]
-                            [ text n 
+                            [ text n
                             , button
                                 [ onClick (onRemove n)
                                 , Html.Attributes.attribute "aria-label" ("Remove " ++ n)
@@ -526,9 +571,19 @@ viewComponentPreview model comp displayTokens =
             , div [ classes [ Tw.flex, Tw.gap s2 ] ]
                 [ if List.isEmpty comp.variants then
                     text ""
+
                   else
                     Html.select
-                        [ onInput (\v -> UpdatePreviewComponentVariant (if v == "" then Nothing else Just v))
+                        [ onInput
+                            (\v ->
+                                UpdatePreviewComponentVariant
+                                    (if v == "" then
+                                        Nothing
+
+                                     else
+                                        Just v
+                                    )
+                            )
                         , classes [ Tw.p s1, Tw.border, Tw.border_color (slate s300), Tw.rounded_sm, Tw.text_sm ]
                         ]
                         (Html.option [ value "" ] [ text "Base Variant" ]
@@ -536,9 +591,19 @@ viewComponentPreview model comp displayTokens =
                         )
                 , if List.isEmpty comp.states then
                     text ""
+
                   else
                     Html.select
-                        [ onInput (\v -> UpdatePreviewComponentState (if v == "" then Nothing else Just v))
+                        [ onInput
+                            (\v ->
+                                UpdatePreviewComponentState
+                                    (if v == "" then
+                                        Nothing
+
+                                     else
+                                        Just v
+                                    )
+                            )
                         , classes [ Tw.p s1, Tw.border, Tw.border_color (slate s300), Tw.rounded_sm, Tw.text_sm ]
                         ]
                         (Html.option [ value "" ] [ text "Base State" ]
@@ -550,7 +615,7 @@ viewComponentPreview model comp displayTokens =
         , case comp.layout of
             Just l ->
                 div [ Ui.previewSurface, classes [ Tw.min_h s24 ] ]
-                    [ Renderer.renderLayoutWithSlots Dict.empty Dict.empty [] displayTokens Dict.empty model.previewComponentVariant model.previewComponentState l ]
+                    [ Renderer.renderWithConditions displayTokens model.previewComponentVariant model.previewComponentState l ]
 
             Nothing ->
                 div [ Ui.muted ] [ text "Nothing to preview yet." ]
@@ -686,6 +751,7 @@ the user starts typing and offers no help if they get the format wrong.
 `extraAttrs` lets call sites opt into a `list="..."` datalist or a different
 `type_`/`step`/`min`/`max` (e.g. the numeric "minimum ratio" field) without
 branching inside this shared helper.
+
 -}
 viewRuleField : Model -> String -> String -> String -> String -> List (Html.Attribute Msg) -> Html Msg
 viewRuleField model key label placeholder hint extraAttrs =

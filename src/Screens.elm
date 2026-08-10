@@ -1,4 +1,4 @@
-module Screens exposing (Screen, ScreenNode(..), ComponentInstanceProps, ContainerProps, decoder, encoder, screenNodeDecoder, screenNodeEncoder)
+module Screens exposing (ComponentInstanceProps, ContainerProps, Screen, ScreenNode(..), decoder, encoder, formsCycle, screenNodeDecoder, screenNodeEncoder)
 
 import Dict exposing (Dict)
 import Json.Decode as Decode exposing (Decoder)
@@ -32,9 +32,46 @@ type alias ContainerProps =
     , styles : Dict String String
     }
 
+
+{-| Whether following this node's screen references leads back to a screen that
+is already on the way in. `visited` is the screens being expanded, innermost
+last, and it has to include the screen the node belongs to — a screen that
+contains itself is the loop people actually make.
+
+The preview discovers the same condition as it descends, one screen at a time.
+This answers it up front, so the editor can mark the row that causes it instead
+of leaving you to find out at preview time.
+
+-}
+formsCycle : Dict String Screen -> List String -> ScreenNode -> Bool
+formsCycle screens visited node =
+    case node of
+        ScreenInstance props ->
+            if List.member props.screenName visited then
+                True
+
+            else
+                case Dict.get props.screenName screens of
+                    Just screen ->
+                        formsCycle screens (props.screenName :: visited) screen.root
+
+                    Nothing ->
+                        False
+
+        Container _ children ->
+            List.any (formsCycle screens visited) children
+
+        ComponentInstance _ ->
+            False
+
+        TextNode _ ->
+            False
+
+
 orElse : Decoder a -> Decoder a -> Decoder a
 orElse fallback decoder2 =
     Decode.oneOf [ decoder2, fallback ]
+
 
 screenNodeDecoder : Decoder ScreenNode
 screenNodeDecoder =

@@ -1,4 +1,4 @@
-module Update exposing (update)
+module Update exposing (applyRoute, update)
 
 import Auth
 import Browser
@@ -12,18 +12,19 @@ import GitLab.Commits
 import GitLab.Files
 import GitLab.MergeRequests
 import GitLab.Projects
+import Http
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Naming
 import Ports
+import Route
 import Screens exposing (ScreenNode(..))
 import Templates
 import Themes
-import Tokens
 import TokenScale
+import Tokens
 import Types exposing (..)
 import Url
-import Route
 
 
 {-| The "add a variant / slot / state" forms are the same form three times
@@ -34,6 +35,7 @@ They used to clear the field unconditionally while a `not (List.member ...)`
 guard inside the mapper quietly dropped duplicates — so adding "primary" twice
 looked like it worked and didn't. Routing all three through `Naming` means a
 duplicate says so and the field keeps what you typed.
+
 -}
 addNameToComponent :
     { noun : String
@@ -80,27 +82,91 @@ addNameToComponent config model =
                     )
 
 
-removeNameFromComponent : (Components.Component -> List String) -> (List String -> Components.Component -> Components.Component) -> String -> Model -> ( Model, Cmd Msg )
-removeNameFromComponent get set name model =
+{-| The mirror of `addNameToComponent`, with one job more: the layout can point
+at a variant, state or slot _by name_, so dropping the name has to drop what
+points at it. Left behind, a `When` on a deleted variant is a condition that can
+never match again and a placeholder for a deleted slot renders as nothing —
+neither of which the editor gives you any way to see, let alone fix.
+-}
+removeNameFromComponent :
+    { get : Components.Component -> List String
+    , set : List String -> Components.Component -> Components.Component
+    , forget : String -> Components.Layout -> Components.Layout
+    }
+    -> String
+    -> Model
+    -> ( Model, Cmd Msg )
+removeNameFromComponent config name model =
     case model.selectedComponentName of
         Nothing ->
             ( model, Cmd.none )
 
         Just selected ->
             let
-                currentComponents =
-                    model.components |> Maybe.withDefault []
-
                 removeFrom c =
                     if c.name == selected then
-                        set (List.filter (\n -> n /= name) (get c)) c
+                        let
+                            stripped =
+                                config.set (List.filter (\n -> n /= name) (config.get c)) c
+                        in
+                        { stripped | layout = Maybe.map (mapLayout (config.forget name)) stripped.layout }
 
                     else
                         c
             in
-            ( { model | components = Just (List.map removeFrom currentComponents) }
+            ( { model | components = Just (List.map removeFrom (Maybe.withDefault [] model.components)) }
             , Cmd.none
             )
+
+
+{-| A `When` that named the removed variant becomes one that doesn't ask about
+variants at all, rather than one that can never be true.
+-}
+forgetVariant : String -> Components.Layout -> Components.Layout
+forgetVariant name layout =
+    case layout of
+        Components.When props children ->
+            if props.variant == Just name then
+                Components.When { props | variant = Nothing } children
+
+            else
+                layout
+
+        _ ->
+            layout
+
+
+{-| As `forgetVariant`, for the other half of a condition.
+-}
+forgetState : String -> Components.Layout -> Components.Layout
+forgetState name layout =
+    case layout of
+        Components.When props children ->
+            if props.state == Just name then
+                Components.When { props | state = Nothing } children
+
+            else
+                layout
+
+        _ ->
+            layout
+
+
+{-| A placeholder for a slot that no longer exists goes back to being an ordinary
+empty text element — visible, and something you can type into.
+-}
+forgetSlot : String -> Components.Layout -> Components.Layout
+forgetSlot name layout =
+    case layout of
+        Components.Element props content ->
+            if props.isSlot && content == name then
+                Components.Element { props | isSlot = False } ""
+
+            else
+                layout
+
+        _ ->
+            layout
 
 
 updateLayoutNode : List Int -> (Components.Layout -> Components.Layout) -> Components.Layout -> Components.Layout
@@ -153,18 +219,206 @@ updateLayoutNode path updateFn layout =
                 Components.Element _ _ ->
                     layout
 
-routeToTab : Route.TabRoute -> Types.Tab
-routeToTab tr =
-    case tr of
-        Route.TokensTab -> Types.TokenStudio
-        Route.ComponentsTab _ -> Types.ComponentRegistry
-        Route.ScreensTab _ -> Types.ScreenComposer
-        Route.GitWorkflowsTab -> Types.GitWorkflows
-        Route.ExportPipelineTab -> Types.ExportPipeline
+
+{-| Rewrites every node in the tree. `updateLayoutNode` addresses one node by
+path; this is for the edits that have to touch all of them, like forgetting a
+variant that no longer exists.
+-}
+mapLayout : (Components.Layout -> Components.Layout) -> Components.Layout -> Components.Layout
+mapLayout f layout =
+    case f layout of
+        Components.Stack props children ->
+            Components.Stack props (List.map (mapLayout f) children)
+
+        Components.Grid props children ->
+            Components.Grid props (List.map (mapLayout f) children)
+
+        Components.When props children ->
+            Components.When props (List.map (mapLayout f) children)
+
+        (Components.Element _ _) as element ->
+            element
+
+
+{-| Everything in the model that belongs to a repository rather than to the app.
+Opening a project, closing one and logging out all have to forget the same set;
+each used to spell it out inline, and each was missing something different.
+-}
+clearProjectState : Model -> Model
+clearProjectState model =
+    { model
+        | selectedProject = Nothing
+        , repositoryTree = Nothing
+        , commitStatus = Nothing
+        , originalTokens = Nothing
+        , tokensFileExists = False
+        , tokens = Nothing
+        , themes = []
+        , existingThemes = []
+        , existingComponents = []
+        , existingScreens = []
+        , activeThemeName = Nothing
+        , originalComponents = Nothing
+        , components = Nothing
+        , selectedComponentName = Nothing
+        , screens = Nothing
+        , selectedScreenName = Nothing
+        , branches = Nothing
+        , currentBranch = Nothing
+        , exportTargets = [ "css", "tailwind" ]
+        , contracts = Nothing
+        , existingContracts = []
+        , newContractRuleType = "allowedTokenGroups"
+        , newContractRuleFields = Dict.empty
+        , newThemeName = ""
+        , newTokenPath = ""
+        , newTokenValue = ""
+        , tokenSearch = ""
+        , tokenTypeFilter = ""
+        , tokenOverriddenOnly = False
+        , tokenChangedOnly = False
+        , newComponentName = ""
+        , newComponentVariant = ""
+        , newComponentSlot = ""
+        , newComponentState = ""
+        , previewComponentVariant = Nothing
+        , previewComponentState = Nothing
+        , newLayoutPropertyName = ""
+        , newLayoutPropertyValue = ""
+        , newScreenName = ""
+    }
+
 
 resetForProject : GitLab.Projects.Project -> Model -> Model
 resetForProject project model =
-    { model | selectedProject = Just project, repositoryTree = Nothing, commitStatus = Nothing, originalTokens = Nothing, tokensFileExists = False, tokens = Nothing, themes = [], existingThemes = [], existingComponents = [], existingScreens = [], activeThemeName = Nothing, originalComponents = Nothing, components = Nothing, selectedComponentName = Nothing, screens = Nothing, selectedScreenName = Nothing, currentBranch = Just project.defaultBranch, exportTargets = [ "css", "tailwind" ], contracts = Nothing, existingContracts = [], newContractRuleType = "allowedTokenGroups", newContractRuleFields = Dict.empty }
+    let
+        cleared =
+            clearProjectState model
+    in
+    { cleared
+        | selectedProject = Just project
+        , currentBranch = Just project.defaultBranch
+    }
+
+
+{-| Everything a route needs from the model: the right project loaded, the right
+tab open, the right thing selected. `UrlChanged` runs it on every navigation and
+`Main.init` runs it once at boot, which is what makes a deep link or a refresh
+land where the URL says rather than on an empty Tokens tab.
+-}
+applyRoute : Route.Route -> Model -> ( Model, Cmd Msg )
+applyRoute route model =
+    case route of
+        Route.Home ->
+            ( { model | activeTab = TokenStudio } |> clearProjectState, Cmd.none )
+
+        Route.Repo path tabRoute ->
+            let
+                ( opened, cmd ) =
+                    openProject path model
+            in
+            ( selectFromRoute tabRoute opened, cmd )
+
+
+{-| A route only speaks for its own tab. Leaving the other tab's selection alone
+is what lets you look at Screens and come back to the component you had open.
+-}
+selectFromRoute : Route.TabRoute -> Model -> Model
+selectFromRoute tabRoute model =
+    { model
+        | activeTab = Route.toTab tabRoute
+        , selectedComponentName =
+            case tabRoute of
+                Route.ComponentsTab name ->
+                    name
+
+                _ ->
+                    model.selectedComponentName
+        , selectedScreenName =
+            case tabRoute of
+                Route.ScreensTab name ->
+                    name
+
+                _ ->
+                    model.selectedScreenName
+    }
+
+
+{-| Re-reads the tab and selection out of the address bar. Needed when something
+lands after the navigation that asked for it.
+-}
+selectFromUrl : Url.Url -> Model -> Model
+selectFromUrl url model =
+    case Route.parse url of
+        Just (Route.Repo _ tabRoute) ->
+            selectFromRoute tabRoute model
+
+        _ ->
+            model
+
+
+{-| Changing tabs and changing selection are both navigations, so that the URL
+and the model can never disagree about what you're looking at. With no project
+open there's no route to push, so the change is made directly.
+-}
+navigateToTab : Route.TabRoute -> Model -> ( Model, Cmd Msg )
+navigateToTab tabRoute model =
+    case model.selectedProject of
+        Just project ->
+            ( model, Nav.pushUrl model.key (Route.toString (Route.Repo project.pathWithNamespace tabRoute)) )
+
+        Nothing ->
+            ( selectFromRoute tabRoute model, Cmd.none )
+
+
+{-| Loads the project the route names, unless it is already the one open. It may
+be one we've already listed, in which case we have its id and can go straight for
+the contents; otherwise — a deep link, a fresh tab — it has to be looked up by
+path first, and `GotProject` picks the work back up.
+-}
+openProject : String -> Model -> ( Model, Cmd Msg )
+openProject path model =
+    if Maybe.map .pathWithNamespace model.selectedProject == Just path then
+        ( model, Cmd.none )
+
+    else
+        case model.token of
+            Nothing ->
+                ( model, Cmd.none )
+
+            Just token ->
+                let
+                    alreadyListed =
+                        model.projects
+                            |> Maybe.withDefault []
+                            |> List.filter (\p -> p.pathWithNamespace == path)
+                            |> List.head
+                in
+                case alreadyListed of
+                    Just project ->
+                        ( resetForProject project model, fetchProjectData token project )
+
+                    Nothing ->
+                        ( { model | selectedProject = Nothing, commitStatus = Just ( Working, "Loading repository..." ) }
+                        , GitLab.Projects.getProject token path GotProject
+                        )
+
+
+{-| A deep link can name a project that doesn't exist, isn't yours, or that your
+token has expired out of — three different things to do about it, so say which.
+-}
+projectErrorMessage : Http.Error -> String
+projectErrorMessage error =
+    case error of
+        Http.BadStatus 404 ->
+            "No repository at that address, or you don't have access to it."
+
+        Http.BadStatus 401 ->
+            "Your GitLab session has expired. Sign in again."
+
+        _ ->
+            "Couldn't reach GitLab to open that repository."
+
 
 fetchProjectData : String -> GitLab.Projects.Project -> Cmd Msg
 fetchProjectData token project =
@@ -278,57 +532,8 @@ update msg model =
 
         UrlChanged url ->
             case Route.parse url of
-                Just Route.Home ->
-                    ( { model | url = url, selectedProject = Nothing, activeTab = TokenStudio, selectedComponentName = Nothing, selectedScreenName = Nothing }, Cmd.none )
-
-                Just (Route.Repo path tabRoute) ->
-                    let
-                        tab = routeToTab tabRoute
-                        compName = case tabRoute of
-                            Route.ComponentsTab c -> c
-                            _ -> Nothing
-                        scrName = case tabRoute of
-                            Route.ScreensTab s -> s
-                            _ -> Nothing
-
-                        ( baseModel, cmd ) =
-                            case model.selectedProject of
-                                Just p ->
-                                    if p.pathWithNamespace /= path then
-                                        case model.token of
-                                            Just t ->
-                                                ( { model | selectedProject = Nothing, commitStatus = Just ( Working, "Loading repository..." ) }
-                                                , GitLab.Projects.getProject t path GotProject
-                                                )
-                                            Nothing ->
-                                                ( model, Cmd.none )
-                                    else
-                                        ( model, Cmd.none )
-
-                                Nothing ->
-                                    let
-                                        knownProject =
-                                            model.projects |> Maybe.andThen (List.filter (\p -> p.pathWithNamespace == path) >> List.head)
-                                    in
-                                    case knownProject of
-                                        Just p ->
-                                            case model.token of
-                                                Just t ->
-                                                    ( resetForProject p model
-                                                    , fetchProjectData t p
-                                                    )
-                                                Nothing ->
-                                                    ( model, Cmd.none )
-                                        Nothing ->
-                                            case model.token of
-                                                Just t ->
-                                                    ( { model | commitStatus = Just ( Working, "Loading repository..." ) }
-                                                    , GitLab.Projects.getProject t path GotProject
-                                                    )
-                                                Nothing ->
-                                                    ( model, Cmd.none )
-                    in
-                    ( { baseModel | url = url, activeTab = tab, selectedComponentName = compName, selectedScreenName = scrName }, cmd )
+                Just route ->
+                    applyRoute route { model | url = url }
 
                 Nothing ->
                     ( { model | url = url }, Cmd.none )
@@ -373,8 +578,21 @@ update msg model =
                     )
 
         Logout ->
-            ( { model | token = Nothing, user = Nothing, error = Nothing, projects = Nothing, projectsPage = 1, projectSearch = "", selectedProject = Nothing, repositoryTree = Nothing, commitStatus = Nothing, originalTokens = Nothing, tokensFileExists = False, tokens = Nothing, themes = [], existingThemes = [], existingComponents = [], existingScreens = [], activeThemeName = Nothing, newThemeName = "", newTokenPath = "", newTokenType = "color", newTokenValue = "", tokenSearch = "", tokenTypeFilter = "", tokenOverriddenOnly = False, tokenChangedOnly = False, activeTab = TokenStudio, components = Nothing, selectedComponentName = Nothing, newComponentName = "", newComponentVariant = "", newComponentSlot = "", newComponentState = "", previewComponentVariant = Nothing, previewComponentState = Nothing, screens = Nothing, selectedScreenName = Nothing, newScreenName = "", contracts = Nothing, existingContracts = [], newContractRuleType = "allowedTokenGroups", newContractRuleFields = Dict.empty }
-            , Ports.clearToken ()
+            ( clearProjectState
+                { model
+                    | token = Nothing
+                    , user = Nothing
+                    , error = Nothing
+                    , projects = Nothing
+                    , projectsPage = 1
+                    , projectSearch = ""
+                    , newTokenType = "color"
+                    , activeTab = TokenStudio
+                }
+            , Cmd.batch
+                [ Ports.clearToken ()
+                , Nav.pushUrl model.key (Route.toString Route.Home)
+                ]
             )
 
         FetchProjects ->
@@ -420,19 +638,25 @@ update msg model =
             ( model, Nav.pushUrl model.key (Route.toString (Route.Repo project.pathWithNamespace Route.TokensTab)) )
 
         UnselectProject ->
-            ( { model | selectedProject = Nothing, repositoryTree = Nothing, tokens = Nothing, themes = [], components = Nothing, screens = Nothing, activeThemeName = Nothing, selectedComponentName = Nothing, selectedScreenName = Nothing, commitStatus = Nothing, contracts = Nothing, existingContracts = [], newContractRuleType = "allowedTokenGroups", newContractRuleFields = Dict.empty }, Nav.pushUrl model.key "/" )
+            ( model, Nav.pushUrl model.key (Route.toString Route.Home) )
 
         GotProject result ->
-            case result of
-                Ok project ->
-                    case model.token of
-                        Just t ->
-                            ( resetForProject project model, fetchProjectData t project )
-                        Nothing ->
-                            ( model, Cmd.none )
+            case ( result, model.token ) of
+                ( Ok project, Just token ) ->
+                    -- The route asked for this project, and resetting for it
+                    -- necessarily forgot what was selected. The rest of the
+                    -- route still says, so it applies again — otherwise a deep
+                    -- link to a component would land on the right tab with
+                    -- nothing chosen the moment the repository arrived.
+                    ( resetForProject project model |> selectFromUrl model.url
+                    , fetchProjectData token project
+                    )
 
-                Err _ ->
-                    ( { model | error = Just "Failed to fetch project details.", commitStatus = Nothing }, Cmd.none )
+                ( Ok _, Nothing ) ->
+                    ( { model | commitStatus = Nothing }, Cmd.none )
+
+                ( Err error, _ ) ->
+                    ( { model | error = Just (projectErrorMessage error), commitStatus = Nothing }, Cmd.none )
 
         GotTree result ->
             case result of
@@ -737,19 +961,7 @@ update msg model =
                     ( model, Cmd.none )
 
         SwitchTab tab ->
-            case model.selectedProject of
-                Just p ->
-                    let
-                        tabRoute = case tab of
-                            TokenStudio -> Route.TokensTab
-                            ComponentRegistry -> Route.ComponentsTab model.selectedComponentName
-                            ScreenComposer -> Route.ScreensTab model.selectedScreenName
-                            GitWorkflows -> Route.GitWorkflowsTab
-                            ExportPipeline -> Route.ExportPipelineTab
-                    in
-                    ( model, Nav.pushUrl model.key (Route.toString (Route.Repo p.pathWithNamespace tabRoute)) )
-                Nothing ->
-                    ( { model | activeTab = tab }, Cmd.none )
+            navigateToTab (Route.tabRouteFor tab model.selectedComponentName model.selectedScreenName) model
 
         GotComponentsTree ref result ->
             case result of
@@ -806,11 +1018,7 @@ update msg model =
                     ( model, Cmd.none )
 
         SelectComponent name ->
-            case model.selectedProject of
-                Just p ->
-                    ( model, Nav.pushUrl model.key (Route.toString (Route.Repo p.pathWithNamespace (Route.ComponentsTab name))) )
-                Nothing ->
-                    ( { model | selectedComponentName = name }, Cmd.none )
+            navigateToTab (Route.ComponentsTab name) model
 
         UpdateNewComponentName name ->
             ( { model | newComponentName = name, commitStatus = Naming.clearFailure model.commitStatus }, Cmd.none )
@@ -853,7 +1061,13 @@ update msg model =
                 model
 
         RemoveComponentVariant name ->
-            removeNameFromComponent .variants (\names c -> { c | variants = names }) name model
+            removeNameFromComponent
+                { get = .variants
+                , set = \names c -> { c | variants = names }
+                , forget = forgetVariant
+                }
+                name
+                model
 
         UpdateNewComponentSlot name ->
             ( { model | newComponentSlot = name, commitStatus = Naming.clearFailure model.commitStatus }, Cmd.none )
@@ -870,7 +1084,13 @@ update msg model =
                 model
 
         RemoveComponentSlot name ->
-            removeNameFromComponent .slots (\names c -> { c | slots = names }) name model
+            removeNameFromComponent
+                { get = .slots
+                , set = \names c -> { c | slots = names }
+                , forget = forgetSlot
+                }
+                name
+                model
 
         UpdateNewComponentState name ->
             ( { model | newComponentState = name, commitStatus = Naming.clearFailure model.commitStatus }, Cmd.none )
@@ -887,7 +1107,13 @@ update msg model =
                 model
 
         RemoveComponentState name ->
-            removeNameFromComponent .states (\names c -> { c | states = names }) name model
+            removeNameFromComponent
+                { get = .states
+                , set = \names c -> { c | states = names }
+                , forget = forgetState
+                }
+                name
+                model
 
         SaveComponent ->
             case ( model.token, model.selectedProject, model.selectedComponentName ) of
@@ -945,27 +1171,10 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
-        InitComponentLayout layoutType ->
+        InitComponentLayout newLayout ->
             case model.selectedComponentName of
                 Just name ->
                     let
-                        currentComponents =
-                            model.components |> Maybe.withDefault []
-
-                        newLayout =
-                            case layoutType of
-                                "stack" ->
-                                    Components.Stack { direction = "column", styles = Dict.empty } []
-
-                                "grid" ->
-                                    Components.Grid { columns = 1, styles = Dict.empty } []
-
-                                "element" ->
-                                    Components.Element { isSlot = False, styles = Dict.empty } "New Element"
-
-                                _ ->
-                                    Components.Stack { direction = "column", styles = Dict.empty } []
-
                         updateComponent c =
                             if c.name == name then
                                 { c | layout = Just newLayout }
@@ -973,7 +1182,7 @@ update msg model =
                             else
                                 c
                     in
-                    ( { model | components = Just (List.map updateComponent currentComponents) }, Cmd.none )
+                    ( { model | components = Just (List.map updateComponent (Maybe.withDefault [] model.components)) }, Cmd.none )
 
                 Nothing ->
                     ( model, Cmd.none )
@@ -1006,7 +1215,6 @@ update msg model =
 
                                                                 Components.When p children ->
                                                                     Components.When p children
-
                                                         )
                                                         l
                                                     )
@@ -1051,7 +1259,6 @@ update msg model =
 
                                                                 Components.When p children ->
                                                                     Components.When p children
-
                                                         )
                                                         l
                                                     )
@@ -1349,8 +1556,15 @@ update msg model =
                                                     (updateLayoutNode path
                                                         (\node ->
                                                             case node of
+                                                                -- `content` is the text when this is a
+                                                                -- text element and the slot name when it
+                                                                -- isn't, so flipping the switch used to
+                                                                -- blank it. Keeping it means toggling
+                                                                -- back gets your text back; an unmatched
+                                                                -- name just leaves the slot picker on
+                                                                -- its "choose one" prompt.
                                                                 Components.Element p content ->
-                                                                    Components.Element { p | isSlot = isSlot } (if isSlot then "" else content)
+                                                                    Components.Element { p | isSlot = isSlot } content
 
                                                                 _ ->
                                                                     node
@@ -1389,12 +1603,19 @@ update msg model =
                                                             case node of
                                                                 Components.When p children ->
                                                                     let
-                                                                        newValue = if value == "" then Nothing else Just value
+                                                                        newValue =
+                                                                            if value == "" then
+                                                                                Nothing
+
+                                                                            else
+                                                                                Just value
                                                                     in
                                                                     if field == "variant" then
                                                                         Components.When { p | variant = newValue } children
+
                                                                     else if field == "state" then
                                                                         Components.When { p | state = newValue } children
+
                                                                     else
                                                                         node
 
@@ -1418,7 +1639,7 @@ update msg model =
 
         UpdatePreviewComponentVariant variant ->
             ( { model | previewComponentVariant = variant }, Cmd.none )
-            
+
         UpdatePreviewComponentState state ->
             ( { model | previewComponentState = state }, Cmd.none )
 
@@ -1528,11 +1749,7 @@ update msg model =
                     ( model, Cmd.none )
 
         SelectScreen name ->
-            case model.selectedProject of
-                Just p ->
-                    ( model, Nav.pushUrl model.key (Route.toString (Route.Repo p.pathWithNamespace (Route.ScreensTab name))) )
-                Nothing ->
-                    ( { model | selectedScreenName = name }, Cmd.none )
+            navigateToTab (Route.ScreensTab name) model
 
         UpdateNewScreenName name ->
             ( { model | newScreenName = name, commitStatus = Naming.clearFailure model.commitStatus }, Cmd.none )

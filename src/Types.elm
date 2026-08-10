@@ -194,7 +194,7 @@ type Msg
     | AddComponentState
     | RemoveComponentState String
     | SaveComponent
-    | InitComponentLayout String
+    | InitComponentLayout Components.Layout
     | UpdateLayoutProperty (List Int) String String
     | RemoveLayoutProperty (List Int) String
     | UpdateLayoutText (List Int) String

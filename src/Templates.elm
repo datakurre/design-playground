@@ -1,11 +1,11 @@
-module Templates exposing (Entry, componentTemplates, emptyComponent, buttonComponent, cardComponent, inputComponent, badgeComponent, alertComponent, themeTemplates, screenTemplates, emptyScreen, loginScreen, dashboardScreen, landingScreen)
+module Templates exposing (Entry, alertComponent, badgeComponent, buttonComponent, cardComponent, componentTemplates, dashboardScreen, emptyComponent, emptyScreen, inputComponent, landingScreen, loginScreen, screenTemplates, themeTemplates)
 
 import Components
 import Dict
 import Screens
 import Themes
-import Tokens
 import TokenScale
+import Tokens
 
 
 type alias Entry a =
@@ -225,4 +225,3 @@ landingScreen name =
                 [ instance "Card" Nothing, instance "Card" Nothing ]
             ]
     }
-

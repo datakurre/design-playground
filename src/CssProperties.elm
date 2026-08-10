@@ -1,5 +1,6 @@
 module CssProperties exposing (allProperties)
 
+
 allProperties : List String
 allProperties =
     [ "-epub-caption-side"

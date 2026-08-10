@@ -3,7 +3,7 @@ module Ui exposing
     , panel, panelSunken, page, divider
     , btnPrimary, btnNeutral, btnDanger, btnBrand, btnSmall, btnQuiet, iconButton
     , textInput, selectInput
-    , tab, tabLink, themePicker
+    , tabLink, themePicker
     , PillTone(..), pill
     , previewSurface
     , contextHelp, tabLede
@@ -44,7 +44,7 @@ Three steps, and no more.
 
 # Navigation
 
-@docs tab, tabLink, themePicker
+@docs tabLink, themePicker
 
 
 # Status
@@ -68,7 +68,7 @@ import Html.Attributes exposing (selected, value)
 import Html.Events exposing (onInput)
 import Tailwind as Tw exposing (Tailwind, batch, classes)
 import Tailwind.Breakpoints exposing (hover)
-import Tailwind.Theme exposing (emerald, orange, red, s0, s0_dot_5, s1, s1_dot_5, s2, s3, s4, s5, s6, s50, s100, s200, s300, s400, s500, s600, s700, s800, s900, slate, white)
+import Tailwind.Theme exposing (emerald, orange, red, s0, s0_dot_5, s1, s100, s1_dot_5, s2, s200, s3, s300, s4, s400, s5, s50, s500, s6, s600, s700, s800, s900, slate, white)
 
 
 
@@ -334,36 +334,12 @@ selectInput =
 
 {-| An underlined tab. Replaces the five near-identical twenty-line button
 blocks that each hardcoded a #e0f7fa fill.
+
+It's a link, not a button, because every tab is somewhere you can be — each one
+has a URL, so middle-click, "open in new tab" and the back button all work
+without the app doing anything.
+
 -}
-tab : Bool -> msg -> String -> Html msg
-tab isActive msg label =
-    Html.button
-        [ Html.Events.onClick msg
-        , Html.Attributes.attribute "aria-current"
-            (if isActive then
-                "page"
-
-             else
-                "false"
-            )
-        , classes
-            [ Tw.px s1
-            , Tw.py s3
-            , Tw.text_sm
-            , Tw.border_b_2
-            , Tw.raw "bg-transparent"
-            , Tw.cursor_pointer
-            , Tw.no_underline
-            , hover [ Tw.text_color (slate s900) ]
-            , if isActive then
-                batch [ Tw.border_color (slate s900), Tw.text_color (slate s900), Tw.font_medium ]
-
-              else
-                batch [ Tw.raw "border-transparent", Tw.text_color (slate s500) ]
-            ]
-        ]
-        [ Html.text label ]
-
 tabLink : Bool -> String -> String -> Html msg
 tabLink isActive url label =
     Html.a
@@ -383,12 +359,21 @@ tabLink isActive url label =
             , Tw.raw "bg-transparent"
             , Tw.cursor_pointer
             , Tw.no_underline
-            , hover [ Tw.text_color (slate s900) ]
+            , Tw.transition_colors
+            , hover [ Tw.text_color (slate s800) ]
             , if isActive then
-                batch [ Tw.border_color (slate s900), Tw.text_color (slate s900), Tw.font_medium ]
+                batch
+                    [ Tw.font_semibold
+                    , Tw.text_color (slate s900)
+                    , Tw.border_color (slate s900)
+                    ]
 
               else
-                batch [ Tw.raw "border-transparent", Tw.text_color (slate s500) ]
+                batch
+                    [ Tw.font_medium
+                    , Tw.text_color (slate s500)
+                    , Tw.raw "border-transparent"
+                    ]
             ]
         ]
         [ Html.text label ]
@@ -467,7 +452,7 @@ pill tone label =
 -- PREVIEW
 
 
-{-| The frame around a live preview. Everything *inside* it is styled from the
+{-| The frame around a live preview. Everything _inside_ it is styled from the
 user's design tokens with inline styles, not from this palette.
 -}
 previewSurface : Attribute msg
@@ -501,6 +486,7 @@ The panel is positioned rather than left in flow: every glyph sits in a
 the whole section below it down each time someone opened one. It does not
 close on an outside click — `<details>` has no such thing, and adding it
 would mean the `Model`/`Msg` state this deliberately avoids.
+
 -}
 contextHelp : { r | title : String, body : List String } -> Html msg
 contextHelp topic =
@@ -559,10 +545,11 @@ own "?" beside it.
 Collapsed help alone meant a first-run user saw no guidance at all — fifteen
 topics, none of them on screen, and nothing anywhere stating that tokens come
 before components come before screens. One line per tab is the cheapest thing
-that is actually *read*, and it costs no `Model` state.
+that is actually _read_, and it costs no `Model` state.
 
 Renders nothing for a topic without a `lede`, so section topics can share the
 `Topic` type without ever appearing here.
+
 -}
 tabLede : { r | title : String, lede : Maybe String, body : List String } -> Html msg
 tabLede topic =

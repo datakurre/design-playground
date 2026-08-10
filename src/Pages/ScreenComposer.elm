@@ -3,15 +3,15 @@ module Pages.ScreenComposer exposing (viewScreenComposer)
 import Components
 import Dict
 import Help
-import Html exposing (Html, a, button, div, h3, h4, li, text, ul)
-import Html.Attributes exposing (href, value)
+import Html exposing (Html, button, div, h3, h4, li, text, ul)
+import Html.Attributes exposing (value)
 import Html.Events exposing (onClick, onInput)
 import Renderer
 import Route
 import Screens exposing (Screen)
 import Tailwind as Tw exposing (classes)
 import Tailwind.Breakpoints exposing (hover)
-import Tailwind.Theme exposing (s0, s100, s2, s24, s3, s4, s48, s50, s6, s64, s700, s900, slate)
+import Tailwind.Theme exposing (red, s0, s0_dot_5, s100, s2, s200, s24, s3, s4, s48, s50, s6, s600, s64, s700, s900, slate)
 import Templates
 import Themes
 import Tokens
@@ -184,11 +184,11 @@ viewScreenEditor model screen screens screensDict =
             , case screen.root of
                 Screens.Container _ [] ->
                     div [ Ui.mutedSmall ] [ text "Nothing added yet." ]
-                
+
                 Screens.Container _ children ->
                     ul [ classes [ Tw.list_none, Tw.p s0, Tw.m s0 ] ]
-                        (List.indexedMap (\index node -> viewAddedNode screen.name index node screensDict) children)
-                
+                        (List.indexedMap (viewAddedNode screensDict screen.name) children)
+
                 _ ->
                     div [ Ui.mutedSmall ] [ text "Invalid root node." ]
             ]
@@ -205,26 +205,43 @@ viewScreenEditor model screen screens screensDict =
         ]
 
 
-viewAddedNode : String -> Int -> Screens.ScreenNode -> Dict.Dict String Screen -> Html Msg
-viewAddedNode parentName index node screensDict =
+viewAddedNode : Dict.Dict String Screen -> String -> Int -> Screens.ScreenNode -> Html Msg
+viewAddedNode screensDict parentName index node =
     let
-        ( nodeName, nodeType, hasLoop ) =
+        ( nodeName, nodeType ) =
             case node of
                 Screens.ComponentInstance props ->
-                    ( props.componentName, "Component", False )
-                
+                    ( props.componentName, "Component" )
+
                 Screens.ScreenInstance props ->
-                    ( props.screenName, "Screen", checkLoop parentName [ parentName ] screensDict (Screens.ScreenInstance props) )
-                
-                _ ->
-                    ( "Unknown", "Unknown", False )
+                    ( props.screenName, "Screen" )
+
+                Screens.Container _ _ ->
+                    ( "Group", "Group" )
+
+                Screens.TextNode content ->
+                    ( content, "Text" )
     in
-    li [ classes [ Tw.flex, Tw.justify_between, Tw.items_center, Tw.p s2, Tw.border_b, Tw.border_color (Tailwind.Theme.slate Tailwind.Theme.s200) ] ]
+    li [ classes [ Tw.flex, Tw.justify_between, Tw.items_center, Tw.p s2, Tw.border_b, Tw.border_color (slate s200) ] ]
         [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2 ] ]
             [ div [ classes [ Tw.font_medium ] ] [ text nodeName ]
-            , div [ Ui.mutedSmall, classes [ Tw.px s2, Tw.py Tailwind.Theme.s0_dot_5, Tw.bg_color (Tailwind.Theme.slate Tailwind.Theme.s100), Tw.rounded_full ] ] [ text nodeType ]
-            , if hasLoop then
-                div [ classes [ Tw.text_color (Tailwind.Theme.red Tailwind.Theme.s600), Tw.text_xs, Tw.font_medium, Tw.bg_color (Tailwind.Theme.red Tailwind.Theme.s50), Tw.px s2, Tw.py Tailwind.Theme.s0_dot_5, Tw.border, Tw.border_color (Tailwind.Theme.red Tailwind.Theme.s200), Tw.rounded_md ] ] [ text "Loop detected" ]
+            , div [ Ui.mutedSmall, classes [ Tw.px s2, Tw.py s0_dot_5, Tw.bg_color (slate s100), Tw.rounded_full ] ] [ text nodeType ]
+            , if Screens.formsCycle screensDict [ parentName ] node then
+                div
+                    [ classes
+                        [ Tw.text_color (red s600)
+                        , Tw.text_xs
+                        , Tw.font_medium
+                        , Tw.bg_color (red s50)
+                        , Tw.px s2
+                        , Tw.py s0_dot_5
+                        , Tw.border
+                        , Tw.border_color (red s200)
+                        , Tw.rounded_md
+                        ]
+                    ]
+                    [ text "Loop detected" ]
+
               else
                 text ""
             ]
@@ -234,26 +251,6 @@ viewAddedNode parentName index node screensDict =
             ]
             [ text "Remove" ]
         ]
-
-
-checkLoop : String -> List String -> Dict.Dict String Screen -> Screens.ScreenNode -> Bool
-checkLoop originalTarget visited screensDict node =
-    case node of
-        Screens.ScreenInstance props ->
-            if props.screenName == originalTarget || List.member props.screenName visited then
-                True
-            else
-                case Dict.get props.screenName screensDict of
-                    Just screen ->
-                        checkLoop originalTarget (props.screenName :: visited) screensDict screen.root
-                    Nothing ->
-                        False
-                        
-        Screens.Container _ children ->
-            List.any (checkLoop originalTarget visited screensDict) children
-            
-        _ ->
-            False
 
 
 {-| Both adders append to the top level of the screen. The old labels said

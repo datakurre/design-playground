@@ -2,6 +2,7 @@ module GitLab.Projects exposing (Project, getProject, listProjects, projectDecod
 
 import Http
 import Json.Decode as Decode exposing (Decoder)
+import Url
 
 
 type alias Project =
@@ -34,12 +35,14 @@ listProjects token page toMsg =
         }
 
 
+{-| GitLab takes a project's path in place of its id, provided the whole thing —
+slashes and all — arrives as one percent-encoded path segment.
+-}
 getProject : String -> String -> (Result Http.Error Project -> msg) -> Cmd msg
 getProject token pathWithNamespace toMsg =
     let
         encodedPath =
-            pathWithNamespace
-                |> String.replace "/" "%2F"
+            Url.percentEncode pathWithNamespace
     in
     Http.request
         { method = "GET"

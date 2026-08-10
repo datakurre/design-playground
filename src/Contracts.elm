@@ -155,15 +155,22 @@ applyRule tokens path styles rule =
                 |> Dict.toList
                 |> List.filterMap
                     (\( property, value ) ->
-                        if List.member property properties && hasHardcodedValues value then
-                            Just
-                                { path = path
-                                , property = Just property
-                                , message = "Hardcoded value found."
-                                }
+                        case ( List.member property properties, hardcodedPart value ) of
+                            ( True, "" ) ->
+                                Nothing
 
-                        else
-                            Nothing
+                            ( True, literal ) ->
+                                -- Naming the literal is the difference between
+                                -- "something here is wrong" and knowing which
+                                -- part of `1px solid {core.border}` to replace.
+                                Just
+                                    { path = path
+                                    , property = Just property
+                                    , message = "Hardcoded value: " ++ literal
+                                    }
+
+                            ( False, _ ) ->
+                                Nothing
                     )
 
         SpacingOnScale properties scale ->
@@ -262,67 +269,60 @@ styleNodesHelp path layout =
             List.concat (List.indexedMap (\i child -> styleNodesHelp (path ++ [ i ]) child) children)
 
 
-extractAliasPaths : String -> List Tokens.TokenPath
-extractAliasPaths value =
+{-| A style value split into the `{token.path}` references it makes and the
+literal text around them: `"1px solid {core.border}"` is the alias
+`core.border` and the literal `"1px solid "`.
+
+Two rules read a value, and they want opposite halves of the same reading — one
+asks what it points at, the other what it states outright — so the scan happens
+once, here. An unclosed `{` isn't a reference, so it stays literal.
+
+-}
+type alias ValueParts =
+    { aliases : List String
+    , literal : String
+    }
+
+
+valueParts : String -> ValueParts
+valueParts value =
     let
         go s acc =
             case String.indexes "{" s |> List.head of
+                Nothing ->
+                    { acc | literal = acc.literal ++ s }
+
                 Just startIdx ->
                     let
                         afterBrace =
                             String.dropLeft (startIdx + 1) s
                     in
                     case String.indexes "}" afterBrace |> List.head of
-                        Just endOffset ->
-                            let
-                                aliasPathStr =
-                                    String.left endOffset afterBrace
-
-                                aliasPath =
-                                    String.split "." aliasPathStr
-
-                                after =
-                                    String.dropLeft (endOffset + 1) afterBrace
-                            in
-                            go after (aliasPath :: acc)
-
                         Nothing ->
-                            acc
+                            { acc | literal = acc.literal ++ s }
 
-                Nothing ->
-                    acc
-    in
-    go value [] |> List.reverse
-
-
-hasHardcodedValues : String -> Bool
-hasHardcodedValues value =
-    let
-        go s =
-            case String.indexes "{" s |> List.head of
-                Just startIdx ->
-                    let
-                        before =
-                            String.left startIdx s
-
-                        afterBrace =
-                            String.dropLeft (startIdx + 1) s
-                    in
-                    case String.indexes "}" afterBrace |> List.head of
                         Just endOffset ->
-                            let
-                                after =
-                                    String.dropLeft (endOffset + 1) afterBrace
-                            in
-                            before ++ go after
-
-                        Nothing ->
-                            s
-
-                Nothing ->
-                    s
+                            go (String.dropLeft (endOffset + 1) afterBrace)
+                                { aliases = acc.aliases ++ [ String.left endOffset afterBrace ]
+                                , literal = acc.literal ++ String.left startIdx s
+                                }
     in
-    String.trim (go value) /= ""
+    go value { aliases = [], literal = "" }
+
+
+extractAliasPaths : String -> List Tokens.TokenPath
+extractAliasPaths value =
+    (valueParts value).aliases
+        |> List.map (String.split ".")
+
+
+{-| Whatever a value says on its own account, once its token references are
+taken out. Empty means the value is made of tokens and nothing else.
+-}
+hardcodedPart : String -> String
+hardcodedPart value =
+    (valueParts value).literal
+        |> String.trim
 
 
 isPrefixOf : List a -> List a -> Bool

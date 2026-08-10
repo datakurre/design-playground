@@ -5,6 +5,7 @@ import Json.Encode as Encode
 import Test exposing (..)
 import Tokens exposing (TokenValue(..))
 
+
 testEncoder : Test
 testEncoder =
     test "encodes multiple tokens with same prefix" <|

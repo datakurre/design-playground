@@ -1,6 +1,8 @@
 module RendererTest exposing (suite)
 
+import Components exposing (Layout(..))
 import Dict
+import Expect
 import Renderer
 import Screens exposing (ScreenNode(..))
 import Test exposing (..)
@@ -16,6 +18,7 @@ and it's locked here.
 `renderScreenNode` takes dictionaries and a node rather than a `Model`, which
 is what makes it reachable from a test at all — everything in `update` and
 every `Model`-taking view is behind a `Nav.Key`.
+
 -}
 suite : Test
 suite =
@@ -52,7 +55,66 @@ suite =
                 Renderer.renderScreenNode Dict.empty Dict.empty [ "Shell" ] [] (ScreenInstance { screenName = "Shell" })
                     |> Query.fromHtml
                     |> Query.has [ Selector.text "Shell ends up including itself — remove the loop to preview it." ]
+        , describe "conditional layout"
+            [ test "a condition on the variant being shown is drawn" <|
+                \_ ->
+                    only { variant = Just "primary", state = Nothing }
+                        |> preview (Just "primary") Nothing
+                        |> Query.has [ Selector.text "Conditional" ]
+            , test "a condition on some other variant is not" <|
+                \_ ->
+                    only { variant = Just "primary", state = Nothing }
+                        |> preview (Just "secondary") Nothing
+                        |> Query.hasNot [ Selector.text "Conditional" ]
+            , test "a condition on a variant is not drawn when no variant is chosen" <|
+                \_ ->
+                    only { variant = Just "primary", state = Nothing }
+                        |> preview Nothing Nothing
+                        |> Query.hasNot [ Selector.text "Conditional" ]
+            , test "a condition that names nothing is always drawn" <|
+                \_ ->
+                    only { variant = Nothing, state = Nothing }
+                        |> preview Nothing Nothing
+                        |> Query.has [ Selector.text "Conditional" ]
+            , test "a condition on both holds only when both match" <|
+                \_ ->
+                    let
+                        layout =
+                            only { variant = Just "primary", state = Just "hover" }
+                    in
+                    -- The matching pair draws; each near miss doesn't.
+                    Expect.all
+                        [ \_ -> preview (Just "primary") (Just "hover") layout |> Query.has [ Selector.text "Conditional" ]
+                        , \_ -> preview (Just "primary") (Just "focus") layout |> Query.hasNot [ Selector.text "Conditional" ]
+                        , \_ -> preview (Just "secondary") (Just "hover") layout |> Query.hasNot [ Selector.text "Conditional" ]
+                        , \_ -> preview Nothing Nothing layout |> Query.hasNot [ Selector.text "Conditional" ]
+                        ]
+                        ()
+            , test "what sits beside a condition is drawn either way" <|
+                \_ ->
+                    Stack { direction = "column", styles = Dict.empty }
+                        [ Element { isSlot = False, styles = Dict.empty } "Always"
+                        , When { variant = Just "primary", state = Nothing }
+                            [ Element { isSlot = False, styles = Dict.empty } "Conditional" ]
+                        ]
+                        |> preview (Just "secondary") Nothing
+                        |> Query.has [ Selector.text "Always" ]
+            ]
         ]
+
+
+{-| A layout whose only content sits behind `props`.
+-}
+only : Components.WhenProps -> Layout
+only props =
+    Stack { direction = "column", styles = Dict.empty }
+        [ When props [ Element { isSlot = False, styles = Dict.empty } "Conditional" ] ]
+
+
+preview : Maybe String -> Maybe String -> Layout -> Query.Single msg
+preview variant state layout =
+    Renderer.renderWithConditions [] variant state layout
+        |> Query.fromHtml
 
 
 instance : String -> ScreenNode

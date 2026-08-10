@@ -7,9 +7,9 @@ import Json.Decode as Decode
 import Screens
 import Templates
 import Test exposing (..)
-import Tokens
-import TokenScale
 import Themes
+import TokenScale
+import Tokens
 
 
 suite : Test
@@ -143,6 +143,7 @@ suite =
                 case emptyTemplate of
                     Just t ->
                         Expect.equal [] (t.build "Foo").overrides
+
                     Nothing ->
                         Expect.fail "Missing empty template"
         , test "dark theme overrides contain expected endpoints" <|
@@ -150,15 +151,19 @@ suite =
                 let
                     darkTemplate =
                         Templates.themeTemplates |> List.filter (\t -> t.id == "dark") |> List.head
+
                     overrides =
                         case darkTemplate of
-                            Just t -> (t.build "Dark").overrides
-                            Nothing -> []
+                            Just t ->
+                                (t.build "Dark").overrides
+
+                            Nothing ->
+                                []
                 in
                 Expect.all
-                    [ \_ -> Expect.equal True (List.member ( ["color","gray","50"], { value = Tokens.StringValue "#111827", type_ = "color", description = Nothing } ) overrides)
-                    , \_ -> Expect.equal True (List.member ( ["color","gray","900"], { value = Tokens.StringValue "#f9fafb", type_ = "color", description = Nothing } ) overrides)
-                    , \_ -> Expect.equal True (List.member ( ["color","brand","500"], { value = Tokens.StringValue "#60a5fa", type_ = "color", description = Nothing } ) overrides)
+                    [ \_ -> Expect.equal True (List.member ( [ "color", "gray", "50" ], { value = Tokens.StringValue "#111827", type_ = "color", description = Nothing } ) overrides)
+                    , \_ -> Expect.equal True (List.member ( [ "color", "gray", "900" ], { value = Tokens.StringValue "#f9fafb", type_ = "color", description = Nothing } ) overrides)
+                    , \_ -> Expect.equal True (List.member ( [ "color", "brand", "500" ], { value = Tokens.StringValue "#60a5fa", type_ = "color", description = Nothing } ) overrides)
                     ]
                     ()
         , test "End-to-end pure pipeline check for dark theme composition" <|
@@ -166,20 +171,24 @@ suite =
                 let
                     darkEntry =
                         Templates.themeTemplates |> List.filter (\t -> t.id == "dark") |> List.head |> Maybe.withDefault { id = "dark", label = "Dark", build = \n -> Themes.fromTokens n [] }
+
                     applied =
                         Themes.applyTheme TokenScale.seed (darkEntry.build "Dark")
                             |> List.filter (\( p, _ ) -> p == [ "color", "gray", "50" ])
                 in
-                Expect.equal [ ( ["color", "gray", "50"], { value = Tokens.StringValue "#111827", type_ = "color", description = Nothing } ) ] applied
+                Expect.equal [ ( [ "color", "gray", "50" ], { value = Tokens.StringValue "#111827", type_ = "color", description = Nothing } ) ] applied
         , test "Codec round-trip for dark theme" <|
             \_ ->
                 let
                     darkTheme =
-                        (Templates.themeTemplates |> List.filter (\t -> t.id == "dark") |> List.head |> Maybe.map (\t -> t.build "Dark") |> Maybe.withDefault (Themes.fromTokens "Dark" []))
+                        Templates.themeTemplates |> List.filter (\t -> t.id == "dark") |> List.head |> Maybe.map (\t -> t.build "Dark") |> Maybe.withDefault (Themes.fromTokens "Dark" [])
+
                     encoded =
                         Tokens.encoder darkTheme.overrides
+
                     decoded =
                         Decode.decodeValue Tokens.decoder encoded
+
                     sortByPath =
                         List.sortBy (\( p, _ ) -> String.join "." p)
                 in
@@ -194,7 +203,8 @@ suite =
                         List.map
                             (\t ->
                                 let
-                                    s = t.build "My Screen"
+                                    s =
+                                        t.build "My Screen"
                                 in
                                 s.name == "My Screen" && s.path == "/my-screen"
                             )
@@ -255,10 +265,10 @@ suite =
 
                     names =
                         collectComponentNames (Templates.loginScreen "x").root
-                    
+
                     buttonCount =
                         List.length (List.filter (\n -> n == "Button") names)
-                    
+
                     inputCount =
                         List.length (List.filter (\n -> n == "Input") names)
                 in
@@ -287,10 +297,10 @@ suite =
 
                     names =
                         collectComponentNames (Templates.dashboardScreen "x").root
-                    
+
                     cardCount =
                         List.length (List.filter (\n -> n == "Card") names)
-                    
+
                     badgeCount =
                         List.length (List.filter (\n -> n == "Badge") names)
                 in
@@ -319,10 +329,10 @@ suite =
 
                     names =
                         collectComponentNames (Templates.landingScreen "x").root
-                    
+
                     alertCount =
                         List.length (List.filter (\n -> n == "Alert") names)
-                    
+
                     buttonCount =
                         List.length (List.filter (\n -> n == "Button") names)
                 in

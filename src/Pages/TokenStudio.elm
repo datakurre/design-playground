@@ -19,10 +19,10 @@ import Html.Keyed
 import Set
 import Tailwind as Tw exposing (classes)
 import Tailwind.Theme exposing (amber, s0, s0_dot_5, s1, s100, s2, s200, s24, s3, s300, s32, s4, s48, s500, s6, s64, s700, s8, s800, slate)
+import Templates
 import Themes exposing (Theme)
 import TokenBrowse exposing (Node(..))
 import Tokens
-import Templates
 import Types exposing (..)
 import Ui
 
@@ -242,7 +242,7 @@ viewFilterCheckbox label isOn toMsg =
 Filtering deliberately drops the groups rather than expanding the ones that
 contain a match: a `<details>` is open or closed in the DOM, so once someone has
 toggled one by hand the vdom's `open` attribute no longer moves it, and a tree
-that only *sometimes* expands to your match is worse than no tree.
+that only _sometimes_ expands to your match is worse than no tree.
 
 -}
 viewTokenList : RowContext -> TokenBrowse.Filters -> TokenBrowse.Marks -> List Tokens.FlatToken -> Html Msg

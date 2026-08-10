@@ -1,7 +1,7 @@
 module Export exposing (generateCssVariables, generateTailwindConfig)
 
-import Tokens exposing (FlatToken)
 import Dict
+import Tokens exposing (FlatToken)
 
 
 generateCssVariables : List FlatToken -> String
@@ -17,11 +17,13 @@ generateCssVariables tokens =
                     case Tokens.resolveAliasValue tokens token.value of
                         Tokens.StringValue s ->
                             [ "  " ++ varName ++ ": " ++ s ++ ";" ]
+
                         Tokens.CompositeValue dict ->
                             Dict.toList dict
-                                |> List.map (\(subProp, subVal) -> 
-                                    "  " ++ varName ++ "-" ++ subProp ++ ": " ++ subVal ++ ";"
-                                )
+                                |> List.map
+                                    (\( subProp, subVal ) ->
+                                        "  " ++ varName ++ "-" ++ subProp ++ ": " ++ subVal ++ ";"
+                                    )
                 )
                 tokens
     in
@@ -47,6 +49,7 @@ generateTailwindConfig tokens =
                         case Tokens.resolveAliasValue tokens token.value of
                             Tokens.StringValue s ->
                                 [ "        '" ++ key ++ "': '" ++ s ++ "'" ]
+
                             Tokens.CompositeValue _ ->
                                 []
                     )

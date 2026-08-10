@@ -108,11 +108,15 @@ resolveAliasHelp tokens value depth =
                             resolvedAlias =
                                 List.filter (\( p, _ ) -> p == aliasPath) tokens
                                     |> List.head
-                                    |> Maybe.map (\( _, t ) -> 
-                                        case t.value of
-                                            StringValue s -> resolveAliasHelp tokens s (depth - 1)
-                                            CompositeValue _ -> "{[Composite: " ++ aliasPathStr ++ "]}"
-                                    )
+                                    |> Maybe.map
+                                        (\( _, t ) ->
+                                            case t.value of
+                                                StringValue s ->
+                                                    resolveAliasHelp tokens s (depth - 1)
+
+                                                CompositeValue _ ->
+                                                    "{[Composite: " ++ aliasPathStr ++ "]}"
+                                        )
                                     |> Maybe.withDefault ("{" ++ aliasPathStr ++ "}")
 
                             before =

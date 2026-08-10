@@ -1,4 +1,4 @@
-module Renderer exposing (render, renderLayoutWithSlots, renderScreenNode)
+module Renderer exposing (renderScreenNode, renderWithConditions)
 
 import Components exposing (Component, Layout(..))
 import Dict exposing (Dict)
@@ -15,6 +15,7 @@ camelToKebab str =
             (\c ->
                 if Char.isUpper c then
                     [ '-', Char.toLower c ]
+
                 else
                     [ c ]
             )
@@ -30,6 +31,7 @@ resolveToken path tokens =
         aliasPath =
             if String.startsWith "{" cleanPath && String.endsWith "}" cleanPath then
                 String.slice 1 -1 cleanPath |> String.trim
+
             else
                 cleanPath
 
@@ -50,17 +52,21 @@ resolveToken path tokens =
             -- e.g., "1px solid {color.primary}" -> "1px solid #ff0000"
             Tokens.StringValue (Tokens.resolveAlias tokens path)
 
+
 renderStyles : List FlatToken -> Dict String String -> List (Html.Attribute msg)
 renderStyles tokens stylesDict =
     Dict.toList stylesDict
-        |> List.concatMap (\( prop, tokenPath ) -> 
-            case resolveToken tokenPath tokens of
-                Tokens.StringValue s ->
-                    [ style (camelToKebab prop) s ]
-                Tokens.CompositeValue dict ->
-                    Dict.toList dict
-                        |> List.map (\( subProp, subVal ) -> style (camelToKebab subProp) subVal)
-        )
+        |> List.concatMap
+            (\( prop, tokenPath ) ->
+                case resolveToken tokenPath tokens of
+                    Tokens.StringValue s ->
+                        [ style (camelToKebab prop) s ]
+
+                    Tokens.CompositeValue dict ->
+                        Dict.toList dict
+                            |> List.map (\( subProp, subVal ) -> style (camelToKebab subProp) subVal)
+            )
+
 
 renderScreenNode : Dict String Component -> Dict String Screen -> List String -> List FlatToken -> ScreenNode -> Html msg
 renderScreenNode components screens visited tokens node =
@@ -70,11 +76,16 @@ renderScreenNode components screens visited tokens node =
                 Just comp ->
                     case comp.layout of
                         Just layout ->
-                            let
-                                slotDict =
-                                    Dict.fromList props.slots
-                            in
-                            renderLayoutWithSlots components screens visited tokens slotDict props.variant props.state layout
+                            renderLayout
+                                { components = components
+                                , screens = screens
+                                , visited = visited
+                                , tokens = tokens
+                                , slots = Dict.fromList props.slots
+                                , activeVariant = props.variant
+                                , activeState = props.state
+                                }
+                                layout
 
                         Nothing ->
                             previewProblem (props.componentName ++ " has no layout yet — add one on the Components tab.")
@@ -85,18 +96,21 @@ renderScreenNode components screens visited tokens node =
         ScreenInstance props ->
             if List.member props.screenName visited then
                 previewProblem (props.screenName ++ " ends up including itself — remove the loop to preview it.")
+
             else
                 case Dict.get props.screenName screens of
                     Just screen ->
                         renderScreenNode components screens (props.screenName :: visited) tokens screen.root
+
                     Nothing ->
                         previewProblem ("There is no screen called " ++ props.screenName ++ ".")
 
         Container props children ->
             div
-                ( [ style "display" "flex"
-                  , style "flex-direction" props.direction
-                  ] ++ renderStyles tokens props.styles
+                ([ style "display" "flex"
+                 , style "flex-direction" props.direction
+                 ]
+                    ++ renderStyles tokens props.styles
                 )
                 (List.map (renderScreenNode components screens visited tokens) children)
 
@@ -104,67 +118,108 @@ renderScreenNode components screens visited tokens node =
             text content
 
 
-renderLayoutWithSlots : Dict String Component -> Dict String Screen -> List String -> List FlatToken -> Dict String (List ScreenNode) -> Maybe String -> Maybe String -> Layout -> Html msg
-renderLayoutWithSlots components screens visited tokens slots activeVariant activeState layout =
+{-| Everything a layout node needs beyond itself: the libraries to look
+components and screens up in, which screens are already being drawn further up
+(so a cycle gets caught rather than hanging), the tokens to resolve values
+against, what fills each slot, and which variant and state are being shown.
+
+It's a record because all seven travel together, unchanged, down every branch of
+the tree — as arguments they were seven things to keep in the right order at
+each of six recursive calls.
+
+-}
+type alias Env =
+    { components : Dict String Component
+    , screens : Dict String Screen
+    , visited : List String
+    , tokens : List FlatToken
+    , slots : Dict String (List ScreenNode)
+    , activeVariant : Maybe String
+    , activeState : Maybe String
+    }
+
+
+renderLayout : Env -> Layout -> Html msg
+renderLayout env layout =
     case layout of
         Stack props children ->
             div
-                ( [ style "display" "flex"
-                  , style "flex-direction" props.direction
-                  ] ++ renderStyles tokens props.styles
+                ([ style "display" "flex"
+                 , style "flex-direction" props.direction
+                 ]
+                    ++ renderStyles env.tokens props.styles
                 )
-                (List.map (renderLayoutWithSlots components screens visited tokens slots activeVariant activeState) children)
+                (List.map (renderLayout env) children)
 
         Grid props children ->
             div
-                ( [ style "display" "grid"
-                  , style "grid-template-columns" ("repeat(" ++ String.fromInt props.columns ++ ", 1fr)")
-                  ] ++ renderStyles tokens props.styles
+                ([ style "display" "grid"
+                 , style "grid-template-columns" ("repeat(" ++ String.fromInt props.columns ++ ", 1fr)")
+                 ]
+                    ++ renderStyles env.tokens props.styles
                 )
-                (List.map (renderLayoutWithSlots components screens visited tokens slots activeVariant activeState) children)
+                (List.map (renderLayout env) children)
 
         When props children ->
             let
-                variantMatch =
-                    case props.variant of
-                        Just v -> Just v == activeVariant
-                        Nothing -> True
+                -- A condition that doesn't name a variant (or a state) doesn't
+                -- care about it, so it holds whatever is being shown.
+                matches condition active =
+                    case condition of
+                        Just wanted ->
+                            Just wanted == active
 
-                stateMatch =
-                    case props.state of
-                        Just s -> Just s == activeState
-                        Nothing -> True
+                        Nothing ->
+                            True
             in
-            if variantMatch && stateMatch then
+            if matches props.variant env.activeVariant && matches props.state env.activeState then
+                -- `display: contents` keeps the wrapper out of the layout, so
+                -- conditional children sit in the parent flex or grid exactly
+                -- where they would if the condition weren't there.
                 div [ style "display" "contents" ]
-                    (List.map (renderLayoutWithSlots components screens visited tokens slots activeVariant activeState) children)
+                    (List.map (renderLayout env) children)
+
             else
                 text ""
 
         Element props content ->
             if props.isSlot then
-                case Dict.get content slots of
+                case Dict.get content env.slots of
                     Just slotChildren ->
                         div
                             [ style "display" "contents" ]
-                            (List.map (renderScreenNode components screens visited tokens) slotChildren)
+                            (List.map (renderScreenNode env.components env.screens env.visited env.tokens) slotChildren)
 
                     Nothing ->
                         div
-                            ( [ style "border" "1px dashed #ccc"
-                              , style "padding" "0.5rem"
-                              ] ++ renderStyles tokens props.styles
+                            ([ style "border" "1px dashed #ccc"
+                             , style "padding" "0.5rem"
+                             ]
+                                ++ renderStyles env.tokens props.styles
                             )
                             [ text ("Slot: " ++ content) ]
 
             else
                 span
-                    (renderStyles tokens props.styles)
+                    (renderStyles env.tokens props.styles)
                     [ text content ]
 
-render : List FlatToken -> Layout -> Html msg
-render tokens layout =
-    renderLayoutWithSlots Dict.empty Dict.empty [] tokens Dict.empty Nothing Nothing layout
+
+{-| A layout as it looks under one variant and state — what the Components tab
+previews while you flip between them.
+-}
+renderWithConditions : List FlatToken -> Maybe String -> Maybe String -> Layout -> Html msg
+renderWithConditions tokens activeVariant activeState layout =
+    renderLayout
+        { components = Dict.empty
+        , screens = Dict.empty
+        , visited = []
+        , tokens = tokens
+        , slots = Dict.empty
+        , activeVariant = activeVariant
+        , activeState = activeState
+        }
+        layout
 
 
 {-| Something in the design can't be drawn. This renders inside the preview

@@ -1,4 +1,4 @@
-module Components exposing (Component, decoder, encoder, Layout(..), StackProps, GridProps, ElementProps, layoutDecoder, layoutEncoder)
+module Components exposing (Component, ElementProps, GridProps, Layout(..), StackProps, WhenProps, decoder, encoder, layoutDecoder, layoutEncoder)
 
 import Dict exposing (Dict)
 import Json.Decode as Decode exposing (Decoder)
@@ -11,25 +11,30 @@ type Layout
     | Element ElementProps String
     | When WhenProps (List Layout)
 
+
 type alias WhenProps =
     { variant : Maybe String
     , state : Maybe String
     }
+
 
 type alias StackProps =
     { direction : String
     , styles : Dict String String
     }
 
+
 type alias GridProps =
     { columns : Int
     , styles : Dict String String
     }
 
+
 type alias ElementProps =
     { isSlot : Bool
     , styles : Dict String String
     }
+
 
 type alias Component =
     { name : String
@@ -39,6 +44,7 @@ type alias Component =
     , states : List String
     , layout : Maybe Layout
     }
+
 
 layoutDecoder : Decoder Layout
 layoutDecoder =
@@ -82,9 +88,11 @@ layoutDecoder =
                         Decode.fail ("Unknown layout type: " ++ type_)
             )
 
+
 orElse : Decoder a -> Decoder a -> Decoder a
 orElse fallback decoder2 =
     Decode.oneOf [ decoder2, fallback ]
+
 
 layoutEncoder : Layout -> Value
 layoutEncoder layout =
@@ -119,18 +127,25 @@ layoutEncoder layout =
                     [ ( "type", Encode.string "when" )
                     , ( "children", Encode.list layoutEncoder children )
                     ]
-                
+
                 variantFields =
                     case props.variant of
-                        Just v -> [ ( "variant", Encode.string v ) ]
-                        Nothing -> []
-                        
+                        Just v ->
+                            [ ( "variant", Encode.string v ) ]
+
+                        Nothing ->
+                            []
+
                 stateFields =
                     case props.state of
-                        Just s -> [ ( "state", Encode.string s ) ]
-                        Nothing -> []
+                        Just s ->
+                            [ ( "state", Encode.string s ) ]
+
+                        Nothing ->
+                            []
             in
             Encode.object (baseFields ++ variantFields ++ stateFields)
+
 
 decoder : Decoder Component
 decoder =
@@ -141,6 +156,7 @@ decoder =
         (Decode.field "slots" (Decode.list Decode.string))
         (Decode.field "states" (Decode.list Decode.string))
         (Decode.maybe (Decode.field "layout" layoutDecoder))
+
 
 encoder : Component -> Value
 encoder component =

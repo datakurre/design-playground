@@ -4,7 +4,7 @@ import Dict
 import Expect
 import Set
 import Test exposing (..)
-import TokenScale exposing (seed, mergeStarterScale)
+import TokenScale exposing (mergeStarterScale, seed)
 import Tokens exposing (TokenValue(..))
 
 
@@ -17,21 +17,30 @@ suite =
         , test "seed has no duplicate paths" <|
             \_ ->
                 let
-                    paths = List.map Tuple.first seed
-                    uniquePaths = Set.fromList paths
+                    paths =
+                        List.map Tuple.first seed
+
+                    uniquePaths =
+                        Set.fromList paths
                 in
                 Expect.equal (List.length paths) (Set.size uniquePaths)
         , test "anchor points exist" <|
             \_ ->
                 let
-                    dict = Dict.fromList seed
+                    dict =
+                        Dict.fromList seed
+
                     getVal path d =
                         Dict.get path d
-                            |> Maybe.map (\t ->
-                                case t.value of
-                                    StringValue v -> v
-                                    _ -> ""
-                            )
+                            |> Maybe.map
+                                (\t ->
+                                    case t.value of
+                                        StringValue v ->
+                                            v
+
+                                        _ ->
+                                            ""
+                                )
                 in
                 Expect.all
                     [ \d -> Expect.equal (Just "#f9fafb") (getVal [ "color", "gray", "50" ] d)
@@ -51,15 +60,19 @@ suite =
                             StringValue v ->
                                 if List.head path == Just "color" then
                                     String.startsWith "#" v && String.length v == 7
+
                                 else
                                     String.endsWith "rem" v
-                            _ -> False
+
+                            _ ->
+                                False
                 in
                 Expect.equal True (List.all isConsistent seed)
         , test "merging into empty list yields the seed" <|
             \_ ->
                 let
-                    sorted mergeRes = List.sortBy (\(p, _) -> String.join "." p) mergeRes
+                    sorted mergeRes =
+                        List.sortBy (\( p, _ ) -> String.join "." p) mergeRes
                 in
                 Expect.equal (sorted seed) (sorted (mergeStarterScale []))
         , test "non-destructive merge retains existing tokens on collision" <|
@@ -72,8 +85,12 @@ suite =
                           , description = Nothing
                           }
                         )
-                    merged = mergeStarterScale [ existingToken ]
-                    dict = Dict.fromList merged
+
+                    merged =
+                        mergeStarterScale [ existingToken ]
+
+                    dict =
+                        Dict.fromList merged
                 in
                 Expect.equal
                     (Just (StringValue "#custom"))
@@ -88,8 +105,12 @@ suite =
                           , description = Nothing
                           }
                         )
-                    merged = mergeStarterScale [ existingToken ]
-                    dict = Dict.fromList merged
+
+                    merged =
+                        mergeStarterScale [ existingToken ]
+
+                    dict =
+                        Dict.fromList merged
                 in
                 Expect.equal
                     (Just (StringValue "#123456"))

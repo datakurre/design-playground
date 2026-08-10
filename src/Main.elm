@@ -131,8 +131,20 @@ init flags url key =
 
                         Nothing ->
                             []
+
+        -- `UrlChanged` only fires on later navigation, so without this a deep
+        -- link or a refresh would land on an empty Tokens tab no matter what
+        -- the URL said. The token comes from flags, so the repository can start
+        -- loading right away.
+        ( routedModel, routeCmd ) =
+            case Route.parse url of
+                Just route ->
+                    Update.applyRoute route initialModel
+
+                Nothing ->
+                    ( initialModel, Cmd.none )
     in
-    ( initialModel, Cmd.batch cmds )
+    ( routedModel, Cmd.batch (routeCmd :: cmds) )
 
 
 
@@ -442,26 +454,11 @@ viewTabs model =
                             Just p ->
                                 Route.toString
                                     (Route.Repo p.pathWithNamespace
-                                        (case tabId of
-                                            TokenStudio ->
-                                                Route.TokensTab
-
-                                            ComponentRegistry ->
-                                                Route.ComponentsTab model.selectedComponentName
-
-                                            ScreenComposer ->
-                                                Route.ScreensTab model.selectedScreenName
-
-                                            GitWorkflows ->
-                                                Route.GitWorkflowsTab
-
-                                            ExportPipeline ->
-                                                Route.ExportPipelineTab
-                                        )
+                                        (Route.tabRouteFor tabId model.selectedComponentName model.selectedScreenName)
                                     )
 
                             Nothing ->
-                                "#"
+                                Route.toString Route.Home
                 in
                 Ui.tabLink (model.activeTab == tabId) tabUrl label
             )
