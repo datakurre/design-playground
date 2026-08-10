@@ -107,7 +107,7 @@ suite =
                 \_ ->
                     let
                         component =
-                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.singleton "color" "{interactive.primary}" } "content") }
+                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.singleton "color" "{interactive.primary}", overrides = [] } "content") }
 
                         contract =
                             { component = "Test", rules = [ AllowedTokenGroups [ [ "interactive" ] ] ] }
@@ -117,7 +117,7 @@ suite =
                 \_ ->
                     let
                         component =
-                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.singleton "color" "{danger.primary}" } "content") }
+                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.singleton "color" "{danger.primary}", overrides = [] } "content") }
 
                         contract =
                             { component = "Test", rules = [ AllowedTokenGroups [ [ "interactive" ] ] ] }
@@ -132,7 +132,7 @@ suite =
                 \_ ->
                     let
                         component =
-                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.singleton "padding" "10px" } "content") }
+                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.singleton "padding" "10px", overrides = [] } "content") }
 
                         contract =
                             { component = "Test", rules = [ NoHardcodedValues [ "padding" ] ] }
@@ -150,7 +150,7 @@ suite =
                     -- still catch what it originally caught.
                     let
                         component =
-                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.singleton "color" "#ff0000" } "content") }
+                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.singleton "color" "#ff0000", overrides = [] } "content") }
 
                         contract =
                             { component = "Test", rules = [ NoHardcodedValues [ "color" ] ] }
@@ -165,7 +165,7 @@ suite =
                 \_ ->
                     let
                         component =
-                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.singleton "border" "1px solid {core.border}" } "content") }
+                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.singleton "border" "1px solid {core.border}", overrides = [] } "content") }
 
                         contract =
                             { component = "Test", rules = [ NoHardcodedValues [ "border" ] ] }
@@ -192,7 +192,7 @@ suite =
                             , layout =
                                 Just
                                     (When { variant = Just "primary", state = Nothing }
-                                        [ Element { isSlot = False, styles = Dict.singleton "color" "#ff0000" } "content" ]
+                                        [ Element { isSlot = False, styles = Dict.singleton "color" "#ff0000", overrides = [] } "content" ]
                                     )
                             }
 
@@ -209,7 +209,7 @@ suite =
                 \_ ->
                     let
                         component =
-                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.singleton "color" "{core.red}" } "content") }
+                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.singleton "color" "{core.red}", overrides = [] } "content") }
 
                         contract =
                             { component = "Test", rules = [ NoHardcodedValues [ "color" ] ] }
@@ -219,7 +219,7 @@ suite =
                 \_ ->
                     let
                         component =
-                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.singleton "padding" "{spacing.sm} {spacing.md}" } "content") }
+                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.singleton "padding" "{spacing.sm} {spacing.md}", overrides = [] } "content") }
 
                         contract =
                             { component = "Test", rules = [ NoHardcodedValues [ "padding" ] ] }
@@ -229,7 +229,7 @@ suite =
                 \_ ->
                     let
                         component =
-                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.singleton "background" "#ff0000" } "content") }
+                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.singleton "background" "#ff0000", overrides = [] } "content") }
 
                         contract =
                             { component = "Test", rules = [ NoHardcodedValues [ "color" ] ] }
@@ -242,7 +242,7 @@ suite =
                             [ ( [ "spacing", "sm" ], { value = StringValue "4px", type_ = "spacing", description = Nothing } ) ]
 
                         component =
-                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.singleton "padding" "4px" } "content") }
+                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.singleton "padding" "4px", overrides = [] } "content") }
 
                         contract =
                             { component = "Test", rules = [ SpacingOnScale [ "padding" ] [ "spacing" ] ] }
@@ -255,7 +255,7 @@ suite =
                             [ ( [ "spacing", "sm" ], { value = StringValue "4px", type_ = "spacing", description = Nothing } ) ]
 
                         component =
-                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.singleton "padding" "5px" } "content") }
+                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.singleton "padding" "5px", overrides = [] } "content") }
 
                         contract =
                             { component = "Test", rules = [ SpacingOnScale [ "padding" ] [ "spacing" ] ] }
@@ -270,7 +270,7 @@ suite =
                 \_ ->
                     let
                         component =
-                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.fromList [ ( "color", "#000000" ), ( "background-color", "#ffffff" ) ] } "content") }
+                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.fromList [ ( "color", "#000000" ), ( "background-color", "#ffffff" ) ], overrides = [] } "content") }
 
                         contract =
                             { component = "Test", rules = [ ContrastThreshold { foreground = "color", background = "background-color", minimumRatio = 4.5 } ] }
@@ -280,7 +280,7 @@ suite =
                 \_ ->
                     let
                         component =
-                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.fromList [ ( "color", "#888888" ), ( "background-color", "#777777" ) ] } "content") }
+                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.fromList [ ( "color", "#888888" ), ( "background-color", "#777777" ) ], overrides = [] } "content") }
 
                         contract =
                             { component = "Test", rules = [ ContrastThreshold { foreground = "color", background = "background-color", minimumRatio = 4.5 } ] }
@@ -295,7 +295,7 @@ suite =
                 \_ ->
                     let
                         component =
-                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.singleton "color" "#000000" } "content") }
+                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.singleton "color" "#000000", overrides = [] } "content") }
 
                         contract =
                             { component = "Test", rules = [ ContrastThreshold { foreground = "color", background = "background-color", minimumRatio = 4.5 } ] }
@@ -310,7 +310,7 @@ suite =
                             , variants = []
                             , slots = []
                             , states = []
-                            , layout = Just (Element { isSlot = False, styles = Dict.fromList [ ( "color", "#888888" ), ( "background-color", "#777777" ), ( "padding", "5px" ) ] } "content")
+                            , layout = Just (Element { isSlot = False, styles = Dict.fromList [ ( "color", "#888888" ), ( "background-color", "#777777" ), ( "padding", "5px" ) ], overrides = [] } "content")
                             }
 
                         contract =
@@ -324,4 +324,111 @@ suite =
                     in
                     Expect.equal 3 (List.length (Contracts.validate [] contract component))
             ]
+        , describe "style layers"
+            [ test "a hardcoded value written only for a variant is still caught" <|
+                \_ ->
+                    -- The whole point of checking layers: before this, every
+                    -- colour decision a variant made was outside the contract.
+                    let
+                        component =
+                            layered
+                                (Dict.singleton "color" "{core.text}")
+                                [ layer (Just "danger") Nothing [ ( "color", "#ff0000" ) ] ]
+
+                        contract =
+                            { component = "Test", rules = [ NoHardcodedValues [ "color" ] ] }
+                    in
+                    case Contracts.validate [] contract component of
+                        [ violation ] ->
+                            Expect.all
+                                [ \_ -> Expect.equal "Hardcoded value: #ff0000" violation.message
+                                , \_ -> Expect.equal (Just { variant = Just "danger", state = Nothing }) violation.context
+                                ]
+                                ()
+
+                        other ->
+                            Expect.fail ("Expected 1 violation, got " ++ String.fromInt (List.length other))
+            , test "a base problem is reported once, not once per variant" <|
+                \_ ->
+                    let
+                        component =
+                            layered
+                                (Dict.singleton "color" "#ff0000")
+                                [ layer (Just "primary") Nothing [ ( "padding", "1rem" ) ]
+                                , layer (Just "danger") Nothing [ ( "padding", "2rem" ) ]
+                                ]
+
+                        contract =
+                            { component = "Test", rules = [ NoHardcodedValues [ "color" ] ] }
+                    in
+                    case Contracts.validate [] contract component of
+                        [ violation ] ->
+                            Expect.equal Nothing violation.context
+
+                        other ->
+                            Expect.fail ("Expected 1 violation, got " ++ String.fromInt (List.length other))
+            , test "a layer that fixes the base problem is not itself reported" <|
+                \_ ->
+                    let
+                        component =
+                            layered
+                                (Dict.singleton "color" "#ff0000")
+                                [ layer (Just "primary") Nothing [ ( "color", "{core.text}" ) ] ]
+
+                        contract =
+                            { component = "Test", rules = [ NoHardcodedValues [ "color" ] ] }
+                    in
+                    Contracts.validate [] contract component
+                        |> List.map .context
+                        |> Expect.equal [ Nothing ]
+            , test "a contrast pairing that only fails in one variant is caught" <|
+                \_ ->
+                    -- The variant overrides the background alone, so checking
+                    -- what it *changed* would never see the text colour it now
+                    -- sits on.
+                    let
+                        component =
+                            layered
+                                (Dict.fromList [ ( "color", "#ffffff" ), ( "background-color", "#000000" ) ])
+                                [ layer (Just "washedOut") Nothing [ ( "background-color", "#eeeeee" ) ] ]
+
+                        contract =
+                            { component = "Test"
+                            , rules = [ ContrastThreshold { foreground = "color", background = "background-color", minimumRatio = 4.5 } ]
+                            }
+                    in
+                    Contracts.validate [] contract component
+                        |> List.map .context
+                        |> Expect.equal [ Just { variant = Just "washedOut", state = Nothing } ]
+            , test "a component with no layers validates exactly as before" <|
+                \_ ->
+                    let
+                        component =
+                            layered (Dict.singleton "color" "#ff0000") []
+
+                        contract =
+                            { component = "Test", rules = [ NoHardcodedValues [ "color" ] ] }
+                    in
+                    Contracts.validate [] contract component
+                        |> List.map .context
+                        |> Expect.equal [ Nothing ]
+            ]
         ]
+
+
+{-| A one-node component with base styles and style layers over them.
+-}
+layered : Dict.Dict String String -> List Components.StyleLayer -> Components.Component
+layered styles overrides =
+    { name = "Test"
+    , description = Nothing
+    , variants = []
+    , slots = []
+    , states = []
+    , layout = Just (Element { isSlot = False, styles = styles, overrides = overrides } "content")
+    }
+
+
+layer : Maybe String -> Maybe String -> List ( String, String ) -> Components.StyleLayer
+layer variant state styles =
+    { variant = variant, state = state, styles = Dict.fromList styles }

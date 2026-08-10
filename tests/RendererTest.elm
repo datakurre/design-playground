@@ -8,6 +8,7 @@ import Screens exposing (ScreenNode(..))
 import Test exposing (..)
 import Test.Html.Query as Query
 import Test.Html.Selector as Selector
+import Tokens
 
 
 {-| The preview's error boxes are the app's last line of guidance: when a
@@ -92,23 +93,98 @@ suite =
                         ()
             , test "what sits beside a condition is drawn either way" <|
                 \_ ->
-                    Stack { direction = "column", styles = Dict.empty }
-                        [ Element { isSlot = False, styles = Dict.empty } "Always"
+                    Stack { direction = "column", styles = Dict.empty, overrides = [] }
+                        [ Element { isSlot = False, styles = Dict.empty, overrides = [] } "Always"
                         , When { variant = Just "primary", state = Nothing }
-                            [ Element { isSlot = False, styles = Dict.empty } "Conditional" ]
+                            [ Element { isSlot = False, styles = Dict.empty, overrides = [] } "Conditional" ]
                         ]
                         |> preview (Just "secondary") Nothing
                         |> Query.has [ Selector.text "Always" ]
             ]
+        , describe "style layers"
+            [ test "the base styles are what's drawn with nothing selected" <|
+                \_ ->
+                    styled [ layer (Just "primary") Nothing [ ( "color", "white" ) ] ]
+                        |> preview Nothing Nothing
+                        |> Query.has [ Selector.style "color" "black" ]
+            , test "a layer for the variant being shown is drawn over the base" <|
+                \_ ->
+                    styled [ layer (Just "primary") Nothing [ ( "color", "white" ) ] ]
+                        |> preview (Just "primary") Nothing
+                        |> Query.has [ Selector.style "color" "white" ]
+            , test "a layer for some other variant is not" <|
+                \_ ->
+                    styled [ layer (Just "primary") Nothing [ ( "color", "white" ) ] ]
+                        |> preview (Just "secondary") Nothing
+                        |> Query.has [ Selector.style "color" "black" ]
+            , test "what a layer doesn't mention is still inherited" <|
+                \_ ->
+                    styled [ layer (Just "primary") Nothing [ ( "color", "white" ) ] ]
+                        |> preview (Just "primary") Nothing
+                        |> Query.has [ Selector.style "padding" "1rem" ]
+            , test "a state layer wins over a variant layer" <|
+                \_ ->
+                    styled
+                        [ layer (Just "primary") Nothing [ ( "color", "variant" ) ]
+                        , layer Nothing (Just "hover") [ ( "color", "state" ) ]
+                        ]
+                        |> preview (Just "primary") (Just "hover")
+                        |> Query.has [ Selector.style "color" "state" ]
+            , test "token references in a layer resolve like any other value" <|
+                \_ ->
+                    Renderer.renderWithConditions
+                        [ ( [ "color", "brand", "500" ], { value = Tokens.StringValue "#3b82f6", type_ = "color", description = Nothing } ) ]
+                        (Just "primary")
+                        Nothing
+                        (styled [ layer (Just "primary") Nothing [ ( "color", "{color.brand.500}" ) ] ])
+                        |> Query.fromHtml
+                        |> Query.has [ Selector.style "color" "#3b82f6" ]
+            , test "a screen instancing a component with a variant gets that variant's styles" <|
+                \_ ->
+                    -- Screens already carry variant and state on an instance,
+                    -- so this needs nothing of the Screens tab — but it is the
+                    -- path that makes a variant worth declaring at all.
+                    let
+                        button =
+                            { name = "Button"
+                            , description = Nothing
+                            , variants = [ "primary" ]
+                            , slots = []
+                            , states = []
+                            , layout = Just (styled [ layer (Just "primary") Nothing [ ( "color", "white" ) ] ])
+                            }
+                    in
+                    ComponentInstance { componentName = "Button", variant = Just "primary", state = Nothing, slots = [] }
+                        |> Renderer.renderScreenNode (Dict.fromList [ ( "Button", button ) ]) Dict.empty [] []
+                        |> Query.fromHtml
+                        |> Query.has [ Selector.style "color" "white" ]
+            ]
         ]
+
+
+{-| One text element with a base style and whatever layers are handed in.
+-}
+styled : List Components.StyleLayer -> Layout
+styled overrides =
+    Element
+        { isSlot = False
+        , styles = Dict.fromList [ ( "color", "black" ), ( "padding", "1rem" ) ]
+        , overrides = overrides
+        }
+        "Styled"
+
+
+layer : Maybe String -> Maybe String -> List ( String, String ) -> Components.StyleLayer
+layer variant state styles =
+    { variant = variant, state = state, styles = Dict.fromList styles }
 
 
 {-| A layout whose only content sits behind `props`.
 -}
 only : Components.WhenProps -> Layout
 only props =
-    Stack { direction = "column", styles = Dict.empty }
-        [ When props [ Element { isSlot = False, styles = Dict.empty } "Conditional" ] ]
+    Stack { direction = "column", styles = Dict.empty, overrides = [] }
+        [ When props [ Element { isSlot = False, styles = Dict.empty, overrides = [] } "Conditional" ] ]
 
 
 preview : Maybe String -> Maybe String -> Layout -> Query.Single msg

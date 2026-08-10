@@ -2,7 +2,7 @@ module Help exposing
     ( Topic
     , forTab
     , tokens, themes, tokenFilters, newToken
-    , components, componentLayout, usageContract, componentEditor, componentVariant, componentState, componentSlot
+    , components, componentLayout, usageContract, componentEditor, componentVariant, componentState, componentSlot, componentContext
     , screens, addComponentToScreen, addScreenToScreen, screenEditor
     , gitWorkflows, branch, unsavedChanges, mergeRequests, contractCheck
     , export
@@ -30,7 +30,7 @@ broken once.
 
 @docs tokens, themes, tokenFilters, newToken
 
-@docs components, componentLayout, usageContract, componentEditor, componentVariant, componentState, componentSlot
+@docs components, componentLayout, usageContract, componentEditor, componentVariant, componentState, componentSlot, componentContext
 
 @docs screens, addComponentToScreen, addScreenToScreen, screenEditor
 
@@ -193,7 +193,10 @@ componentVariant =
     { id = "component-variant"
     , title = "Variants"
     , lede = Nothing
-    , body = [ "Variants define alternative visual styles for a component (e.g., 'primary', 'danger')." ]
+    , body =
+        [ "Variants define alternative visual styles for a component (e.g., 'primary', 'danger')."
+        , "Select one under \"Editing\" to give it styles of its own; anything you don't override there is inherited from the component's base styles."
+        ]
     }
 
 
@@ -203,7 +206,24 @@ componentState =
     { id = "component-state"
     , title = "States"
     , lede = Nothing
-    , body = [ "States represent interactive or conditional modes like 'hover', 'active', or 'disabled'." ]
+    , body =
+        [ "States represent interactive or conditional modes like 'hover', 'active', or 'disabled'."
+        , "Like variants, a state can carry its own styles — and a state's styles win over a variant's when both apply."
+        ]
+    }
+
+
+{-| -}
+componentContext : Topic
+componentContext =
+    { id = "component-context"
+    , title = "Editing a variant or state"
+    , lede = Nothing
+    , body =
+        [ "This chooses which version of the component you are working on. With nothing selected you are editing the base styles, which every variant and state starts from."
+        , "Select a variant or state and the styles you change apply only there, layered over the base. Rows are marked \"inherited\" or \"overridden\" so you can see which is which, and × on an overridden row puts it back."
+        , "The preview follows this selection, so what you are looking at is always what you are changing."
+        ]
     }
 
 
@@ -364,6 +384,7 @@ all =
     , componentVariant
     , componentState
     , componentSlot
+    , componentContext
     , screens
     , addComponentToScreen
     , addScreenToScreen

@@ -31,17 +31,76 @@ emptyComponent name =
     { name = name, description = Nothing, variants = [], slots = [], states = [], layout = Nothing }
 
 
+{-| A style layer for one variant, one state, or both.
+-}
+layer : { variant : Maybe String, state : Maybe String } -> List ( String, String ) -> Components.StyleLayer
+layer condition styles =
+    { variant = condition.variant, state = condition.state, styles = Dict.fromList styles }
+
+
+forVariant : String -> List ( String, String ) -> Components.StyleLayer
+forVariant name styles =
+    layer { variant = Just name, state = Nothing } styles
+
+
+forState : String -> List ( String, String ) -> Components.StyleLayer
+forState name styles =
+    layer { variant = Nothing, state = Just name } styles
+
+
+{-| The base shape is still the one moved verbatim from the old Update.elm
+"Button" branch, and `TemplatesTest` still locks it.
+
+What is new is the styling: the four variants used to be names with nothing
+behind them, so a Button created from this template rendered identically
+whichever one you previewed.
+
+Where the starter scale has a colour for the job it is referenced by token path
+— `{color.brand.*}` and `{color.gray.*}`, what "Apply starter scale" seeds on
+the Tokens tab. It ships one brand ramp and one neutral ramp and no semantic
+ones, so `success` and `danger` are literals here. Naming them
+`{color.success.500}` would only render as unresolved text, and dressing them
+in brand blue would be a lie about what they mean.
+
+-}
 buttonComponent : String -> Components.Component
 buttonComponent name =
-    -- Moved verbatim from the old Update.elm "Button" branch. Do not
-    -- change any value here — TemplatesTest.elm locks this exact shape
-    -- as a regression test against the pre-extraction behavior.
     { name = name
     , description = Just "A basic button component"
     , variants = [ "primary", "secondary", "success", "danger" ]
     , slots = [ "default" ]
     , states = [ "hover", "active", "disabled" ]
-    , layout = Just (Components.Element { isSlot = True, styles = Dict.fromList [ ( "padding", "0.5rem 1rem" ), ( "border-radius", "0.25rem" ), ( "cursor", "pointer" ) ] } "Button text")
+    , layout =
+        Just
+            (Components.Element
+                { isSlot = True
+                , styles =
+                    Dict.fromList
+                        [ ( "padding", "0.5rem 1rem" )
+                        , ( "border-radius", "0.25rem" )
+                        , ( "cursor", "pointer" )
+                        , ( "background-color", "{color.gray.200}" )
+                        , ( "color", "{color.gray.900}" )
+                        ]
+                , overrides =
+                    [ forVariant "primary"
+                        [ ( "background-color", "{color.brand.500}" ), ( "color", "{color.gray.50}" ) ]
+                    , forVariant "secondary"
+                        [ ( "background-color", "{color.gray.100}" ), ( "color", "{color.gray.900}" ) ]
+                    , forVariant "success"
+                        [ ( "background-color", "#16a34a" ), ( "color", "{color.gray.50}" ) ]
+                    , forVariant "danger"
+                        [ ( "background-color", "#dc2626" ), ( "color", "{color.gray.50}" ) ]
+
+                    -- States layer over whichever variant is showing, which is
+                    -- why they don't have to be written out per variant.
+                    , forState "hover" [ ( "opacity", "0.9" ) ]
+                    , forState "active" [ ( "opacity", "0.8" ) ]
+                    , forState "disabled" [ ( "opacity", "0.5" ), ( "cursor", "not-allowed" ) ]
+                    ]
+                }
+                "Button text"
+            )
     }
 
 
@@ -56,10 +115,10 @@ cardComponent name =
     , states = []
     , layout =
         Just
-            (Components.Stack { direction = "column", styles = Dict.fromList [ ( "border", "1px solid #ccc" ), ( "border-radius", "0.25rem" ), ( "overflow", "hidden" ) ] }
-                [ Components.Element { isSlot = True, styles = Dict.fromList [ ( "padding", "1rem" ), ( "background-color", "#f8f9fa" ), ( "border-bottom", "1px solid #ccc" ) ] } "Header Slot"
-                , Components.Element { isSlot = True, styles = Dict.fromList [ ( "padding", "1rem" ) ] } "Body Slot"
-                , Components.Element { isSlot = True, styles = Dict.fromList [ ( "padding", "1rem" ), ( "background-color", "#f8f9fa" ), ( "border-top", "1px solid #ccc" ) ] } "Footer Slot"
+            (Components.Stack { direction = "column", styles = Dict.fromList [ ( "border", "1px solid #ccc" ), ( "border-radius", "0.25rem" ), ( "overflow", "hidden" ) ], overrides = [] }
+                [ Components.Element { isSlot = True, styles = Dict.fromList [ ( "padding", "1rem" ), ( "background-color", "#f8f9fa" ), ( "border-bottom", "1px solid #ccc" ) ], overrides = [] } "Header Slot"
+                , Components.Element { isSlot = True, styles = Dict.fromList [ ( "padding", "1rem" ) ], overrides = [] } "Body Slot"
+                , Components.Element { isSlot = True, styles = Dict.fromList [ ( "padding", "1rem" ), ( "background-color", "#f8f9fa" ), ( "border-top", "1px solid #ccc" ) ], overrides = [] } "Footer Slot"
                 ]
             )
     }
@@ -83,6 +142,16 @@ inputComponent name =
                         , ( "border-radius", "0.25rem" )
                         , ( "background-color", "#ffffff" )
                         ]
+                , overrides =
+                    -- `default` restates the base border as a token reference
+                    -- rather than the literal the base carries. It has to say
+                    -- something: a variant that styles nothing is a name in a
+                    -- picker that changes nothing when you choose it.
+                    [ forVariant "default" [ ( "border", "1px solid {color.gray.300}" ) ]
+                    , forVariant "error" [ ( "border", "1px solid {color.gray.900}" ) ]
+                    , forState "focus" [ ( "outline", "2px solid {color.brand.500}" ) ]
+                    , forState "disabled" [ ( "background-color", "{color.gray.100}" ), ( "opacity", "0.6" ) ]
+                    ]
                 }
                 "Input value"
             )
@@ -101,6 +170,13 @@ badgeComponent name =
             (Components.Element
                 { isSlot = True
                 , styles = Dict.fromList [ ( "padding", "0.125rem 0.5rem" ), ( "border-radius", "9999px" ), ( "font-size", "0.75rem" ), ( "background-color", "#f3f4f6" ) ]
+                , overrides =
+                    -- Semantic colours are literals for the same reason as in
+                    -- buttonComponent: the starter scale has no ramp for them.
+                    [ forVariant "neutral" [ ( "background-color", "{color.gray.100}" ), ( "color", "{color.gray.700}" ) ]
+                    , forVariant "positive" [ ( "background-color", "#dcfce7" ), ( "color", "#166534" ) ]
+                    , forVariant "negative" [ ( "background-color", "#fee2e2" ), ( "color", "#991b1b" ) ]
+                    ]
                 }
                 "Badge label"
             )
@@ -117,8 +193,18 @@ alertComponent name =
     , layout =
         Just
             (Components.Stack
-                { direction = "row", styles = Dict.fromList [ ( "padding", "0.75rem 1rem" ), ( "border-radius", "0.25rem" ), ( "border-left", "4px solid #6b7280" ), ( "background-color", "#f9fafb" ), ( "gap", "0.5rem" ), ( "align-items", "center" ) ] }
-                [ Components.Element { isSlot = True, styles = Dict.empty } "Alert message" ]
+                { direction = "row"
+                , styles = Dict.fromList [ ( "padding", "0.75rem 1rem" ), ( "border-radius", "0.25rem" ), ( "border-left", "4px solid #6b7280" ), ( "background-color", "#f9fafb" ), ( "gap", "0.5rem" ), ( "align-items", "center" ) ]
+                , overrides =
+                    -- Semantic colours are literals for the same reason as in
+                    -- buttonComponent: the starter scale has no ramp for them.
+                    [ forVariant "info" [ ( "border-left", "4px solid {color.brand.500}" ), ( "background-color", "{color.brand.50}" ) ]
+                    , forVariant "success" [ ( "border-left", "4px solid #16a34a" ), ( "background-color", "#f0fdf4" ) ]
+                    , forVariant "warning" [ ( "border-left", "4px solid #d97706" ), ( "background-color", "#fffbeb" ) ]
+                    , forVariant "danger" [ ( "border-left", "4px solid #dc2626" ), ( "background-color", "#fef2f2" ) ]
+                    ]
+                }
+                [ Components.Element { isSlot = True, styles = Dict.empty, overrides = [] } "Alert message" ]
             )
     }
 

@@ -78,7 +78,7 @@ Where things live, so you don't have to guess:
 **Shell and plumbing**
 
 - `src/Main.elm` — entry point, app bar, tab chrome, project picker
-- `src/Update.elm` — the single `update` loop (~2400 lines; the Refactor Agent's
+- `src/Update.elm` — the single `update` loop (~2100 lines; the Refactor Agent's
   standing assignment)
 - `src/Types.elm` — `Model`, `Msg`, `Tab`
 - `src/Route.elm` — fragment-based URL routing (`#/namespace/project/tab/item`);
@@ -89,6 +89,11 @@ Where things live, so you don't have to guess:
 **Domain**
 
 - `src/Tokens.elm`, `src/Themes.elm`, `src/Components.elm`, `src/Screens.elm`
+- `src/Components.elm` also owns per-variant/per-state styling: a layout node
+  carries base `styles` plus `overrides` (style layers keyed by variant and/or
+  state), and `resolveStyles` is the one place that decides which layer wins.
+  Anything asking "what does this node look like as X?" — the renderer, the
+  editor, the contract validator — goes through it.
 - `src/Contracts.elm` — usage-contract schema, codecs, and `validate`
 - `src/Export.elm` — CSS variables and Tailwind config generators
 - `src/Templates.elm` — component, screen, and theme starter templates

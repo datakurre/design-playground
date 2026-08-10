@@ -8,10 +8,16 @@ import Json.Encode as Encode exposing (Value)
 import Tokens exposing (TokenPath)
 
 
+{-| Where a rule was broken. `context` is `Nothing` for a component's base
+styles and `Just` the variant/state whose style layer introduced the problem —
+a hardcoded colour written only for the `danger` variant is still a hardcoded
+colour, and the editor has to be able to say which layer to open.
+-}
 type alias Violation =
     { path : List Int
     , property : Maybe String
     , message : String
+    , context : Maybe Components.StyleContext
     }
 
 
@@ -116,6 +122,16 @@ encoder contract =
         ]
 
 
+{-| Every rule, against every node, in every context the component actually
+styles.
+
+Checking the base styles alone would let anything written for a variant through,
+which is most of what a design system's colour decisions are. The contexts come
+from the layers the author wrote rather than from every combination of the
+component's variant and state lists — four variants and five states is twenty
+combinations and almost none of them exist.
+
+-}
 validate : List Tokens.FlatToken -> Contract -> Components.Component -> List Violation
 validate tokens contract component =
     case component.layout of
@@ -123,12 +139,79 @@ validate tokens contract component =
             []
 
         Just layout ->
-            styleNodes layout
-                |> List.concatMap (\( path, styles ) -> List.concatMap (applyRule tokens path styles) contract.rules)
+            let
+                nodes =
+                    styleNodes layout
+
+                violationsIn context =
+                    List.concatMap (\( path, node ) -> checkNode tokens contract path context node) nodes
+
+                baseViolations =
+                    violationsIn Components.baseContext
+
+                -- A problem in the base styles is one problem, however many
+                -- variants inherit it.
+                alreadyReported violation =
+                    List.any
+                        (\base ->
+                            base.path
+                                == violation.path
+                                && base.property
+                                == violation.property
+                                && base.message
+                                == violation.message
+                        )
+                        baseViolations
+            in
+            baseViolations
+                ++ (Components.styleContexts layout
+                        |> List.filter (\context -> context /= Components.baseContext)
+                        |> List.concatMap (violationsIn >> List.filter (not << alreadyReported))
+                   )
 
 
-applyRule : List Tokens.FlatToken -> List Int -> Dict String String -> Rule -> List Violation
-applyRule tokens path styles rule =
+{-| One node, in one context.
+
+The property-scoped rules look only at what this context _changes_, so a
+hardcoded base value isn't re-reported under every variant that inherits it.
+`ContrastThreshold` can't work that way — a variant that overrides only the
+background still changes the pairing — so it reads the fully resolved styles,
+and the caller drops whatever that duplicates from the base.
+
+-}
+checkNode : List Tokens.FlatToken -> Contract -> List Int -> Components.StyleContext -> Components.Styling -> List Violation
+checkNode tokens contract path context node =
+    let
+        resolved =
+            Components.resolveStyles context node
+
+        scoped =
+            if context == Components.baseContext then
+                resolved
+
+            else
+                let
+                    inherited =
+                        Components.resolveStyles Components.baseContext node
+                in
+                Dict.filter (\property value -> Dict.get property inherited /= Just value) resolved
+
+        tag =
+            if context == Components.baseContext then
+                Nothing
+
+            else
+                Just context
+    in
+    List.concatMap (applyRule tokens path tag { scoped = scoped, resolved = resolved }) contract.rules
+
+
+applyRule : List Tokens.FlatToken -> List Int -> Maybe Components.StyleContext -> { scoped : Dict String String, resolved : Dict String String } -> Rule -> List Violation
+applyRule tokens path context nodeStyles rule =
+    let
+        styles =
+            nodeStyles.scoped
+    in
     case rule of
         AllowedTokenGroups groups ->
             styles
@@ -146,6 +229,7 @@ applyRule tokens path styles rule =
                                             { path = path
                                             , property = Just property
                                             , message = "Token path '" ++ String.join "." aliasPath ++ "' is not in allowed groups."
+                                            , context = context
                                             }
                                 )
                     )
@@ -167,6 +251,7 @@ applyRule tokens path styles rule =
                                     { path = path
                                     , property = Just property
                                     , message = "Hardcoded value: " ++ literal
+                                    , context = context
                                     }
 
                             ( False, _ ) ->
@@ -202,6 +287,7 @@ applyRule tokens path styles rule =
                                     { path = path
                                     , property = Just property
                                     , message = "Resolved value '" ++ resolved ++ "' is not part of the required scale."
+                                    , context = context
                                     }
 
                             else
@@ -212,7 +298,10 @@ applyRule tokens path styles rule =
                     )
 
         ContrastThreshold { foreground, background, minimumRatio } ->
-            case ( Dict.get foreground styles, Dict.get background styles ) of
+            -- The one rule that reads the whole node rather than what this
+            -- context changed: overriding just the background in a variant
+            -- still changes what the unchanged text colour sits on.
+            case ( Dict.get foreground nodeStyles.resolved, Dict.get background nodeStyles.resolved ) of
                 ( Just fg, Just bg ) ->
                     let
                         fgRes =
@@ -235,6 +324,7 @@ applyRule tokens path styles rule =
                                 [ { path = path
                                   , property = Nothing
                                   , message = "Contrast ratio " ++ String.fromFloat ratioRounded ++ " is below minimum " ++ String.fromFloat minimumRatio
+                                  , context = context
                                   }
                                 ]
 
@@ -248,25 +338,39 @@ applyRule tokens path styles rule =
                     []
 
 
-styleNodes : Components.Layout -> List ( List Int, Dict String String )
+styleNodes : Components.Layout -> List ( List Int, Components.Styling )
 styleNodes layout =
     styleNodesHelp [] layout
 
 
-styleNodesHelp : List Int -> Components.Layout -> List ( List Int, Dict String String )
+styleNodesHelp : List Int -> Components.Layout -> List ( List Int, Components.Styling )
 styleNodesHelp path layout =
+    let
+        -- `When` carries no styles of its own, so `Components.styling` gives it
+        -- nothing and it contributes only its children.
+        here =
+            case Components.styling layout of
+                Just node ->
+                    [ ( path, node ) ]
+
+                Nothing ->
+                    []
+
+        nested children =
+            List.concat (List.indexedMap (\i child -> styleNodesHelp (path ++ [ i ]) child) children)
+    in
     case layout of
-        Components.Stack props children ->
-            ( path, props.styles ) :: List.concat (List.indexedMap (\i child -> styleNodesHelp (path ++ [ i ]) child) children)
+        Components.Stack _ children ->
+            here ++ nested children
 
-        Components.Grid props children ->
-            ( path, props.styles ) :: List.concat (List.indexedMap (\i child -> styleNodesHelp (path ++ [ i ]) child) children)
-
-        Components.Element props _ ->
-            [ ( path, props.styles ) ]
+        Components.Grid _ children ->
+            here ++ nested children
 
         Components.When _ children ->
-            List.concat (List.indexedMap (\i child -> styleNodesHelp (path ++ [ i ]) child) children)
+            here ++ nested children
+
+        Components.Element _ _ ->
+            here
 
 
 {-| A style value split into the `{token.path}` references it makes and the

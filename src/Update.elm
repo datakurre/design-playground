@@ -97,34 +97,25 @@ removeNameFromComponent :
     -> Model
     -> ( Model, Cmd Msg )
 removeNameFromComponent config name model =
-    case model.selectedComponentName of
-        Nothing ->
-            ( model, Cmd.none )
-
-        Just selected ->
+    updateSelectedComponent
+        (\c ->
             let
-                removeFrom c =
-                    if c.name == selected then
-                        let
-                            stripped =
-                                config.set (List.filter (\n -> n /= name) (config.get c)) c
-                        in
-                        { stripped | layout = Maybe.map (mapLayout (config.forget name)) stripped.layout }
-
-                    else
-                        c
+                stripped =
+                    config.set (List.filter (\n -> n /= name) (config.get c)) c
             in
-            ( { model | components = Just (List.map removeFrom (Maybe.withDefault [] model.components)) }
-            , Cmd.none
-            )
+            { stripped | layout = Maybe.map (mapLayout (config.forget name)) stripped.layout }
+        )
+        model
 
 
 {-| A `When` that named the removed variant becomes one that doesn't ask about
-variants at all, rather than one that can never be true.
+variants at all, rather than one that can never be true — and the styles written
+for that variant go with it. A layer left behind would be invisible in the
+editor and would come back to life the moment someone added the name again.
 -}
 forgetVariant : String -> Components.Layout -> Components.Layout
 forgetVariant name layout =
-    case layout of
+    (case layout of
         Components.When props children ->
             if props.variant == Just name then
                 Components.When { props | variant = Nothing } children
@@ -134,13 +125,15 @@ forgetVariant name layout =
 
         _ ->
             layout
+    )
+        |> Components.mapOverrides (List.filter (\layer -> layer.variant /= Just name))
 
 
 {-| As `forgetVariant`, for the other half of a condition.
 -}
 forgetState : String -> Components.Layout -> Components.Layout
 forgetState name layout =
-    case layout of
+    (case layout of
         Components.When props children ->
             if props.state == Just name then
                 Components.When { props | state = Nothing } children
@@ -150,6 +143,8 @@ forgetState name layout =
 
         _ ->
             layout
+    )
+        |> Components.mapOverrides (List.filter (\layer -> layer.state /= Just name))
 
 
 {-| A placeholder for a slot that no longer exists goes back to being an ordinary
@@ -240,6 +235,107 @@ mapLayout f layout =
             element
 
 
+{-| The component being edited, changed. Twelve messages used to open with the
+same four lines — unwrap `selectedComponentName`, default `components` to `[]`,
+map over it, compare names — and the interesting part of each was one expression
+buried inside that.
+-}
+updateSelectedComponent : (Components.Component -> Components.Component) -> Model -> ( Model, Cmd Msg )
+updateSelectedComponent f model =
+    case model.selectedComponentName of
+        Nothing ->
+            ( model, Cmd.none )
+
+        Just selected ->
+            let
+                apply c =
+                    if c.name == selected then
+                        f c
+
+                    else
+                        c
+            in
+            ( { model | components = Just (List.map apply (Maybe.withDefault [] model.components)) }
+            , Cmd.none
+            )
+
+
+{-| One node of the selected component's layout, addressed by path. A component
+with no layout yet has nothing to address, and is left alone.
+-}
+updateLayoutAt : List Int -> (Components.Layout -> Components.Layout) -> Model -> ( Model, Cmd Msg )
+updateLayoutAt path f model =
+    updateSelectedComponent (\c -> { c | layout = Maybe.map (updateLayoutNode path f) c.layout }) model
+
+
+{-| Deleting the variant you were editing drops you back to the base, rather
+than leaving the editor pointed at a context the component no longer has.
+-}
+forgetEditingVariant : String -> Model -> Model
+forgetEditingVariant name model =
+    if model.editingVariant == Just name then
+        { model | editingVariant = Nothing }
+
+    else
+        model
+
+
+{-| As `forgetEditingVariant`, for states.
+-}
+forgetEditingState : String -> Model -> Model
+forgetEditingState name model =
+    if model.editingState == Just name then
+        { model | editingState = Nothing }
+
+    else
+        model
+
+
+{-| Adding a child is the same job whatever kind of node it goes into, which is
+why five messages spelled out the same `Stack`/`Grid`/`When` triple. An
+`Element` renders text or a slot and holds no children, so it takes none.
+-}
+appendChild : Components.Layout -> Components.Layout -> Components.Layout
+appendChild child node =
+    case node of
+        Components.Stack props children ->
+            Components.Stack props (children ++ [ child ])
+
+        Components.Grid props children ->
+            Components.Grid props (children ++ [ child ])
+
+        Components.When props children ->
+            Components.When props (children ++ [ child ])
+
+        Components.Element _ _ ->
+            node
+
+
+{-| The other half of `appendChild`. This used to leave `When` out, so the
+delete button on anything inside a conditional did nothing at all.
+-}
+removeChildAt : Int -> Components.Layout -> Components.Layout
+removeChildAt index node =
+    let
+        without children =
+            List.indexedMap Tuple.pair children
+                |> List.filter (\( i, _ ) -> i /= index)
+                |> List.map Tuple.second
+    in
+    case node of
+        Components.Stack props children ->
+            Components.Stack props (without children)
+
+        Components.Grid props children ->
+            Components.Grid props (without children)
+
+        Components.When props children ->
+            Components.When props (without children)
+
+        Components.Element _ _ ->
+            node
+
+
 {-| Forgets the repository. Opening a project, closing one and logging out all
 have to forget the same set, and listing what to _forget_ never worked: each
 call site used to spell it out inline and each was missing something different,
@@ -305,11 +401,37 @@ applyRoute route model =
 
 {-| A route only speaks for its own tab. Leaving the other tab's selection alone
 is what lets you look at Screens and come back to the component you had open.
+
+Moving to a different component does drop the editing context, though: variants
+and states are named per component, so `primary` carried over from the last one
+would mean editing a layer this one never declared.
+
 -}
 selectFromRoute : Route.TabRoute -> Model -> Model
 selectFromRoute tabRoute model =
+    let
+        movedToAnotherComponent =
+            case tabRoute of
+                Route.ComponentsTab name ->
+                    name /= model.selectedComponentName
+
+                _ ->
+                    False
+    in
     { model
         | activeTab = Route.toTab tabRoute
+        , editingVariant =
+            if movedToAnotherComponent then
+                Nothing
+
+            else
+                model.editingVariant
+        , editingState =
+            if movedToAnotherComponent then
+                Nothing
+
+            else
+                model.editingState
         , selectedComponentName =
             case tabRoute of
                 Route.ComponentsTab name ->
@@ -1051,6 +1173,7 @@ update msg model =
                 }
                 name
                 model
+                |> Tuple.mapFirst (forgetEditingVariant name)
 
         UpdateNewComponentSlot name ->
             ( { model | newComponentSlot = name, commitStatus = Naming.clearFailure model.commitStatus }, Cmd.none )
@@ -1097,6 +1220,7 @@ update msg model =
                 }
                 name
                 model
+                |> Tuple.mapFirst (forgetEditingState name)
 
         SaveComponent ->
             case ( model.token, model.selectedProject, model.selectedComponentName ) of
@@ -1155,108 +1279,17 @@ update msg model =
                     ( model, Cmd.none )
 
         InitComponentLayout newLayout ->
-            case model.selectedComponentName of
-                Just name ->
-                    let
-                        updateComponent c =
-                            if c.name == name then
-                                { c | layout = Just newLayout }
-
-                            else
-                                c
-                    in
-                    ( { model | components = Just (List.map updateComponent (Maybe.withDefault [] model.components)) }, Cmd.none )
-
-                Nothing ->
-                    ( model, Cmd.none )
+            updateSelectedComponent (\c -> { c | layout = Just newLayout }) model
 
         UpdateLayoutProperty path prop value ->
-            case model.selectedComponentName of
-                Just name ->
-                    let
-                        currentComponents =
-                            model.components |> Maybe.withDefault []
-
-                        updateComponent c =
-                            if c.name == name then
-                                case c.layout of
-                                    Just l ->
-                                        { c
-                                            | layout =
-                                                Just
-                                                    (updateLayoutNode path
-                                                        (\node ->
-                                                            case node of
-                                                                Components.Stack p children ->
-                                                                    Components.Stack { p | styles = Dict.insert prop value p.styles } children
-
-                                                                Components.Grid p children ->
-                                                                    Components.Grid { p | styles = Dict.insert prop value p.styles } children
-
-                                                                Components.Element p content ->
-                                                                    Components.Element { p | styles = Dict.insert prop value p.styles } content
-
-                                                                Components.When p children ->
-                                                                    Components.When p children
-                                                        )
-                                                        l
-                                                    )
-                                        }
-
-                                    Nothing ->
-                                        c
-
-                            else
-                                c
-                    in
-                    ( { model | components = Just (List.map updateComponent currentComponents), newLayoutPropertyName = "", newLayoutPropertyValue = "" }, Cmd.none )
-
-                Nothing ->
-                    ( model, Cmd.none )
+            updateLayoutAt path (Components.mapContextStyles (editingContext model) (Dict.insert prop value)) model
+                |> Tuple.mapFirst (\m -> { m | newLayoutPropertyName = "", newLayoutPropertyValue = "" })
 
         RemoveLayoutProperty path prop ->
-            case model.selectedComponentName of
-                Just name ->
-                    let
-                        currentComponents =
-                            model.components |> Maybe.withDefault []
-
-                        updateComponent c =
-                            if c.name == name then
-                                case c.layout of
-                                    Just l ->
-                                        { c
-                                            | layout =
-                                                Just
-                                                    (updateLayoutNode path
-                                                        (\node ->
-                                                            case node of
-                                                                Components.Stack p children ->
-                                                                    Components.Stack { p | styles = Dict.remove prop p.styles } children
-
-                                                                Components.Grid p children ->
-                                                                    Components.Grid { p | styles = Dict.remove prop p.styles } children
-
-                                                                Components.Element p content ->
-                                                                    Components.Element { p | styles = Dict.remove prop p.styles } content
-
-                                                                Components.When p children ->
-                                                                    Components.When p children
-                                                        )
-                                                        l
-                                                    )
-                                        }
-
-                                    Nothing ->
-                                        c
-
-                            else
-                                c
-                    in
-                    ( { model | components = Just (List.map updateComponent currentComponents) }, Cmd.none )
-
-                Nothing ->
-                    ( model, Cmd.none )
+            -- In the base context this drops the property. In a variant or
+            -- state it drops only that layer's opinion of it, so the node goes
+            -- back to inheriting — which is what the editor's × means there.
+            updateLayoutAt path (Components.mapContextStyles (editingContext model) (Dict.remove prop)) model
 
         UpdateNewLayoutPropertyName name ->
             ( { model | newLayoutPropertyName = name }, Cmd.none )
@@ -1265,426 +1298,94 @@ update msg model =
             ( { model | newLayoutPropertyValue = value }, Cmd.none )
 
         AddLayoutText path content ->
-            case model.selectedComponentName of
-                Just name ->
-                    let
-                        currentComponents =
-                            model.components |> Maybe.withDefault []
-
-                        updateComponent c =
-                            if c.name == name then
-                                case c.layout of
-                                    Just l ->
-                                        { c
-                                            | layout =
-                                                Just
-                                                    (updateLayoutNode path
-                                                        (\node ->
-                                                            case node of
-                                                                Components.Stack p children ->
-                                                                    Components.Stack p (children ++ [ Components.Element { isSlot = False, styles = Dict.empty } content ])
-
-                                                                Components.Grid p children ->
-                                                                    Components.Grid p (children ++ [ Components.Element { isSlot = False, styles = Dict.empty } content ])
-
-                                                                Components.When p children ->
-                                                                    Components.When p (children ++ [ Components.Element { isSlot = False, styles = Dict.empty } content ])
-
-                                                                _ ->
-                                                                    node
-                                                        )
-                                                        l
-                                                    )
-                                        }
-
-                                    Nothing ->
-                                        c
-
-                            else
-                                c
-                    in
-                    ( { model | components = Just (List.map updateComponent currentComponents) }, Cmd.none )
-
-                Nothing ->
-                    ( model, Cmd.none )
+            updateLayoutAt path (appendChild (Components.Element { isSlot = False, styles = Dict.empty, overrides = [] } content)) model
 
         AddLayoutSlot path ->
-            case model.selectedComponentName of
-                Just name ->
-                    let
-                        currentComponents =
-                            model.components |> Maybe.withDefault []
-
-                        updateComponent c =
-                            if c.name == name then
-                                case c.layout of
-                                    Just l ->
-                                        { c
-                                            | layout =
-                                                Just
-                                                    (updateLayoutNode path
-                                                        (\node ->
-                                                            case node of
-                                                                Components.Stack p children ->
-                                                                    Components.Stack p (children ++ [ Components.Element { isSlot = True, styles = Dict.empty } "" ])
-
-                                                                Components.Grid p children ->
-                                                                    Components.Grid p (children ++ [ Components.Element { isSlot = True, styles = Dict.empty } "" ])
-
-                                                                Components.When p children ->
-                                                                    Components.When p (children ++ [ Components.Element { isSlot = True, styles = Dict.empty } "" ])
-
-                                                                _ ->
-                                                                    node
-                                                        )
-                                                        l
-                                                    )
-                                        }
-
-                                    Nothing ->
-                                        c
-
-                            else
-                                c
-                    in
-                    ( { model | components = Just (List.map updateComponent currentComponents) }, Cmd.none )
-
-                Nothing ->
-                    ( model, Cmd.none )
+            updateLayoutAt path (appendChild (Components.Element { isSlot = True, styles = Dict.empty, overrides = [] } "")) model
 
         AddLayoutStack path ->
-            case model.selectedComponentName of
-                Just name ->
-                    let
-                        currentComponents =
-                            model.components |> Maybe.withDefault []
-
-                        updateComponent c =
-                            if c.name == name then
-                                case c.layout of
-                                    Just l ->
-                                        { c
-                                            | layout =
-                                                Just
-                                                    (updateLayoutNode path
-                                                        (\node ->
-                                                            case node of
-                                                                Components.Stack p children ->
-                                                                    Components.Stack p (children ++ [ Components.Stack { direction = "column", styles = Dict.empty } [] ])
-
-                                                                Components.Grid p children ->
-                                                                    Components.Grid p (children ++ [ Components.Stack { direction = "column", styles = Dict.empty } [] ])
-
-                                                                Components.When p children ->
-                                                                    Components.When p (children ++ [ Components.Stack { direction = "column", styles = Dict.empty } [] ])
-
-                                                                _ ->
-                                                                    node
-                                                        )
-                                                        l
-                                                    )
-                                        }
-
-                                    Nothing ->
-                                        c
-
-                            else
-                                c
-                    in
-                    ( { model | components = Just (List.map updateComponent currentComponents) }, Cmd.none )
-
-                Nothing ->
-                    ( model, Cmd.none )
+            updateLayoutAt path (appendChild (Components.Stack { direction = "column", styles = Dict.empty, overrides = [] } [])) model
 
         AddLayoutGrid path ->
-            case model.selectedComponentName of
-                Just name ->
-                    let
-                        currentComponents =
-                            model.components |> Maybe.withDefault []
-
-                        updateComponent c =
-                            if c.name == name then
-                                case c.layout of
-                                    Just l ->
-                                        { c
-                                            | layout =
-                                                Just
-                                                    (updateLayoutNode path
-                                                        (\node ->
-                                                            case node of
-                                                                Components.Stack p children ->
-                                                                    Components.Stack p (children ++ [ Components.Grid { columns = 2, styles = Dict.empty } [] ])
-
-                                                                Components.Grid p children ->
-                                                                    Components.Grid p (children ++ [ Components.Grid { columns = 2, styles = Dict.empty } [] ])
-
-                                                                Components.When p children ->
-                                                                    Components.When p (children ++ [ Components.Grid { columns = 2, styles = Dict.empty } [] ])
-
-                                                                _ ->
-                                                                    node
-                                                        )
-                                                        l
-                                                    )
-                                        }
-
-                                    Nothing ->
-                                        c
-
-                            else
-                                c
-                    in
-                    ( { model | components = Just (List.map updateComponent currentComponents) }, Cmd.none )
-
-                Nothing ->
-                    ( model, Cmd.none )
+            updateLayoutAt path (appendChild (Components.Grid { columns = 2, styles = Dict.empty, overrides = [] } [])) model
 
         AddLayoutWhen path ->
-            case model.selectedComponentName of
-                Just name ->
-                    let
-                        currentComponents =
-                            model.components |> Maybe.withDefault []
-
-                        updateComponent c =
-                            if c.name == name then
-                                case c.layout of
-                                    Just l ->
-                                        { c
-                                            | layout =
-                                                Just
-                                                    (updateLayoutNode path
-                                                        (\node ->
-                                                            case node of
-                                                                Components.Stack p children ->
-                                                                    Components.Stack p (children ++ [ Components.When { variant = Nothing, state = Nothing } [] ])
-
-                                                                Components.Grid p children ->
-                                                                    Components.Grid p (children ++ [ Components.When { variant = Nothing, state = Nothing } [] ])
-
-                                                                Components.When p children ->
-                                                                    Components.When p (children ++ [ Components.When { variant = Nothing, state = Nothing } [] ])
-
-                                                                _ ->
-                                                                    node
-                                                        )
-                                                        l
-                                                    )
-                                        }
-
-                                    Nothing ->
-                                        c
-
-                            else
-                                c
-                    in
-                    ( { model | components = Just (List.map updateComponent currentComponents) }, Cmd.none )
-
-                Nothing ->
-                    ( model, Cmd.none )
+            updateLayoutAt path (appendChild (Components.When { variant = Nothing, state = Nothing } [])) model
 
         UpdateLayoutText path newContent ->
-            case model.selectedComponentName of
-                Just name ->
-                    let
-                        currentComponents =
-                            model.components |> Maybe.withDefault []
+            updateLayoutAt path
+                (\node ->
+                    case node of
+                        Components.Element props _ ->
+                            Components.Element props newContent
 
-                        updateComponent c =
-                            if c.name == name then
-                                case c.layout of
-                                    Just l ->
-                                        { c
-                                            | layout =
-                                                Just
-                                                    (updateLayoutNode path
-                                                        (\node ->
-                                                            case node of
-                                                                Components.Element p _ ->
-                                                                    Components.Element p newContent
-
-                                                                _ ->
-                                                                    node
-                                                        )
-                                                        l
-                                                    )
-                                        }
-
-                                    Nothing ->
-                                        c
-
-                            else
-                                c
-                    in
-                    ( { model | components = Just (List.map updateComponent currentComponents) }, Cmd.none )
-
-                Nothing ->
-                    ( model, Cmd.none )
+                        _ ->
+                            node
+                )
+                model
 
         ToggleLayoutNodeIsSlot path isSlot ->
-            case model.selectedComponentName of
-                Just name ->
-                    let
-                        currentComponents =
-                            model.components |> Maybe.withDefault []
+            updateLayoutAt path
+                (\node ->
+                    case node of
+                        -- `content` is the text when this is a text element and
+                        -- the slot name when it isn't, so flipping the switch
+                        -- used to blank it. Keeping it means toggling back gets
+                        -- your text back; an unmatched name just leaves the slot
+                        -- picker on its "choose one" prompt.
+                        Components.Element props content ->
+                            Components.Element { props | isSlot = isSlot } content
 
-                        updateComponent c =
-                            if c.name == name then
-                                case c.layout of
-                                    Just l ->
-                                        { c
-                                            | layout =
-                                                Just
-                                                    (updateLayoutNode path
-                                                        (\node ->
-                                                            case node of
-                                                                -- `content` is the text when this is a
-                                                                -- text element and the slot name when it
-                                                                -- isn't, so flipping the switch used to
-                                                                -- blank it. Keeping it means toggling
-                                                                -- back gets your text back; an unmatched
-                                                                -- name just leaves the slot picker on
-                                                                -- its "choose one" prompt.
-                                                                Components.Element p content ->
-                                                                    Components.Element { p | isSlot = isSlot } content
-
-                                                                _ ->
-                                                                    node
-                                                        )
-                                                        l
-                                                    )
-                                        }
-
-                                    Nothing ->
-                                        c
-
-                            else
-                                c
-                    in
-                    ( { model | components = Just (List.map updateComponent currentComponents) }, Cmd.none )
-
-                Nothing ->
-                    ( model, Cmd.none )
+                        _ ->
+                            node
+                )
+                model
 
         UpdateLayoutWhenCondition path field value ->
-            case model.selectedComponentName of
-                Just name ->
-                    let
-                        currentComponents =
-                            model.components |> Maybe.withDefault []
+            let
+                newValue =
+                    if value == "" then
+                        Nothing
 
-                        updateComponent c =
-                            if c.name == name then
-                                case c.layout of
-                                    Just l ->
-                                        { c
-                                            | layout =
-                                                Just
-                                                    (updateLayoutNode path
-                                                        (\node ->
-                                                            case node of
-                                                                Components.When p children ->
-                                                                    let
-                                                                        newValue =
-                                                                            if value == "" then
-                                                                                Nothing
+                    else
+                        Just value
+            in
+            updateLayoutAt path
+                (\node ->
+                    case node of
+                        Components.When props children ->
+                            if field == "variant" then
+                                Components.When { props | variant = newValue } children
 
-                                                                            else
-                                                                                Just value
-                                                                    in
-                                                                    if field == "variant" then
-                                                                        Components.When { p | variant = newValue } children
-
-                                                                    else if field == "state" then
-                                                                        Components.When { p | state = newValue } children
-
-                                                                    else
-                                                                        node
-
-                                                                _ ->
-                                                                    node
-                                                        )
-                                                        l
-                                                    )
-                                        }
-
-                                    Nothing ->
-                                        c
+                            else if field == "state" then
+                                Components.When { props | state = newValue } children
 
                             else
-                                c
-                    in
-                    ( { model | components = Just (List.map updateComponent currentComponents) }, Cmd.none )
+                                node
 
-                Nothing ->
-                    ( model, Cmd.none )
+                        _ ->
+                            node
+                )
+                model
 
-        UpdatePreviewComponentVariant variant ->
-            ( { model | previewComponentVariant = variant }, Cmd.none )
+        UpdateEditingVariant variant ->
+            ( { model | editingVariant = variant }, Cmd.none )
 
-        UpdatePreviewComponentState state ->
-            ( { model | previewComponentState = state }, Cmd.none )
+        UpdateEditingState state ->
+            ( { model | editingState = state }, Cmd.none )
+
+        ClearEditingContext ->
+            ( { model | editingVariant = Nothing, editingState = Nothing }, Cmd.none )
 
         DeleteLayoutNode path ->
-            case model.selectedComponentName of
-                Just name ->
-                    let
-                        currentComponents =
-                            model.components |> Maybe.withDefault []
-
-                        parentPath =
-                            List.take (List.length path - 1) path
-
-                        indexToRemove =
-                            List.drop (List.length path - 1) path |> List.head |> Maybe.withDefault -1
-
-                        updateComponent c =
-                            if c.name == name then
-                                case c.layout of
-                                    Just l ->
-                                        if indexToRemove >= 0 then
-                                            { c
-                                                | layout =
-                                                    Just
-                                                        (updateLayoutNode parentPath
-                                                            (\node ->
-                                                                case node of
-                                                                    Components.Stack p children ->
-                                                                        let
-                                                                            newChildren =
-                                                                                List.indexedMap Tuple.pair children |> List.filter (\( i, _ ) -> i /= indexToRemove) |> List.map Tuple.second
-                                                                        in
-                                                                        Components.Stack p newChildren
-
-                                                                    Components.Grid p children ->
-                                                                        let
-                                                                            newChildren =
-                                                                                List.indexedMap Tuple.pair children |> List.filter (\( i, _ ) -> i /= indexToRemove) |> List.map Tuple.second
-                                                                        in
-                                                                        Components.Grid p newChildren
-
-                                                                    _ ->
-                                                                        node
-                                                            )
-                                                            l
-                                                        )
-                                            }
-
-                                        else
-                                            c
-
-                                    -- Cannot remove root this way
-                                    Nothing ->
-                                        c
-
-                            else
-                                c
-                    in
-                    ( { model | components = Just (List.map updateComponent currentComponents) }, Cmd.none )
-
-                Nothing ->
+            -- A node is removed by its parent, so the root — which has no
+            -- parent — can't be removed this way.
+            case List.reverse path of
+                [] ->
                     ( model, Cmd.none )
+
+                index :: reversedParent ->
+                    updateLayoutAt (List.reverse reversedParent) (removeChildAt index) model
 
         GotScreensTree ref result ->
             case result of

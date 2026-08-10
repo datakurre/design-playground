@@ -26,19 +26,19 @@ import Ui exposing (PillTone(..))
 viewLayoutEditorNode : Model -> Components.Component -> List Int -> Components.Layout -> Html Msg
 viewLayoutEditorNode model comp path layout =
     let
-        ( nodeType, styles, childrenNodes ) =
+        ( nodeType, childrenNodes ) =
             case layout of
-                Components.Stack props children ->
-                    ( "Stack", Just props.styles, children )
+                Components.Stack _ children ->
+                    ( "Stack", children )
 
-                Components.Grid props children ->
-                    ( "Grid", Just props.styles, children )
+                Components.Grid _ children ->
+                    ( "Grid", children )
 
-                Components.Element props content ->
-                    ( "Text", Just props.styles, [] )
+                Components.Element _ _ ->
+                    ( "Text", [] )
 
                 Components.When _ children ->
-                    ( "When", Nothing, children )
+                    ( "When", children )
     in
     div
         [ classes
@@ -70,13 +70,40 @@ viewLayoutEditorNode model comp path layout =
                 ]
                 [ text "×" ]
             ]
-        , case styles of
-            Just s ->
+        , case Components.styling layout of
+            Just node ->
+                let
+                    context =
+                        editingContext model
+
+                    -- What this node looks like in the context being edited,
+                    -- and which of those properties this context is itself
+                    -- responsible for. A property that arrives from the base or
+                    -- from a less specific layer is shown but can't be reset
+                    -- from here — you'd switch to the context that set it.
+                    resolved =
+                        Components.resolveStyles context node
+
+                    ownStyles =
+                        if context == Components.baseContext then
+                            node.base
+
+                        else
+                            node.overrides
+                                |> List.filter (\layer -> layer.variant == context.variant && layer.state == context.state)
+                                |> List.head
+                                |> Maybe.map .styles
+                                |> Maybe.withDefault Dict.empty
+                in
                 div [ classes [ Tw.p s2 ] ]
                     [ div [ Ui.fieldLabel, classes [ Tw.mb s1 ] ] [ text "Styles" ]
                     , ul [ classes [ Tw.list_none, Tw.p s0, Tw.mb s1 ] ]
                         (List.map
                             (\( key, val ) ->
+                                let
+                                    isOwn =
+                                        Dict.member key ownStyles
+                                in
                                 li [ classes [ Tw.flex, Tw.gap s2, Tw.items_center, Tw.mb s1 ] ]
                                     [ div [ Ui.mutedSmall, classes [ Tw.w s24, Tw.truncate ] ] [ text key ]
                                     , Html.input
@@ -89,16 +116,36 @@ viewLayoutEditorNode model comp path layout =
                                         , classes [ Tw.flex_1 ]
                                         ]
                                         []
-                                    , button
-                                        [ Ui.iconButton
-                                        , onClick (RemoveLayoutProperty path key)
-                                        , Html.Attributes.attribute "aria-label" ("Remove " ++ key)
-                                        , Html.Attributes.title ("Remove " ++ key)
-                                        ]
-                                        [ text "×" ]
+                                    , if context == Components.baseContext then
+                                        text ""
+
+                                      else if isOwn then
+                                        Ui.pill Positive "overridden"
+
+                                      else
+                                        Ui.pill Neutral "inherited"
+                                    , if isOwn then
+                                        let
+                                            label =
+                                                if context == Components.baseContext then
+                                                    "Remove " ++ key
+
+                                                else
+                                                    "Reset " ++ key ++ " to inherited"
+                                        in
+                                        button
+                                            [ Ui.iconButton
+                                            , onClick (RemoveLayoutProperty path key)
+                                            , Html.Attributes.attribute "aria-label" label
+                                            , Html.Attributes.title label
+                                            ]
+                                            [ text "×" ]
+
+                                      else
+                                        text ""
                                     ]
                             )
-                            (Dict.toList s)
+                            (Dict.toList resolved)
                         )
                     , div [ classes [ Tw.flex, Tw.gap s2, Tw.items_center ] ]
                         [ Html.input
@@ -388,6 +435,7 @@ viewComponentEditor model comp displayTokens =
                 , button [ Ui.btnDanger, onClick (DeleteComponent comp.name) ] [ text "Delete" ]
                 ]
             ]
+        , viewEditingContext model comp
         , viewNameList
             { label = "Variants"
             , helpTopic = Help.componentVariant
@@ -435,9 +483,9 @@ viewComponentEditor model comp displayTokens =
                         [ div [ Ui.muted, classes [ Tw.mb s2 ] ]
                             [ text "This component has nothing in it yet. Choose a root layout node:" ]
                         , div [ classes [ Tw.flex, Tw.gap s2 ] ]
-                            [ button [ Ui.btnNeutral, onClick (InitComponentLayout (Components.Stack { direction = "column", styles = Dict.empty } [])) ] [ text "+ Stack" ]
-                            , button [ Ui.btnNeutral, onClick (InitComponentLayout (Components.Grid { columns = 1, styles = Dict.empty } [])) ] [ text "+ Grid" ]
-                            , button [ Ui.btnNeutral, onClick (InitComponentLayout (Components.Element { isSlot = False, styles = Dict.empty } "New Element")) ] [ text "+ Element" ]
+                            [ button [ Ui.btnNeutral, onClick (InitComponentLayout (Components.Stack { direction = "column", styles = Dict.empty, overrides = [] } [])) ] [ text "+ Stack" ]
+                            , button [ Ui.btnNeutral, onClick (InitComponentLayout (Components.Grid { columns = 1, styles = Dict.empty, overrides = [] } [])) ] [ text "+ Grid" ]
+                            , button [ Ui.btnNeutral, onClick (InitComponentLayout (Components.Element { isSlot = False, styles = Dict.empty, overrides = [] } "New Element")) ] [ text "+ Element" ]
                             ]
                         ]
 
@@ -447,6 +495,105 @@ viewComponentEditor model comp displayTokens =
         , div [ classes [ Tw.mt s3, Tw.pt s3 ], Ui.divider ]
             [ viewUsageContract model comp displayTokens ]
         ]
+
+
+{-| Which variant and state the component is being worked on in.
+
+This used to sit in the preview header and only change what was drawn, which
+made variants decorative: you could look at `primary` but every style you typed
+went into the one shared set. It decides both now, so a style edited while
+`primary` is selected belongs to `primary`.
+
+Hidden entirely for a component that declares neither — there is no context to
+choose.
+
+-}
+viewEditingContext : Model -> Components.Component -> Html Msg
+viewEditingContext model comp =
+    let
+        context =
+            editingContext model
+    in
+    if List.isEmpty comp.variants && List.isEmpty comp.states then
+        text ""
+
+    else
+        div [ classes [ Tw.mb s3, Tw.p s2, Tw.rounded_md, Tw.bg_color (slate s50) ] ]
+            [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.mb s2, Tw.flex_wrap ] ]
+                [ h4 [ Ui.sectionTitle ] [ text "Editing" ]
+                , Ui.contextHelp Help.componentContext
+                , contextSelect "Editing variant" "Base variant" comp.variants model.editingVariant UpdateEditingVariant
+                , contextSelect "Editing state" "Base state" comp.states model.editingState UpdateEditingState
+                , if context == Components.baseContext then
+                    text ""
+
+                  else
+                    button
+                        [ Ui.btnQuiet
+                        , onClick ClearEditingContext
+                        ]
+                        [ text "Back to base" ]
+                ]
+            , div [ Ui.mutedSmall ]
+                [ text
+                    (case describeContext context of
+                        Nothing ->
+                            "Styles you change apply everywhere, unless a variant or state overrides them."
+
+                        Just described ->
+                            "Styles you change apply only to " ++ described ++ ". Everything else is inherited."
+                    )
+                ]
+            ]
+
+
+{-| One half of the editing context. Empty means "not this one", which is what
+the base styling is.
+-}
+contextSelect : String -> String -> List String -> Maybe String -> (Maybe String -> Msg) -> Html Msg
+contextSelect label baseLabel names selected toMsg =
+    if List.isEmpty names then
+        text ""
+
+    else
+        Html.select
+            [ Ui.selectInput
+            , Html.Attributes.attribute "aria-label" label
+            , onInput
+                (\v ->
+                    toMsg
+                        (if v == "" then
+                            Nothing
+
+                         else
+                            Just v
+                        )
+                )
+            ]
+            (Html.option [ value "", Html.Attributes.selected (selected == Nothing) ] [ text baseLabel ]
+                :: List.map
+                    (\n -> Html.option [ value n, Html.Attributes.selected (selected == Just n) ] [ text n ])
+                    names
+            )
+
+
+{-| The context in words, for the editor's explanation and the preview's
+caption. `Nothing` is the base, which has no name of its own.
+-}
+describeContext : Components.StyleContext -> Maybe String
+describeContext context =
+    case ( context.variant, context.state ) of
+        ( Nothing, Nothing ) ->
+            Nothing
+
+        ( Just variant, Nothing ) ->
+            Just variant
+
+        ( Nothing, Just state ) ->
+            Just ("the " ++ state ++ " state")
+
+        ( Just variant, Just state ) ->
+            Just (variant ++ " in the " ++ state ++ " state")
 
 
 {-| Common variant names across design systems — offered as datalist
@@ -567,55 +714,25 @@ viewComponentPreview : Model -> Components.Component -> List Tokens.FlatToken ->
 viewComponentPreview model comp displayTokens =
     div [ Ui.panelSunken, classes [ Tw.flex_1 ] ]
         [ div [ classes [ Tw.flex, Tw.justify_between, Tw.items_center, Tw.gap s2, Tw.mb s3 ] ]
-            [ h3 [ Ui.sectionTitle ] [ text "Preview" ]
-            , div [ classes [ Tw.flex, Tw.gap s2 ] ]
-                [ if List.isEmpty comp.variants then
-                    text ""
+            [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.flex_wrap ] ]
+                [ h3 [ Ui.sectionTitle ] [ text "Preview" ]
 
-                  else
-                    Html.select
-                        [ onInput
-                            (\v ->
-                                UpdatePreviewComponentVariant
-                                    (if v == "" then
-                                        Nothing
+                -- Read-only on purpose: the context is chosen once, in the
+                -- editor, so what you are looking at and what you are changing
+                -- can't drift apart.
+                , case describeContext (editingContext model) of
+                    Nothing ->
+                        text ""
 
-                                     else
-                                        Just v
-                                    )
-                            )
-                        , classes [ Tw.p s1, Tw.border, Tw.border_color (slate s300), Tw.rounded_sm, Tw.text_sm ]
-                        ]
-                        (Html.option [ value "" ] [ text "Base Variant" ]
-                            :: List.map (\v -> Html.option [ value v, Html.Attributes.selected (model.previewComponentVariant == Just v) ] [ text v ]) comp.variants
-                        )
-                , if List.isEmpty comp.states then
-                    text ""
-
-                  else
-                    Html.select
-                        [ onInput
-                            (\v ->
-                                UpdatePreviewComponentState
-                                    (if v == "" then
-                                        Nothing
-
-                                     else
-                                        Just v
-                                    )
-                            )
-                        , classes [ Tw.p s1, Tw.border, Tw.border_color (slate s300), Tw.rounded_sm, Tw.text_sm ]
-                        ]
-                        (Html.option [ value "" ] [ text "Base State" ]
-                            :: List.map (\v -> Html.option [ value v, Html.Attributes.selected (model.previewComponentState == Just v) ] [ text v ]) comp.states
-                        )
-                , Ui.themePicker (List.map .name model.themes) model.activeThemeName SelectTheme
+                    Just described ->
+                        Ui.pill Neutral ("Showing " ++ described)
                 ]
+            , Ui.themePicker (List.map .name model.themes) model.activeThemeName SelectTheme
             ]
         , case comp.layout of
             Just l ->
                 div [ Ui.previewSurface, classes [ Tw.min_h s24 ] ]
-                    [ Renderer.renderWithConditions displayTokens model.previewComponentVariant model.previewComponentState l ]
+                    [ Renderer.renderWithConditions displayTokens model.editingVariant model.editingState l ]
 
             Nothing ->
                 div [ Ui.muted ] [ text "Nothing to preview yet." ]
@@ -660,9 +777,20 @@ viewUsageContract model comp displayTokens =
             (if not (List.isEmpty violations) then
                 List.map
                     (\v ->
-                        div [ classes [ Tw.text_color (red s700), Tw.text_sm, Tw.mb s1 ] ]
-                            [ Html.strong [] [ text (Maybe.withDefault "General" v.property ++ ": ") ]
-                            , text v.message
+                        div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.text_color (red s700), Tw.text_sm, Tw.mb s1 ] ]
+                            [ -- Which variant or state introduced it. Without
+                              -- this, a rule broken only by one layer reads as
+                              -- if the component broke it everywhere.
+                              case Maybe.andThen describeContext v.context of
+                                Nothing ->
+                                    text ""
+
+                                Just described ->
+                                    Ui.pill Neutral described
+                            , Html.span []
+                                [ Html.strong [] [ text (Maybe.withDefault "General" v.property ++ ": ") ]
+                                , text v.message
+                                ]
                             ]
                     )
                     violations

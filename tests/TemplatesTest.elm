@@ -45,19 +45,101 @@ suite =
                     , \_ -> Expect.equal True othersHaveLayout
                     ]
                     ()
-        , test "Regression lock: buttonComponent is exactly the old inline literal" <|
+        , -- The lock was updated deliberately when style layers landed: the
+          -- four variants used to be names with nothing behind them, so every
+          -- one of them rendered identically. Everything the old lock held —
+          -- name, description, the three name lists, the base padding, radius
+          -- and cursor — is still here unchanged.
+          test "Regression lock: buttonComponent" <|
             \_ ->
                 let
+                    layer variant state styles =
+                        { variant = variant, state = state, styles = Dict.fromList styles }
+
                     expected =
                         { name = "Btn"
                         , description = Just "A basic button component"
                         , variants = [ "primary", "secondary", "success", "danger" ]
                         , slots = [ "default" ]
                         , states = [ "hover", "active", "disabled" ]
-                        , layout = Just (Components.Element { isSlot = True, styles = Dict.fromList [ ( "padding", "0.5rem 1rem" ), ( "border-radius", "0.25rem" ), ( "cursor", "pointer" ) ] } "Button text")
+                        , layout =
+                            Just
+                                (Components.Element
+                                    { isSlot = True
+                                    , styles =
+                                        Dict.fromList
+                                            [ ( "padding", "0.5rem 1rem" )
+                                            , ( "border-radius", "0.25rem" )
+                                            , ( "cursor", "pointer" )
+                                            , ( "background-color", "{color.gray.200}" )
+                                            , ( "color", "{color.gray.900}" )
+                                            ]
+                                    , overrides =
+                                        [ layer (Just "primary") Nothing [ ( "background-color", "{color.brand.500}" ), ( "color", "{color.gray.50}" ) ]
+                                        , layer (Just "secondary") Nothing [ ( "background-color", "{color.gray.100}" ), ( "color", "{color.gray.900}" ) ]
+                                        , layer (Just "success") Nothing [ ( "background-color", "#16a34a" ), ( "color", "{color.gray.50}" ) ]
+                                        , layer (Just "danger") Nothing [ ( "background-color", "#dc2626" ), ( "color", "{color.gray.50}" ) ]
+                                        , layer Nothing (Just "hover") [ ( "opacity", "0.9" ) ]
+                                        , layer Nothing (Just "active") [ ( "opacity", "0.8" ) ]
+                                        , layer Nothing (Just "disabled") [ ( "opacity", "0.5" ), ( "cursor", "not-allowed" ) ]
+                                        ]
+                                    }
+                                    "Button text"
+                                )
                         }
                 in
                 Expect.equal expected (Templates.buttonComponent "Btn")
+        , -- A variant nobody styles and no conditional mentions is a name in a
+          -- list: it shows up in the picker, in a screen's instance settings
+          -- and in the preview, and changes nothing. That was true of every
+          -- template's variants before style layers existed, and this is what
+          -- stops it quietly becoming true again.
+          test "every variant and state a template declares does something" <|
+            \_ ->
+                let
+                    mentioned layout =
+                        case layout of
+                            Components.When props children ->
+                                ( props.variant, props.state ) :: List.concatMap mentioned children
+
+                            _ ->
+                                let
+                                    fromLayers =
+                                        Components.styling layout
+                                            |> Maybe.map (List.map (\l -> ( l.variant, l.state )) << .overrides)
+                                            |> Maybe.withDefault []
+
+                                    fromChildren =
+                                        case layout of
+                                            Components.Stack _ children ->
+                                                List.concatMap mentioned children
+
+                                            Components.Grid _ children ->
+                                                List.concatMap mentioned children
+
+                                            _ ->
+                                                []
+                                in
+                                fromLayers ++ fromChildren
+
+                    unused template =
+                        let
+                            comp =
+                                template.build "X"
+
+                            pairs =
+                                comp.layout |> Maybe.map mentioned |> Maybe.withDefault []
+
+                            variants =
+                                List.filterMap Tuple.first pairs
+
+                            states =
+                                List.filterMap Tuple.second pairs
+                        in
+                        List.filter (\v -> not (List.member v variants)) comp.variants
+                            ++ List.filter (\s -> not (List.member s states)) comp.states
+                in
+                Expect.equal [] (List.concatMap unused Templates.componentTemplates)
         , test "Regression lock: cardComponent is exactly the old inline literal" <|
             \_ ->
                 let
@@ -69,10 +151,10 @@ suite =
                         , states = []
                         , layout =
                             Just
-                                (Components.Stack { direction = "column", styles = Dict.fromList [ ( "border", "1px solid #ccc" ), ( "border-radius", "0.25rem" ), ( "overflow", "hidden" ) ] }
-                                    [ Components.Element { isSlot = True, styles = Dict.fromList [ ( "padding", "1rem" ), ( "background-color", "#f8f9fa" ), ( "border-bottom", "1px solid #ccc" ) ] } "Header Slot"
-                                    , Components.Element { isSlot = True, styles = Dict.fromList [ ( "padding", "1rem" ) ] } "Body Slot"
-                                    , Components.Element { isSlot = True, styles = Dict.fromList [ ( "padding", "1rem" ), ( "background-color", "#f8f9fa" ), ( "border-top", "1px solid #ccc" ) ] } "Footer Slot"
+                                (Components.Stack { direction = "column", styles = Dict.fromList [ ( "border", "1px solid #ccc" ), ( "border-radius", "0.25rem" ), ( "overflow", "hidden" ) ], overrides = [] }
+                                    [ Components.Element { isSlot = True, styles = Dict.fromList [ ( "padding", "1rem" ), ( "background-color", "#f8f9fa" ), ( "border-bottom", "1px solid #ccc" ) ], overrides = [] } "Header Slot"
+                                    , Components.Element { isSlot = True, styles = Dict.fromList [ ( "padding", "1rem" ) ], overrides = [] } "Body Slot"
+                                    , Components.Element { isSlot = True, styles = Dict.fromList [ ( "padding", "1rem" ), ( "background-color", "#f8f9fa" ), ( "border-top", "1px solid #ccc" ) ], overrides = [] } "Footer Slot"
                                     ]
                                 )
                         }

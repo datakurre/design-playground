@@ -23,6 +23,7 @@ suite =
                     , "component-variant"
                     , "component-state"
                     , "component-slot"
+                    , "component-context"
                     , "screens"
                     , "add-component-to-screen"
                     , "add-screen-to-screen"

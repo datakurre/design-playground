@@ -1,6 +1,6 @@
 module Renderer exposing (renderScreenNode, renderWithConditions)
 
-import Components exposing (Component, Layout(..))
+import Components exposing (Component, Layout(..), StyleContext)
 import Dict exposing (Dict)
 import Html exposing (Html, div, span, text)
 import Html.Attributes exposing (style)
@@ -139,6 +139,23 @@ type alias Env =
     }
 
 
+{-| Which variant and state are being shown, in the form both the conditional
+nodes and the style layers ask about.
+-}
+context : Env -> StyleContext
+context env =
+    { variant = env.activeVariant, state = env.activeState }
+
+
+{-| A node's styles as they stand in the context being drawn — its own styles
+with any matching variant or state layer merged over them.
+-}
+nodeStyles : Env -> { r | styles : Dict String String, overrides : List Components.StyleLayer } -> List (Html.Attribute msg)
+nodeStyles env props =
+    renderStyles env.tokens
+        (Components.resolveStyles (context env) { base = props.styles, overrides = props.overrides })
+
+
 renderLayout : Env -> Layout -> Html msg
 renderLayout env layout =
     case layout of
@@ -147,7 +164,7 @@ renderLayout env layout =
                 ([ style "display" "flex"
                  , style "flex-direction" props.direction
                  ]
-                    ++ renderStyles env.tokens props.styles
+                    ++ nodeStyles env props
                 )
                 (List.map (renderLayout env) children)
 
@@ -156,23 +173,12 @@ renderLayout env layout =
                 ([ style "display" "grid"
                  , style "grid-template-columns" ("repeat(" ++ String.fromInt props.columns ++ ", 1fr)")
                  ]
-                    ++ renderStyles env.tokens props.styles
+                    ++ nodeStyles env props
                 )
                 (List.map (renderLayout env) children)
 
         When props children ->
-            let
-                -- A condition that doesn't name a variant (or a state) doesn't
-                -- care about it, so it holds whatever is being shown.
-                matches condition active =
-                    case condition of
-                        Just wanted ->
-                            Just wanted == active
-
-                        Nothing ->
-                            True
-            in
-            if matches props.variant env.activeVariant && matches props.state env.activeState then
+            if Components.matchesContext (context env) props then
                 -- `display: contents` keeps the wrapper out of the layout, so
                 -- conditional children sit in the parent flex or grid exactly
                 -- where they would if the condition weren't there.
@@ -195,13 +201,13 @@ renderLayout env layout =
                             ([ style "border" "1px dashed #ccc"
                              , style "padding" "0.5rem"
                              ]
-                                ++ renderStyles env.tokens props.styles
+                                ++ nodeStyles env props
                             )
                             [ text ("Slot: " ++ content) ]
 
             else
                 span
-                    (renderStyles env.tokens props.styles)
+                    (nodeStyles env props)
                     [ text content ]
 
 

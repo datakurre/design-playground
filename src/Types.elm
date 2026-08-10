@@ -93,8 +93,13 @@ type alias Model =
     , newComponentVariant : String
     , newComponentSlot : String
     , newComponentState : String
-    , previewComponentVariant : Maybe String
-    , previewComponentState : Maybe String
+
+    -- Which variant and state the Components tab is looking at. Not a preview
+    -- setting: it also decides which style layer an edit to a node lands in, so
+    -- that what you are changing and what you are looking at are the same thing.
+    -- `Nothing` in either position is the component's base styling.
+    , editingVariant : Maybe String
+    , editingState : Maybe String
     , newLayoutPropertyName : String
     , newLayoutPropertyValue : String
     , screens : Maybe (List Screen)
@@ -162,8 +167,8 @@ initial key url flags =
     , newComponentVariant = ""
     , newComponentSlot = ""
     , newComponentState = ""
-    , previewComponentVariant = Nothing
-    , previewComponentState = Nothing
+    , editingVariant = Nothing
+    , editingState = Nothing
     , newLayoutPropertyName = ""
     , newLayoutPropertyValue = ""
     , screens = Nothing
@@ -183,6 +188,16 @@ initial key url flags =
     , newContractRuleType = "allowedTokenGroups"
     , newContractRuleFields = Dict.empty
     }
+
+
+{-| Which variant and state the Components tab is looking at, in the form
+`Components` asks about. Both the editor and `update` need it — the editor to
+decide what a style row shows, `update` to decide which layer an edit lands in —
+and they have to agree, so there is one of it.
+-}
+editingContext : Model -> Components.StyleContext
+editingContext model =
+    { variant = model.editingVariant, state = model.editingState }
 
 
 type CommitContext
@@ -272,8 +287,9 @@ type Msg
     | AddLayoutSlot (List Int)
     | ToggleLayoutNodeIsSlot (List Int) Bool
     | UpdateLayoutWhenCondition (List Int) String String
-    | UpdatePreviewComponentVariant (Maybe String)
-    | UpdatePreviewComponentState (Maybe String)
+    | UpdateEditingVariant (Maybe String)
+    | UpdateEditingState (Maybe String)
+    | ClearEditingContext
     | UpdateNewLayoutPropertyName String
     | UpdateNewLayoutPropertyValue String
     | GotScreensTree String (Result Http.Error (List TreeItem))
