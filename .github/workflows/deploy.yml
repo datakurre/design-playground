@@ -32,16 +32,17 @@ jobs:
       - name: Install devenv
         run: nix profile install --accept-flake-config tarball+https://install.devenv.sh/latest
 
-      # Generates .elm-tailwind/, which elm.json lists as a source directory.
-      # Must run before elm-test and elm-review can compile the project.
-      - name: Generate Tailwind Elm API
-        run: devenv shell make gen
-
-      - name: Run Tests (elm-test)
-        run: devenv shell elm-test
-
-      - name: Run Linter (elm-review)
-        run: devenv shell elm-review
+      # The same gate ci.yml and the pre-commit hook run: elm-format --validate,
+      # elm make src/Main.elm, elm-test, the JSON Schema tests, elm-review. It
+      # runs `make gen` first, which generates .elm-tailwind/ — Elm tooling
+      # cannot compile without it.
+      #
+      # This used to be three steps invoking elm-test and elm-review directly,
+      # which skipped formatting, never compiled src/Main.elm, and never ran the
+      # schema tests. Don't unroll it again: if this and `make check` diverge,
+      # main is being held to a weaker standard than a pull request.
+      - name: Check
+        run: devenv shell -- make check
 
       - name: Setup Pages
         id: pages

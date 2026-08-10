@@ -11,13 +11,36 @@ is everything about changing it.
 
 [Nix](https://nixos.org/) with [devenv](https://devenv.sh/). The dev shell pins
 the whole toolchain (Node 22, Elm 0.19.1, elm-format, elm-test, elm-review,
-elm-json, treefmt, and the npm tooling packaged in `pkgs/`); nothing is installed
-globally.
+elm-json, treefmt, chromium, and the npm tooling packaged in `pkgs/`); nothing is
+installed globally.
 
 ```sh
 devenv shell   # or let direnv load it automatically
 make dev       # generates .elm-tailwind/, then starts the Vite dev server
 ```
+
+Inside the dev container the shell is already active, so `make check` works
+directly and the `devenv shell --` prefix is only needed on a host or in CI.
+
+Everything you need should be obtainable by editing `devenv.nix`. If a tool is
+missing, add it to `packages` there rather than installing it — and never run
+`npm install` in the project root, where `node_modules` is a symlink into the nix
+store. See `.claude/skills/devenv-tools/SKILL.md` for the npm and Elm package
+procedures.
+
+**The container has no direct DNS.** All egress goes through the proxy in
+`HTTP_PROXY`/`HTTPS_PROXY`. curl, git and nix honour it; Node does not unless
+told, which is why `devenv.nix` sets `NODE_USE_ENV_PROXY = "1"`. Without that,
+`elm-review` cannot reach `package.elm-lang.org` to solve the dependencies of the
+elm-tailwind-classes extractor, and the consequence is silent: `vite build`
+prints `CLASS EXTRACTION FAILED`, **exits 0**, and emits a stylesheet with every
+dynamically composed class missing — every colour in the app. `make smoke` fails
+on that deliberately.
+
+Elm packages are cached in `~/.elm` (outside the repo, empty in a fresh
+container) and `elm-stuff/` (gitignored). Between them the project builds
+offline. `make clean` leaves `elm-stuff/` alone for that reason; `make distclean`
+removes it and needs the network to recover.
 
 ## Build Toolchain
 
@@ -34,42 +57,81 @@ lists as a required source directory — **`make gen` must run before `elm-test`
 | `make dev`     | `gen` + start the Vite dev server                                                      |
 | `make build`   | `gen` + production Vite build                                                          |
 | `make dist-ci` | `gen` + Vite build for CI/deploy, output in `dist/`                                    |
-| `make check`   | the full verify loop — see below                                                       |
+| `make check`   | the full verify loop — the gate; see below                                             |
+| `make test`    | both test suites; `make test T=Contracts` runs `tests/ContractsTest.elm` alone         |
+| `make fmt`     | `elm-format --yes` + `treefmt` — the fixer for what `check` reports                    |
+| `make review`  | `gen` + `elm-review` on its own                                                        |
+| `make watch`   | re-run `make test` on every Elm change                                                 |
+| `make smoke`   | `build` + render the app in headless chromium — see "Verifying your work"              |
+| `make clean`   | remove generated output, but **not** `elm-stuff/`                                      |
+| `make distclean` | `clean` + `elm-stuff/`; needs the network to recover                                 |
+
+The narrow targets are the working loop. `make check` is the gate, and passing a
+narrow target is not the same as passing it.
 
 ### What `make check` actually runs
 
 In order: `make gen` → `elm-format --validate src/ tests/` → `elm make
-src/Main.elm --output=/dev/null` → `elm-test` → `elm-review`.
+src/Main.elm --output=/dev/null` → `elm-test` → `node --test
+tests/schemas.test.js` → `elm-review`.
 
-The two middle steps are not incidental:
+The middle steps are not incidental:
 
 - **`elm-format --validate`** reports rather than rewrites. Neither elm-test nor
   elm-review has an opinion about layout, so unformatted code used to reach main
-  unnoticed. Fix what it finds with `elm-format --yes src/ tests/`.
+  unnoticed. Fix what it finds with `make fmt`.
 - **`elm make src/Main.elm`** compiles the app entry point explicitly. elm-test
   only compiles the test modules and their dependencies, and elm-review parses
   rather than type-checks — neither reaches `src/Main.elm`, so without this a
   broken `Model` or view would pass `make check`.
+- **`node --test tests/schemas.test.js`** checks the JSON Schemas in `schemas/`
+  against sample payloads. They are the same schemas `src/main.js` feeds to ajv
+  through the `validateSchema` port, so they are not documentation.
 
 Tests live in `tests/`; the elm-review configuration lives in `review/`.
+
+### Verifying your work
+
+`make check` proves the code type-checks and that the pure logic behaves. It
+cannot tell you the app still *starts* — a bad flag decoder, broken port wiring
+in `src/main.js`, or a failed asset path all compile fine and produce a blank
+page.
+
+`make smoke` covers that gap: it builds, serves the result, loads it in headless
+chromium, asserts the app root rendered on both the home route and a deep link,
+and writes screenshots to `.smoke/`. **Look at the screenshots** — the exit code
+only tells you something rendered, the picture tells you whether it rendered
+right. It also fails when Tailwind class extraction has silently degraded the
+stylesheet (see Prerequisites).
+
+Run `make smoke` for any change touching views, routing, `src/main.js`, ports, or
+the build. It is not a substitute for tests: it cannot reach anything behind
+GitLab sign-in, which is impossible locally because `clientId`/`redirectUri` in
+`src/Auth.elm` are hardcoded to the deployed instance.
 
 ### Git hooks
 
 `devenv.nix` installs two pre-commit hooks: `treefmt` and `make check`. A commit
-that fails either is rejected, so run `devenv shell -- make check` before you get
-there.
+that fails either is rejected, so run `make check` before you get there.
 
 ### Deployment & CI
 
-Pushes to `main` trigger `.github/workflows/deploy.yml`, which runs `make gen`,
-`elm-test`, and `elm-review`, builds with `make dist-ci`, and publishes `dist/`
-to GitHub Pages. The site is served under the `/design-playground/` base path,
-set via `base` in `vite.config.js`.
+Two workflows, and both run the same `make check` the pre-commit hook runs:
 
-Note that CI runs those steps individually rather than invoking `make check`, so
-it does **not** run `elm-format --validate` or the explicit `elm make` of the
-entry point. Local `make check` is the stricter gate — don't rely on CI to catch
-formatting or a broken `Main`.
+- `.github/workflows/ci.yml` — every pull request and every push to `main`. Runs
+  `make check`, then `make smoke`, and uploads the smoke screenshots as an
+  artifact so a failure can be looked at rather than guessed at.
+- `.github/workflows/deploy.yml` — pushes to `main`. Runs `make check`, builds
+  with `make dist-ci`, publishes `dist/` to GitHub Pages. The site is served
+  under the `/design-playground/` base path, set via `base` in `vite.config.js`.
+
+Keep both on `make check` rather than unrolling it into individual steps. That
+unrolling is what CI used to do, and it meant nothing checked formatting, nothing
+compiled `src/Main.elm`, and nothing ran the schema tests. If CI and local
+diverge, one of them is lying about whether the branch is good.
+
+There is no nix caching configured, so a cold CI run rebuilds the whole
+environment. Worth adding a cachix cache if runs get slow enough to matter.
 
 ## Module map
 
@@ -107,11 +169,65 @@ Where things live, so you don't have to guess:
 - `src/GitLab/` — REST bindings: `Branches`, `Commits`, `Files`,
   `MergeRequests`, `Projects`
 - `src/Auth.elm` + `src/Ports.elm` — OAuth PKCE and the `localStorage` token cache
+- `src/Ports.elm` also carries `validateSchema`/`schemaValidationResult`, the ajv
+  bridge wired up in `src/main.js` against the JSON Schemas in `schemas/`.
+  Note the incoming half is currently dead: `Main.subscriptions` is `Sub.none`,
+  so validation results are sent from JS and nothing in Elm listens. Wire the
+  subscription before building anything on top of it.
 
 **Views**
 
 - `src/Pages/` — one module per tab: `TokenStudio`, `ComponentRegistry`,
   `ScreenComposer`, `GitWorkflows`, `ExportPipeline`
+
+## Testability rules
+
+Read this before deciding where new code goes. It is the difference between work
+a test can hold onto and work only the compiler ever sees.
+
+**What a test can reach today.** The domain layer — `Tokens`, `Themes`,
+`Screens`, `Components`, `Contracts`, `Colors`, `Naming`, `Export`, `TokenScale`,
+`TokenBrowse`, `Templates`, `Route`, `Help`, and the `GitLab/*` decoders — is
+pure and freely testable. View helpers that take plain data are testable through
+`Test.Html.Query`.
+
+**What no test can reach.** `src/Update.elm` and `src/Main.elm`. `Types.Model`
+carries `key : Nav.Key`, and a `Nav.Key` cannot be constructed outside a running
+`Browser.application`, so `Types.initial` cannot be called from a test and
+neither can anything taking a `Model`. That is roughly a quarter of the source
+where type-checking is the only feedback: every state transition, every
+commit payload, every create-vs-update decision.
+
+So:
+
+1. **Keep decisions out of `Update.elm`.** A non-trivial `case` inside an
+   `update` branch belongs in the relevant domain module, called from the branch.
+   `src/Naming.elm` exists for precisely this reason — its docstring says so.
+2. **Give view helpers data, not `Model`.** Both existing view tests
+   (`tests/RendererTest.elm`, `tests/TokenStudioTest.elm`) target the
+   data-taking sub-function for exactly this reason. Make new views the same
+   shape.
+3. **Do not fake your way around the barrier.** No `Maybe Nav.Key`, no exposing
+   internals solely for tests, and no asserting on `Cmd`s — a `Cmd` is opaque and
+   carries no inspectable information.
+
+The standing fix is to move `update` onto an `Effect` type: `update` returns
+inspectable effect *data*, a single `perform` in `Main` turns it into `Cmd`, and
+`Nav.Key` leaves the `Model`. That also requires `GitLab/*` to return a request
+description rather than a `Cmd`, because `Http.Body` is opaque and a commit
+payload cannot otherwise be asserted. Until that lands, rule 1 is what keeps new
+work testable.
+
+## Skills
+
+Repo-local skills in `.claude/skills/` cover the recipes that are easy to get
+wrong. Prefer them over rediscovering the procedure:
+
+- `verify` — which check to run and how to read its failure
+- `run` — launching, rendering and screenshotting the app
+- `elm-tdd` — where tests go, the house style, working around the `Nav.Key` barrier
+- `add-contract-rule` — the seven places a new usage-contract rule touches
+- `devenv-tools` — getting a tool through nix/devenv, and the proxy trap
 
 ## Overarching Directives
 
@@ -133,7 +249,8 @@ When an agent is summoned, it should adopt one of the following personas dependi
 - Ensure schemas are entirely framework-neutral (no React/Vue specific assumptions).
 - Follow W3C Design Token specs wherever applicable.
 - Maintain backward compatibility where possible.
-- Usage contracts (`src/Contracts.elm`, stored as `components/<name>.contract.json`) are a first-class schema here, not an add-on: they are the layer DTCG itself doesn't standardize. Adding a rule type means extending `Rule`, its codecs, `validate`, and `tests/ContractsTest.elm` together.
+- Usage contracts (`src/Contracts.elm`, stored as `components/<name>.contract.json`) are a first-class schema here, not an add-on: they are the layer DTCG itself doesn't standardize. Adding a rule type means extending `Rule`, its codecs, `validate`, and `tests/ContractsTest.elm` together — plus the form and the help topic. The `add-contract-rule` skill lists all seven places.
+- The JSON Schemas in `schemas/` are load-bearing: `src/main.js` feeds them to ajv through the `validateSchema` port, and `tests/schemas.test.js` covers them. Change a file format and they change with it.
 
 ### 2. The Codec Agent
 **Responsibility:** Generate Elm decoders and encoders for API boundaries.
@@ -156,6 +273,14 @@ When an agent is summoned, it should adopt one of the following personas dependi
 - Extract shared logic into utility modules.
 - Ensure `elm-review` passes without warnings.
 - Break down massive `update` functions into smaller, composable helpers to keep the cognitive load low. `src/Update.elm` is the standing target.
+- The standing assignment is the `Effect` migration described under **Testability
+  rules**, in this order, each stage its own commit with `make check` green:
+  (1) move the pure helpers that only happen to live in `Update.elm` —
+  `updateLayoutNode`, `mapLayout`, `forgetVariant`/`forgetState`/`forgetSlot`,
+  `addNameToComponent`, `removeNameFromComponent` — into `src/Components.elm`
+  with tests; (2) make `GitLab/*` return a request description instead of a
+  `Cmd`; (3) introduce `Effect` and convert `update`; (4) remove `key` from the
+  `Model`, with `Main` holding it in a wrapper. Do not start it on a dirty tree.
 
 ### 5. The Export Agent
 **Responsibility:** Build target generators for *external* consumers of the design system.
@@ -174,5 +299,8 @@ gitignored `TODO-NN-xxxx.md` file — this convention is optional, not every
 task will have one):
 1. **Read** the task description (and the `TODO-NN-xxxx.md` item, if one exists) and this `AGENTS.md` file.
 2. **Identify** the required Agent Roles (e.g., Codec Agent to fetch data, UI Agent to render it).
-3. **Execute** the **Red / Green TDD** cycle.
-4. **Verify** your work locally using `devenv shell -- make check` (see Build Toolchain above for what that runs and why).
+3. **Execute** the **Red / Green TDD** cycle, putting new logic where a test can
+   reach it (see **Testability rules**).
+4. **Verify** your work locally with `make check`, and with `make smoke` when the
+   change touches views, routing, `src/main.js`, ports, or the build (see
+   "Verifying your work" for what each one does and does not prove).

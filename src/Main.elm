@@ -99,7 +99,14 @@ view : Model -> Browser.Document Msg
 view model =
     { title = "Design Playground"
     , body =
-        [ div [ classes [ Tw.min_h_screen, Tw.bg_color (slate s50), Tw.text_color (slate s900) ] ]
+        [ div
+            [ classes [ Tw.min_h_screen, Tw.bg_color (slate s50), Tw.text_color (slate s900) ]
+
+            -- scripts/smoke.sh looks for this attribute to decide whether the
+            -- app booted. It is here rather than a class or a piece of copy
+            -- because both of those churn and this does not.
+            , Html.Attributes.attribute "data-smoke" "app"
+            ]
             [ viewAppBar model
             , div [ Ui.page ]
                 [ viewError model

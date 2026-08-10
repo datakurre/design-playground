@@ -16,3 +16,6 @@ elm-stuff/
 # Vite build output and cache
 dist/
 .vite/
+
+# scripts/smoke.sh: screenshots, the preview server log, chromium's profile
+.smoke/

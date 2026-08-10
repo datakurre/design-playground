@@ -1,0 +1,59 @@
+# Verifies every branch and pull request. Until this existed, deploy.yml was
+# the only workflow, it ran on pushes to main only, and it ran elm-test and
+# elm-review individually rather than through `make check` — so nothing checked
+# formatting, nothing compiled src/Main.elm, nothing ran the schema tests, and
+# nothing at all looked at a branch before it merged.
+#
+# This runs the same `make check` the pre-commit hook runs. Keep it that way:
+# if CI and local diverge, one of them is lying.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+# A new push supersedes the run in flight for the same ref.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+
+      - name: Install devenv
+        run: nix profile install --accept-flake-config tarball+https://install.devenv.sh/latest
+
+      # Format, compile src/Main.elm, elm-test, the JSON Schema tests, elm-review.
+      # `make check` runs `make gen` first, which generates .elm-tailwind/ — Elm
+      # tooling cannot compile without it.
+      - name: Check
+        run: devenv shell -- make check
+
+      # Builds and renders the app in headless chromium. Catches what type
+      # checking cannot: an app that no longer boots, and a Tailwind class
+      # extraction failure, which leaves the build exit code at 0 while stripping
+      # every colour out of the stylesheet.
+      - name: Smoke test
+        run: devenv shell -- make smoke
+
+      - name: Upload smoke screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-screenshots
+          path: .smoke/*.png
+          if-no-files-found: warn
