@@ -239,7 +239,7 @@ applyRule tokens path context nodeStyles rule =
                 |> Dict.toList
                 |> List.filterMap
                     (\( property, value ) ->
-                        case ( List.member property properties, hardcodedPart value ) of
+                        case ( propertyMatches properties property, hardcodedPart value ) of
                             ( True, "" ) ->
                                 Nothing
 
@@ -277,7 +277,7 @@ applyRule tokens path context nodeStyles rule =
                 |> Dict.toList
                 |> List.filterMap
                     (\( property, value ) ->
-                        if List.member property properties then
+                        if propertyMatches properties property then
                             let
                                 resolved =
                                     Tokens.resolveAlias tokens value
@@ -444,3 +444,43 @@ isPrefixOf prefix list =
 
             else
                 False
+
+
+propertyMatches : List String -> String -> Bool
+propertyMatches patterns property =
+    List.any (\pattern -> matchPattern pattern property) patterns
+
+
+matchPattern : String -> String -> Bool
+matchPattern pattern property =
+    case String.split "*" pattern of
+        [] ->
+            property == ""
+
+        [ exact ] ->
+            exact == property
+
+        first :: rest ->
+            if not (String.startsWith first property) then
+                False
+
+            else
+                matchRest rest (String.dropLeft (String.length first) property)
+
+
+matchRest : List String -> String -> Bool
+matchRest parts property =
+    case parts of
+        [] ->
+            True
+
+        [ last ] ->
+            String.endsWith last property
+
+        next :: rest ->
+            case String.indexes next property |> List.head of
+                Nothing ->
+                    False
+
+                Just idx ->
+                    matchRest rest (String.dropLeft (idx + String.length next) property)

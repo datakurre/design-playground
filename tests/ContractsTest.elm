@@ -143,6 +143,31 @@ suite =
 
                         _ ->
                             Expect.fail "Expected 1 violation"
+            , test "NoHardcodedValues: fails with hardcoded string on property matching wildcard" <|
+                \_ ->
+                    let
+                        component =
+                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.singleton "padding-top" "10px", overrides = [] } "content") }
+
+                        contract =
+                            { component = "Test", rules = [ NoHardcodedValues [ "padding-*" ] ] }
+                    in
+                    case Contracts.validate [] contract component of
+                        [ _ ] ->
+                            Expect.pass
+
+                        _ ->
+                            Expect.fail "Expected 1 violation"
+            , test "NoHardcodedValues: passes with hardcoded string on unmatching property with wildcard" <|
+                \_ ->
+                    let
+                        component =
+                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.singleton "margin-top" "10px", overrides = [] } "content") }
+
+                        contract =
+                            { component = "Test", rules = [ NoHardcodedValues [ "padding-*" ] ] }
+                    in
+                    Expect.equal [] (Contracts.validate [] contract component)
             , test "NoHardcodedValues: fails with a raw hex colour on listed property" <|
                 \_ ->
                     -- The rule used to look only for hex literals. It now looks
@@ -248,6 +273,37 @@ suite =
                             { component = "Test", rules = [ SpacingOnScale [ "padding" ] [ "spacing" ] ] }
                     in
                     Expect.equal [] (Contracts.validate tokens contract component)
+            , test "SpacingOnScale: passes when resolved matches token in scale group with wildcard" <|
+                \_ ->
+                    let
+                        tokens =
+                            [ ( [ "spacing", "sm" ], { value = StringValue "4px", type_ = "spacing", description = Nothing } ) ]
+
+                        component =
+                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.singleton "padding-left" "4px", overrides = [] } "content") }
+
+                        contract =
+                            { component = "Test", rules = [ SpacingOnScale [ "padding-*" ] [ "spacing" ] ] }
+                    in
+                    Expect.equal [] (Contracts.validate tokens contract component)
+            , test "SpacingOnScale: fails when resolved does not match token in scale group with wildcard" <|
+                \_ ->
+                    let
+                        tokens =
+                            [ ( [ "spacing", "sm" ], { value = StringValue "4px", type_ = "spacing", description = Nothing } ) ]
+
+                        component =
+                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.singleton "margin-top" "5px", overrides = [] } "content") }
+
+                        contract =
+                            { component = "Test", rules = [ SpacingOnScale [ "margin-*" ] [ "spacing" ] ] }
+                    in
+                    case Contracts.validate tokens contract component of
+                        [ _ ] ->
+                            Expect.pass
+
+                        _ ->
+                            Expect.fail "Expected 1 violation"
             , test "SpacingOnScale: fails when resolved does not match token in scale group" <|
                 \_ ->
                     let
