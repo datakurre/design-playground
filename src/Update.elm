@@ -732,7 +732,10 @@ update msg model =
                                     { model | existingThemes = List.filter ((/=) name) model.existingThemes }
 
                                 CommitDeleteComponent name ->
-                                    { model | existingComponents = List.filter ((/=) name) model.existingComponents }
+                                    { model
+                                        | existingComponents = List.filter ((/=) name) model.existingComponents
+                                        , existingContracts = List.filter ((/=) name) model.existingContracts
+                                    }
 
                                 CommitDeleteScreen name ->
                                     { model | existingScreens = List.filter ((/=) name) model.existingScreens }
@@ -1553,21 +1556,40 @@ update msg model =
             case ( model.token, model.selectedProject ) of
                 ( Just token, Just project ) ->
                     let
+                        contractActions =
+                            if List.member name model.existingContracts then
+                                [ { action = "delete"
+                                  , filePath = "components/" ++ name ++ ".contract.json"
+                                  , content = Nothing
+                                  }
+                                ]
+
+                            else
+                                []
+
                         payload =
                             { branch = Maybe.withDefault project.defaultBranch model.currentBranch
                             , commitMessage = "Delete component " ++ name
                             , actions =
-                                [ { action = "delete"
-                                  , filePath = "components/" ++ name ++ ".json"
-                                  , content = Nothing
-                                  }
-                                ]
+                                { action = "delete"
+                                , filePath = "components/" ++ name ++ ".json"
+                                , content = Nothing
+                                }
+                                    :: contractActions
                             }
 
                         currentComponents =
                             model.components |> Maybe.withDefault []
+
+                        currentContracts =
+                            model.contracts |> Maybe.withDefault []
                     in
-                    ( { model | components = Just (List.filter (\c -> c.name /= name) currentComponents), selectedComponentName = Nothing, commitStatus = Just ( Working, "Deleting " ++ name ++ "..." ) }
+                    ( { model
+                        | components = Just (List.filter (\c -> c.name /= name) currentComponents)
+                        , contracts = Just (List.filter (\c -> c.component /= name) currentContracts)
+                        , selectedComponentName = Nothing
+                        , commitStatus = Just ( Working, "Deleting " ++ name ++ "..." )
+                      }
                     , GitLab.Commits.createCommit token project.id payload (GotCommitResult (CommitDeleteComponent name)) |> Effect.SendRequest
                     )
 

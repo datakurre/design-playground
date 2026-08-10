@@ -293,6 +293,22 @@ suite =
                         |> commitField (Decode.field "actions" (Decode.list (Decode.field "file_path" Decode.string)))
                         |> Expect.equal (Ok [ "exports/variables.css" ])
             ]
+        , describe "deleting"
+            [ test "deleting a component also deletes its contract if it exists" <|
+                \_ ->
+                    let
+                        ( _, effect ) =
+                            Update.update (DeleteComponent "Button")
+                                { signedIn
+                                    | existingComponents = [ "Button" ]
+                                    , components = Just [ { name = "Button", description = Nothing, variants = [], slots = [], states = [], layout = Nothing } ]
+                                    , existingContracts = [ "Button" ]
+                                    , contracts = Just [ { component = "Button", rules = [] } ]
+                                }
+                    in
+                    commitField (Decode.field "actions" (Decode.list (Decode.field "file_path" Decode.string))) effect
+                        |> Expect.equal (Ok [ "components/Button.json", "components/Button.contract.json" ])
+            ]
         , describe "navigation"
             [ test "an external link loads, rather than being pushed into the fragment router" <|
                 \_ ->
