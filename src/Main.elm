@@ -3,8 +3,8 @@ module Main exposing (main)
 import Auth
 import Browser
 import Browser.Navigation as Nav
+import Effect
 import GitLab.Projects exposing (Project)
-import GitLab.Request
 import Help
 import Html exposing (Html, a, button, div, h2, img, input, li, span, text, ul)
 import Html.Attributes exposing (href, src)
@@ -33,7 +33,7 @@ main =
     Browser.application
         { init = init
         , view = view
-        , update = update
+        , update = updateWithEffects
         , subscriptions = subscriptions
         , onUrlChange = UrlChanged
         , onUrlRequest = LinkClicked
@@ -54,15 +54,15 @@ init flags url key =
         initialModel =
             Types.initial key url flags
 
-        cmds =
+        effects =
             case urlCode of
                 Just code ->
-                    [ Auth.exchangeToken code flags.pkceVerifier GotTokenResult |> GitLab.Request.toCmd ]
+                    [ Auth.exchangeToken code flags.pkceVerifier GotTokenResult |> Effect.SendRequest ]
 
                 Nothing ->
                     case flags.token of
                         Just t ->
-                            [ Auth.fetchProfile t GotProfile |> GitLab.Request.toCmd ]
+                            [ Auth.fetchProfile t GotProfile |> Effect.SendRequest ]
 
                         Nothing ->
                             []
@@ -71,15 +71,27 @@ init flags url key =
         -- link or a refresh would land on an empty Tokens tab no matter what
         -- the URL said. The token comes from flags, so the repository can start
         -- loading right away.
-        ( routedModel, routeCmd ) =
+        ( routedModel, routeEffect ) =
             case Route.parse url of
                 Just route ->
                     Update.applyRoute route initialModel
 
                 Nothing ->
-                    ( initialModel, Cmd.none )
+                    ( initialModel, Effect.none )
     in
-    ( routedModel, Cmd.batch (routeCmd :: cmds) )
+    ( routedModel, Effect.perform key (Effect.batch (routeEffect :: effects)) )
+
+
+{-| The one place an `Effect` becomes a `Cmd`. `Update.update` deals in effects
+as data so that a test can read them; this is where they are actually run.
+-}
+updateWithEffects : Msg -> Model -> ( Model, Cmd Msg )
+updateWithEffects msg model =
+    let
+        ( updated, effect ) =
+            update msg model
+    in
+    ( updated, Effect.perform model.key effect )
 
 
 

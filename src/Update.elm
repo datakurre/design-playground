@@ -2,22 +2,20 @@ module Update exposing (applyRoute, update)
 
 import Auth
 import Browser
-import Browser.Navigation as Nav
 import Components
 import Contracts
 import Dict
+import Effect exposing (Effect)
 import Export
 import GitLab.Branches
 import GitLab.Commits
 import GitLab.Files
 import GitLab.MergeRequests
 import GitLab.Projects
-import GitLab.Request
 import Http
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Naming
-import Ports
 import Route
 import Screens exposing (ScreenNode(..))
 import Templates
@@ -47,11 +45,11 @@ addNameToComponent :
     , clear : Model -> Model
     }
     -> Model
-    -> ( Model, Cmd Msg )
+    -> ( Model, Effect Msg )
 addNameToComponent config model =
     case model.selectedComponentName of
         Nothing ->
-            ( { model | commitStatus = Just ( Failed, "Pick a component first" ) }, Cmd.none )
+            ( { model | commitStatus = Just ( Failed, "Pick a component first" ) }, Effect.none )
 
         Just selected ->
             let
@@ -67,7 +65,7 @@ addNameToComponent config model =
             in
             case Naming.check config.typed existing of
                 Err problem ->
-                    ( { model | commitStatus = Just ( Failed, Naming.describe config.noun config.hint problem ) }, Cmd.none )
+                    ( { model | commitStatus = Just ( Failed, Naming.describe config.noun config.hint problem ) }, Effect.none )
 
                 Ok name ->
                     let
@@ -79,7 +77,7 @@ addNameToComponent config model =
                                 c
                     in
                     ( config.clear { model | components = Just (List.map appendTo currentComponents), commitStatus = Nothing }
-                    , Cmd.none
+                    , Effect.none
                     )
 
 
@@ -96,7 +94,7 @@ removeNameFromComponent :
     }
     -> String
     -> Model
-    -> ( Model, Cmd Msg )
+    -> ( Model, Effect Msg )
 removeNameFromComponent config name model =
     updateSelectedComponent
         (\c ->
@@ -114,11 +112,11 @@ same four lines — unwrap `selectedComponentName`, default `components` to `[]`
 map over it, compare names — and the interesting part of each was one expression
 buried inside that.
 -}
-updateSelectedComponent : (Components.Component -> Components.Component) -> Model -> ( Model, Cmd Msg )
+updateSelectedComponent : (Components.Component -> Components.Component) -> Model -> ( Model, Effect Msg )
 updateSelectedComponent f model =
     case model.selectedComponentName of
         Nothing ->
-            ( model, Cmd.none )
+            ( model, Effect.none )
 
         Just selected ->
             let
@@ -130,14 +128,14 @@ updateSelectedComponent f model =
                         c
             in
             ( { model | components = Just (List.map apply (Maybe.withDefault [] model.components)) }
-            , Cmd.none
+            , Effect.none
             )
 
 
 {-| One node of the selected component's layout, addressed by path. A component
 with no layout yet has nothing to address, and is left alone.
 -}
-updateLayoutAt : List Int -> (Components.Layout -> Components.Layout) -> Model -> ( Model, Cmd Msg )
+updateLayoutAt : List Int -> (Components.Layout -> Components.Layout) -> Model -> ( Model, Effect Msg )
 updateLayoutAt path f model =
     updateSelectedComponent (\c -> { c | layout = Maybe.map (Components.updateLayoutNode path f) c.layout }) model
 
@@ -259,11 +257,11 @@ tab open, the right thing selected. `UrlChanged` runs it on every navigation and
 `Main.init` runs it once at boot, which is what makes a deep link or a refresh
 land where the URL says rather than on an empty Tokens tab.
 -}
-applyRoute : Route.Route -> Model -> ( Model, Cmd Msg )
+applyRoute : Route.Route -> Model -> ( Model, Effect Msg )
 applyRoute route model =
     case route of
         Route.Home ->
-            ( { model | activeTab = TokenStudio } |> clearProjectState, Cmd.none )
+            ( { model | activeTab = TokenStudio } |> clearProjectState, Effect.none )
 
         Route.Repo path tabRoute ->
             let
@@ -340,14 +338,14 @@ selectFromUrl url model =
 and the model can never disagree about what you're looking at. With no project
 open there's no route to push, so the change is made directly.
 -}
-navigateToTab : Route.TabRoute -> Model -> ( Model, Cmd Msg )
+navigateToTab : Route.TabRoute -> Model -> ( Model, Effect Msg )
 navigateToTab tabRoute model =
     case model.selectedProject of
         Just project ->
-            ( model, Nav.pushUrl model.key (Route.toString (Route.Repo project.pathWithNamespace tabRoute)) )
+            ( model, Effect.PushUrl (Route.toString (Route.Repo project.pathWithNamespace tabRoute)) )
 
         Nothing ->
-            ( selectFromRoute tabRoute model, Cmd.none )
+            ( selectFromRoute tabRoute model, Effect.none )
 
 
 {-| Loads the project the route names, unless it is already the one open. It may
@@ -355,15 +353,15 @@ be one we've already listed, in which case we have its id and can go straight fo
 the contents; otherwise — a deep link, a fresh tab — it has to be looked up by
 path first, and `GotProject` picks the work back up.
 -}
-openProject : String -> Model -> ( Model, Cmd Msg )
+openProject : String -> Model -> ( Model, Effect Msg )
 openProject path model =
     if Maybe.map .pathWithNamespace model.selectedProject == Just path then
-        ( model, Cmd.none )
+        ( model, Effect.none )
 
     else
         case model.token of
             Nothing ->
-                ( model, Cmd.none )
+                ( model, Effect.none )
 
             Just token ->
                 let
@@ -379,7 +377,7 @@ openProject path model =
 
                     Nothing ->
                         ( { model | selectedProject = Nothing, commitStatus = Just ( Working, "Loading repository..." ) }
-                        , GitLab.Projects.getProject token path GotProject |> GitLab.Request.toCmd
+                        , GitLab.Projects.getProject token path GotProject |> Effect.SendRequest
                         )
 
 
@@ -399,21 +397,21 @@ projectErrorMessage error =
             "Couldn't reach GitLab to open that repository."
 
 
-fetchProjectData : String -> GitLab.Projects.Project -> Cmd Msg
+fetchProjectData : String -> GitLab.Projects.Project -> Effect Msg
 fetchProjectData token project =
-    Cmd.batch
-        [ GitLab.Files.listTree token project.id project.defaultBranch GotTree |> GitLab.Request.toCmd
-        , GitLab.Files.getFileRaw token project.id project.defaultBranch "tokens/tokens.json" GotTokensFile |> GitLab.Request.toCmd
-        , GitLab.Files.listTreeAtPath token project.id project.defaultBranch "themes" (GotThemesTree project.defaultBranch) |> GitLab.Request.toCmd
-        , GitLab.Files.listTreeAtPath token project.id project.defaultBranch "components" (GotComponentsTree project.defaultBranch) |> GitLab.Request.toCmd
-        , GitLab.Files.listTreeAtPath token project.id project.defaultBranch "layouts" (GotScreensTree project.defaultBranch) |> GitLab.Request.toCmd
-        , GitLab.Branches.listBranches token project.id GotBranches |> GitLab.Request.toCmd
-        , GitLab.MergeRequests.listMergeRequests token project.id GotMergeRequests |> GitLab.Request.toCmd
-        , GitLab.Files.getFileRaw token project.id project.defaultBranch "contracts.json" (GotContractFile "contracts.json") |> GitLab.Request.toCmd
+    Effect.batch
+        [ GitLab.Files.listTree token project.id project.defaultBranch GotTree |> Effect.SendRequest
+        , GitLab.Files.getFileRaw token project.id project.defaultBranch "tokens/tokens.json" GotTokensFile |> Effect.SendRequest
+        , GitLab.Files.listTreeAtPath token project.id project.defaultBranch "themes" (GotThemesTree project.defaultBranch) |> Effect.SendRequest
+        , GitLab.Files.listTreeAtPath token project.id project.defaultBranch "components" (GotComponentsTree project.defaultBranch) |> Effect.SendRequest
+        , GitLab.Files.listTreeAtPath token project.id project.defaultBranch "layouts" (GotScreensTree project.defaultBranch) |> Effect.SendRequest
+        , GitLab.Branches.listBranches token project.id GotBranches |> Effect.SendRequest
+        , GitLab.MergeRequests.listMergeRequests token project.id GotMergeRequests |> Effect.SendRequest
+        , GitLab.Files.getFileRaw token project.id project.defaultBranch "contracts.json" (GotContractFile "contracts.json") |> Effect.SendRequest
         ]
 
 
-updateTokenPathLogic : Model -> Msg -> Tokens.TokenPath -> ( Model, Cmd Msg )
+updateTokenPathLogic : Model -> Msg -> Tokens.TokenPath -> ( Model, Effect Msg )
 updateTokenPathLogic model msg path =
     let
         modifyTokenValue currentMsg currentVal =
@@ -455,7 +453,7 @@ updateTokenPathLogic model msg path =
                 newTokens =
                     Maybe.map (List.map updateToken) model.tokens
             in
-            ( { model | tokens = newTokens }, Cmd.none )
+            ( { model | tokens = newTokens }, Effect.none )
 
         Just activeName ->
             let
@@ -496,19 +494,19 @@ updateTokenPathLogic model msg path =
                     else
                         theme
             in
-            ( { model | themes = List.map updateTheme model.themes }, Cmd.none )
+            ( { model | themes = List.map updateTheme model.themes }, Effect.none )
 
 
-update : Msg -> Model -> ( Model, Cmd Msg )
+update : Msg -> Model -> ( Model, Effect Msg )
 update msg model =
     case msg of
         LinkClicked urlRequest ->
             case urlRequest of
                 Browser.Internal url ->
-                    ( model, Nav.pushUrl model.key (Url.toString url) )
+                    ( model, Effect.PushUrl (Url.toString url) )
 
                 Browser.External hrefString ->
-                    ( model, Nav.load hrefString )
+                    ( model, Effect.LoadUrl hrefString )
 
         UrlChanged url ->
             case Route.parse url of
@@ -516,7 +514,7 @@ update msg model =
                     applyRoute route { model | url = url }
 
                 Nothing ->
-                    ( { model | url = url }, Cmd.none )
+                    ( { model | url = url }, Effect.none )
 
         GotTokenResult result ->
             case result of
@@ -529,15 +527,15 @@ update msg model =
                             { currentUrl | query = Nothing }
                     in
                     ( { model | token = Just token, error = Nothing }
-                    , Cmd.batch
-                        [ Ports.cacheToken token
-                        , Auth.fetchProfile token GotProfile |> GitLab.Request.toCmd
-                        , Nav.replaceUrl model.key (Url.toString newUrl)
+                    , Effect.batch
+                        [ Effect.CacheToken token
+                        , Auth.fetchProfile token GotProfile |> Effect.SendRequest
+                        , Effect.ReplaceUrl (Url.toString newUrl)
                         ]
                     )
 
                 Err _ ->
-                    ( { model | error = Just "Failed to exchange authorization code for token." }, Cmd.none )
+                    ( { model | error = Just "Failed to exchange authorization code for token." }, Effect.none )
 
         GotProfile result ->
             case result of
@@ -545,16 +543,16 @@ update msg model =
                     ( { model | user = Just user, error = Nothing }
                     , case model.token of
                         Just t ->
-                            GitLab.Projects.listProjects t 1 GotProjects |> GitLab.Request.toCmd
+                            GitLab.Projects.listProjects t 1 GotProjects |> Effect.SendRequest
 
                         Nothing ->
-                            Cmd.none
+                            Effect.none
                     )
 
                 Err _ ->
                     -- On error (e.g., token expired), clear the token
                     ( { model | token = Nothing, user = Nothing, error = Just "Failed to fetch profile. Token may have expired." }
-                    , Ports.clearToken ()
+                    , Effect.ClearToken
                     )
 
         Logout ->
@@ -568,35 +566,35 @@ update msg model =
                     , projectSearch = ""
                     , activeTab = TokenStudio
                 }
-            , Cmd.batch
-                [ Ports.clearToken ()
-                , Nav.pushUrl model.key (Route.toString Route.Home)
+            , Effect.batch
+                [ Effect.ClearToken
+                , Effect.PushUrl (Route.toString Route.Home)
                 ]
             )
 
         FetchProjects ->
             case model.token of
                 Just token ->
-                    ( model, GitLab.Projects.listProjects token 1 GotProjects |> GitLab.Request.toCmd )
+                    ( model, GitLab.Projects.listProjects token 1 GotProjects |> Effect.SendRequest )
 
                 Nothing ->
-                    ( model, Cmd.none )
+                    ( model, Effect.none )
 
         GotProjects result ->
             case result of
                 Ok projects ->
-                    ( { model | projects = Just projects, projectsPage = 1 }, Cmd.none )
+                    ( { model | projects = Just projects, projectsPage = 1 }, Effect.none )
 
                 Err _ ->
-                    ( { model | error = Just "Failed to fetch projects." }, Cmd.none )
+                    ( { model | error = Just "Failed to fetch projects." }, Effect.none )
 
         LoadMoreProjects ->
             case ( model.token, model.projectsPage ) of
                 ( Just token, page ) ->
-                    ( model, GitLab.Projects.listProjects token (page + 1) GotMoreProjects |> GitLab.Request.toCmd )
+                    ( model, GitLab.Projects.listProjects token (page + 1) GotMoreProjects |> Effect.SendRequest )
 
                 _ ->
-                    ( model, Cmd.none )
+                    ( model, Effect.none )
 
         GotMoreProjects result ->
             case result of
@@ -605,19 +603,19 @@ update msg model =
                         currentProjects =
                             model.projects |> Maybe.withDefault []
                     in
-                    ( { model | projects = Just (currentProjects ++ newProjects), projectsPage = model.projectsPage + 1 }, Cmd.none )
+                    ( { model | projects = Just (currentProjects ++ newProjects), projectsPage = model.projectsPage + 1 }, Effect.none )
 
                 Err _ ->
-                    ( { model | error = Just "Failed to load more projects." }, Cmd.none )
+                    ( { model | error = Just "Failed to load more projects." }, Effect.none )
 
         UpdateProjectSearch search ->
-            ( { model | projectSearch = search }, Cmd.none )
+            ( { model | projectSearch = search }, Effect.none )
 
         SelectProject project ->
-            ( model, Nav.pushUrl model.key (Route.toString (Route.Repo project.pathWithNamespace Route.TokensTab)) )
+            ( model, Effect.PushUrl (Route.toString (Route.Repo project.pathWithNamespace Route.TokensTab)) )
 
         UnselectProject ->
-            ( model, Nav.pushUrl model.key (Route.toString Route.Home) )
+            ( model, Effect.PushUrl (Route.toString Route.Home) )
 
         GotProject result ->
             case ( result, model.token ) of
@@ -632,18 +630,18 @@ update msg model =
                     )
 
                 ( Ok _, Nothing ) ->
-                    ( { model | commitStatus = Nothing }, Cmd.none )
+                    ( { model | commitStatus = Nothing }, Effect.none )
 
                 ( Err error, _ ) ->
-                    ( { model | error = Just (projectErrorMessage error), commitStatus = Nothing }, Cmd.none )
+                    ( { model | error = Just (projectErrorMessage error), commitStatus = Nothing }, Effect.none )
 
         GotTree result ->
             case result of
                 Ok tree ->
-                    ( { model | repositoryTree = Just tree }, Cmd.none )
+                    ( { model | repositoryTree = Just tree }, Effect.none )
 
                 Err _ ->
-                    ( { model | error = Just "Failed to fetch repository tree." }, Cmd.none )
+                    ( { model | error = Just "Failed to fetch repository tree." }, Effect.none )
 
         GotSchemaValidationResult { valid, errors } ->
             case model.pendingCommit of
@@ -664,17 +662,17 @@ update msg model =
                                         }
                                 in
                                 ( { model | pendingCommit = Nothing, commitStatus = Just ( Working, "Saving..." ) }
-                                , GitLab.Commits.createCommit token project.id payload (GotCommitResult pending.commitContext) |> GitLab.Request.toCmd
+                                , GitLab.Commits.createCommit token project.id payload (GotCommitResult pending.commitContext) |> Effect.SendRequest
                                 )
 
                             _ ->
-                                ( { model | pendingCommit = Nothing }, Cmd.none )
+                                ( { model | pendingCommit = Nothing }, Effect.none )
 
                     else
-                        ( { model | pendingCommit = Nothing, commitStatus = Just ( Failed, "Schema validation failed: " ++ String.join ", " errors ) }, Cmd.none )
+                        ( { model | pendingCommit = Nothing, commitStatus = Just ( Failed, "Schema validation failed: " ++ String.join ", " errors ) }, Effect.none )
 
                 Nothing ->
-                    ( model, Cmd.none )
+                    ( model, Effect.none )
 
         GotCommitResult context result ->
             case result of
@@ -719,25 +717,25 @@ update msg model =
                                 _ ->
                                     model
                     in
-                    ( { newModel | commitStatus = Just ( Done, "Saved" ) }, Cmd.none )
+                    ( { newModel | commitStatus = Just ( Done, "Saved" ) }, Effect.none )
 
                 Err _ ->
-                    ( { model | commitStatus = Just ( Failed, "Couldn't save to GitLab" ) }, Cmd.none )
+                    ( { model | commitStatus = Just ( Failed, "Couldn't save to GitLab" ) }, Effect.none )
 
         GotTokensFile result ->
             case result of
                 Ok content ->
                     case Decode.decodeString Tokens.decoder content of
                         Ok tokensList ->
-                            ( { model | tokens = Just tokensList, originalTokens = Just tokensList, tokensFileExists = True, error = Nothing }, Cmd.none )
+                            ( { model | tokens = Just tokensList, originalTokens = Just tokensList, tokensFileExists = True, error = Nothing }, Effect.none )
 
                         Err _ ->
-                            ( { model | error = Just "Couldn't read tokens/tokens.json — the file may be malformed." }, Cmd.none )
+                            ( { model | error = Just "Couldn't read tokens/tokens.json — the file may be malformed." }, Effect.none )
 
                 -- No tokens file yet is the normal state of a fresh repository,
                 -- not an error. The Tokens page shows an empty state for it.
                 Err _ ->
-                    ( { model | tokens = Just [], originalTokens = Just [], tokensFileExists = False, error = Nothing }, Cmd.none )
+                    ( { model | tokens = Just [], originalTokens = Just [], tokensFileExists = False, error = Nothing }, Effect.none )
 
         GotThemesTree ref result ->
             case result of
@@ -753,16 +751,16 @@ update msg model =
                             case ( model.token, model.selectedProject ) of
                                 ( Just token, Just project ) ->
                                     List.map
-                                        (\file -> GitLab.Files.getFileRaw token project.id ref file.path (GotThemeFile file.name) |> GitLab.Request.toCmd)
+                                        (\file -> GitLab.Files.getFileRaw token project.id ref file.path (GotThemeFile file.name) |> Effect.SendRequest)
                                         jsonFiles
 
                                 _ ->
                                     []
                     in
-                    ( { model | existingThemes = themeNames }, Cmd.batch cmds )
+                    ( { model | existingThemes = themeNames }, Effect.batch cmds )
 
                 Err _ ->
-                    ( { model | existingThemes = [] }, Cmd.none )
+                    ( { model | existingThemes = [] }, Effect.none )
 
         GotThemeFile filename result ->
             case result of
@@ -779,31 +777,31 @@ update msg model =
                                 newThemes =
                                     newTheme :: List.filter (\t -> t.name /= themeName) model.themes
                             in
-                            ( { model | themes = newThemes }, Cmd.none )
+                            ( { model | themes = newThemes }, Effect.none )
 
                         Err _ ->
-                            ( model, Cmd.none )
+                            ( model, Effect.none )
 
                 Err _ ->
-                    ( model, Cmd.none )
+                    ( model, Effect.none )
 
         SelectTheme themeName ->
             -- Each of these two filters is only meaningful in one of the two
             -- modes, and the checkbox for it is only rendered there, so leaving
             -- one ticked across a switch would narrow the list with no visible
             -- control to un-narrow it.
-            ( { model | activeThemeName = themeName, tokenOverriddenOnly = False, tokenChangedOnly = False }, Cmd.none )
+            ( { model | activeThemeName = themeName, tokenOverriddenOnly = False, tokenChangedOnly = False }, Effect.none )
 
         UpdateNewThemeName name ->
-            ( { model | newThemeName = name, commitStatus = Naming.clearFailure model.commitStatus }, Cmd.none )
+            ( { model | newThemeName = name, commitStatus = Naming.clearFailure model.commitStatus }, Effect.none )
 
         UpdateNewThemeTemplate template ->
-            ( { model | newThemeTemplate = template }, Cmd.none )
+            ( { model | newThemeTemplate = template }, Effect.none )
 
         CreateTheme ->
             case Naming.check model.newThemeName (List.map .name model.themes) of
                 Err problem ->
-                    ( { model | commitStatus = Just ( Failed, Naming.describe "theme" "Dark" problem ) }, Cmd.none )
+                    ( { model | commitStatus = Just ( Failed, Naming.describe "theme" "Dark" problem ) }, Effect.none )
 
                 Ok name ->
                     let
@@ -814,7 +812,7 @@ update msg model =
                                 |> Maybe.map (\t -> t.build name)
                                 |> Maybe.withDefault (Themes.fromTokens name [])
                     in
-                    ( { model | themes = newTheme :: model.themes, activeThemeName = Just name, newThemeName = "", newThemeTemplate = "empty", commitStatus = Nothing }, Cmd.none )
+                    ( { model | themes = newTheme :: model.themes, activeThemeName = Just name, newThemeName = "", newThemeTemplate = "empty", commitStatus = Nothing }, Effect.none )
 
         UpdateToken path _ ->
             updateTokenPathLogic model msg path
@@ -832,19 +830,19 @@ update msg model =
             updateTokenPathLogic model msg path
 
         UpdateNewCompositePropertyName name ->
-            ( { model | newCompositePropertyName = name }, Cmd.none )
+            ( { model | newCompositePropertyName = name }, Effect.none )
 
         UpdateNewCompositePropertyValue value ->
-            ( { model | newCompositePropertyValue = value }, Cmd.none )
+            ( { model | newCompositePropertyValue = value }, Effect.none )
 
         UpdateNewTokenPath path ->
-            ( { model | newTokenPath = path, commitStatus = Naming.clearFailure model.commitStatus }, Cmd.none )
+            ( { model | newTokenPath = path, commitStatus = Naming.clearFailure model.commitStatus }, Effect.none )
 
         UpdateNewTokenType t ->
-            ( { model | newTokenType = t }, Cmd.none )
+            ( { model | newTokenType = t }, Effect.none )
 
         UpdateNewTokenValue value ->
-            ( { model | newTokenValue = value }, Cmd.none )
+            ( { model | newTokenValue = value }, Effect.none )
 
         CreateToken ->
             case model.tokens of
@@ -861,7 +859,7 @@ update msg model =
                     in
                     case Naming.check (String.join "." segments) existing of
                         Err problem ->
-                            ( { model | commitStatus = Just ( Failed, Naming.describe "token" "color.brand.500" problem ) }, Cmd.none )
+                            ( { model | commitStatus = Just ( Failed, Naming.describe "token" "color.brand.500" problem ) }, Effect.none )
 
                         Ok _ ->
                             let
@@ -871,33 +869,33 @@ update msg model =
                                     , description = Nothing
                                     }
                             in
-                            ( { model | tokens = Just (( segments, newToken ) :: tokensList), newTokenPath = "", newTokenValue = "", commitStatus = Nothing }, Cmd.none )
+                            ( { model | tokens = Just (( segments, newToken ) :: tokensList), newTokenPath = "", newTokenValue = "", commitStatus = Nothing }, Effect.none )
 
                 Nothing ->
-                    ( { model | commitStatus = Just ( Working, "Tokens are still loading" ) }, Cmd.none )
+                    ( { model | commitStatus = Just ( Working, "Tokens are still loading" ) }, Effect.none )
 
         ApplyStarterTokenScale ->
             case model.tokens of
                 Just existing ->
-                    ( { model | tokens = Just (TokenScale.mergeStarterScale existing) }, Cmd.none )
+                    ( { model | tokens = Just (TokenScale.mergeStarterScale existing) }, Effect.none )
 
                 Nothing ->
-                    ( model, Cmd.none )
+                    ( model, Effect.none )
 
         UpdateTokenSearch search ->
-            ( { model | tokenSearch = search }, Cmd.none )
+            ( { model | tokenSearch = search }, Effect.none )
 
         UpdateTokenTypeFilter type_ ->
-            ( { model | tokenTypeFilter = type_ }, Cmd.none )
+            ( { model | tokenTypeFilter = type_ }, Effect.none )
 
         ToggleTokenOverriddenOnly ->
-            ( { model | tokenOverriddenOnly = not model.tokenOverriddenOnly }, Cmd.none )
+            ( { model | tokenOverriddenOnly = not model.tokenOverriddenOnly }, Effect.none )
 
         ToggleTokenChangedOnly ->
-            ( { model | tokenChangedOnly = not model.tokenChangedOnly }, Cmd.none )
+            ( { model | tokenChangedOnly = not model.tokenChangedOnly }, Effect.none )
 
         ClearTokenFilters ->
-            ( { model | tokenSearch = "", tokenTypeFilter = "", tokenOverriddenOnly = False, tokenChangedOnly = False }, Cmd.none )
+            ( { model | tokenSearch = "", tokenTypeFilter = "", tokenOverriddenOnly = False, tokenChangedOnly = False }, Effect.none )
 
         SaveTokens ->
             case ( model.token, model.selectedProject ) of
@@ -927,11 +925,11 @@ update msg model =
                                             }
                                     in
                                     ( { model | commitStatus = Just ( Working, "Validating tokens..." ), pendingCommit = Just pending }
-                                    , Ports.validateSchema { schema = "tokens", data = jsonValue, context = Encode.null }
+                                    , Effect.ValidateSchema { schema = "tokens", data = jsonValue, context = Encode.null }
                                     )
 
                                 Nothing ->
-                                    ( model, Cmd.none )
+                                    ( model, Effect.none )
 
                         Just activeName ->
                             let
@@ -961,14 +959,14 @@ update msg model =
                                             }
                                     in
                                     ( { model | commitStatus = Just ( Working, "Validating theme..." ), pendingCommit = Just pending }
-                                    , Ports.validateSchema { schema = "tokens", data = jsonValue, context = Encode.null }
+                                    , Effect.ValidateSchema { schema = "tokens", data = jsonValue, context = Encode.null }
                                     )
 
                                 Nothing ->
-                                    ( model, Cmd.none )
+                                    ( model, Effect.none )
 
                 _ ->
-                    ( model, Cmd.none )
+                    ( model, Effect.none )
 
         SwitchTab tab ->
             navigateToTab (Route.tabRouteFor tab model.selectedComponentName model.selectedScreenName) model
@@ -993,19 +991,19 @@ update msg model =
                             case ( model.token, model.selectedProject ) of
                                 ( Just token, Just project ) ->
                                     List.map
-                                        (\file -> GitLab.Files.getFileRaw token project.id ref file.path (GotComponentFile file.name) |> GitLab.Request.toCmd)
+                                        (\file -> GitLab.Files.getFileRaw token project.id ref file.path (GotComponentFile file.name) |> Effect.SendRequest)
                                         jsonFiles
                                         ++ List.map
-                                            (\file -> GitLab.Files.getFileRaw token project.id ref file.path (GotContractFile file.name) |> GitLab.Request.toCmd)
+                                            (\file -> GitLab.Files.getFileRaw token project.id ref file.path (GotContractFile file.name) |> Effect.SendRequest)
                                             contractFiles
 
                                 _ ->
                                     []
                     in
-                    ( { model | components = Just [], existingComponents = componentNames, contracts = Just [], existingContracts = contractComponentNames }, Cmd.batch cmds )
+                    ( { model | components = Just [], existingComponents = componentNames, contracts = Just [], existingContracts = contractComponentNames }, Effect.batch cmds )
 
                 Err _ ->
-                    ( { model | components = Just [], contracts = Just [] }, Cmd.none )
+                    ( { model | components = Just [], contracts = Just [] }, Effect.none )
 
         GotComponentFile filename result ->
             case result of
@@ -1019,22 +1017,22 @@ update msg model =
                                 newComponents =
                                     component :: List.filter (\c -> c.name /= component.name) currentComponents
                             in
-                            ( { model | components = Just newComponents, originalComponents = Just newComponents }, Cmd.none )
+                            ( { model | components = Just newComponents, originalComponents = Just newComponents }, Effect.none )
 
                         Err _ ->
-                            ( model, Cmd.none )
+                            ( model, Effect.none )
 
                 Err _ ->
-                    ( model, Cmd.none )
+                    ( model, Effect.none )
 
         SelectComponent name ->
             navigateToTab (Route.ComponentsTab name) model
 
         UpdateNewComponentName name ->
-            ( { model | newComponentName = name, commitStatus = Naming.clearFailure model.commitStatus }, Cmd.none )
+            ( { model | newComponentName = name, commitStatus = Naming.clearFailure model.commitStatus }, Effect.none )
 
         UpdateNewComponentTemplate template ->
-            ( { model | newComponentTemplate = template }, Cmd.none )
+            ( { model | newComponentTemplate = template }, Effect.none )
 
         CreateComponent ->
             let
@@ -1043,7 +1041,7 @@ update msg model =
             in
             case Naming.check model.newComponentName (List.map .name currentComponents) of
                 Err problem ->
-                    ( { model | commitStatus = Just ( Failed, Naming.describe "component" "Button" problem ) }, Cmd.none )
+                    ( { model | commitStatus = Just ( Failed, Naming.describe "component" "Button" problem ) }, Effect.none )
 
                 Ok name ->
                     let
@@ -1054,10 +1052,10 @@ update msg model =
                                 |> Maybe.map (\t -> t.build name)
                                 |> Maybe.withDefault (Templates.emptyComponent name)
                     in
-                    ( { model | components = Just (newComponent :: currentComponents), selectedComponentName = Just name, newComponentName = "", newComponentTemplate = "empty", commitStatus = Nothing }, Cmd.none )
+                    ( { model | components = Just (newComponent :: currentComponents), selectedComponentName = Just name, newComponentName = "", newComponentTemplate = "empty", commitStatus = Nothing }, Effect.none )
 
         UpdateNewComponentVariant name ->
-            ( { model | newComponentVariant = name, commitStatus = Naming.clearFailure model.commitStatus }, Cmd.none )
+            ( { model | newComponentVariant = name, commitStatus = Naming.clearFailure model.commitStatus }, Effect.none )
 
         AddComponentVariant ->
             addNameToComponent
@@ -1081,7 +1079,7 @@ update msg model =
                 |> Tuple.mapFirst (forgetEditingVariant name)
 
         UpdateNewComponentSlot name ->
-            ( { model | newComponentSlot = name, commitStatus = Naming.clearFailure model.commitStatus }, Cmd.none )
+            ( { model | newComponentSlot = name, commitStatus = Naming.clearFailure model.commitStatus }, Effect.none )
 
         AddComponentSlot ->
             addNameToComponent
@@ -1104,7 +1102,7 @@ update msg model =
                 model
 
         UpdateNewComponentState name ->
-            ( { model | newComponentState = name, commitStatus = Naming.clearFailure model.commitStatus }, Cmd.none )
+            ( { model | newComponentState = name, commitStatus = Naming.clearFailure model.commitStatus }, Effect.none )
 
         AddComponentState ->
             addNameToComponent
@@ -1162,14 +1160,14 @@ update msg model =
                                     }
                             in
                             ( { model | commitStatus = Just ( Working, "Validating " ++ comp.name ++ "..." ), pendingCommit = Just pending }
-                            , Ports.validateSchema { schema = "components", data = jsonValue, context = Encode.null }
+                            , Effect.ValidateSchema { schema = "components", data = jsonValue, context = Encode.null }
                             )
 
                         Nothing ->
-                            ( model, Cmd.none )
+                            ( model, Effect.none )
 
                 _ ->
-                    ( model, Cmd.none )
+                    ( model, Effect.none )
 
         InitComponentLayout newLayout ->
             updateSelectedComponent (\c -> { c | layout = Just newLayout }) model
@@ -1185,10 +1183,10 @@ update msg model =
             updateLayoutAt path (Components.mapContextStyles (editingContext model) (Dict.remove prop)) model
 
         UpdateNewLayoutPropertyName name ->
-            ( { model | newLayoutPropertyName = name }, Cmd.none )
+            ( { model | newLayoutPropertyName = name }, Effect.none )
 
         UpdateNewLayoutPropertyValue value ->
-            ( { model | newLayoutPropertyValue = value }, Cmd.none )
+            ( { model | newLayoutPropertyValue = value }, Effect.none )
 
         AddLayoutText path content ->
             updateLayoutAt path (appendChild (Components.Element { isSlot = False, styles = Dict.empty, overrides = [] } content)) model
@@ -1262,20 +1260,20 @@ update msg model =
                 model
 
         UpdateEditingVariant variant ->
-            ( { model | editingVariant = variant }, Cmd.none )
+            ( { model | editingVariant = variant }, Effect.none )
 
         UpdateEditingState state ->
-            ( { model | editingState = state }, Cmd.none )
+            ( { model | editingState = state }, Effect.none )
 
         ClearEditingContext ->
-            ( { model | editingVariant = Nothing, editingState = Nothing }, Cmd.none )
+            ( { model | editingVariant = Nothing, editingState = Nothing }, Effect.none )
 
         DeleteLayoutNode path ->
             -- A node is removed by its parent, so the root — which has no
             -- parent — can't be removed this way.
             case List.reverse path of
                 [] ->
-                    ( model, Cmd.none )
+                    ( model, Effect.none )
 
                 index :: reversedParent ->
                     updateLayoutAt (List.reverse reversedParent) (removeChildAt index) model
@@ -1294,16 +1292,16 @@ update msg model =
                             case ( model.token, model.selectedProject ) of
                                 ( Just token, Just project ) ->
                                     List.map
-                                        (\file -> GitLab.Files.getFileRaw token project.id ref file.path (GotScreenFile file.name) |> GitLab.Request.toCmd)
+                                        (\file -> GitLab.Files.getFileRaw token project.id ref file.path (GotScreenFile file.name) |> Effect.SendRequest)
                                         jsonFiles
 
                                 _ ->
                                     []
                     in
-                    ( { model | screens = Just [], existingScreens = screenNames }, Cmd.batch cmds )
+                    ( { model | screens = Just [], existingScreens = screenNames }, Effect.batch cmds )
 
                 Err _ ->
-                    ( { model | screens = Just [], existingScreens = [] }, Cmd.none )
+                    ( { model | screens = Just [], existingScreens = [] }, Effect.none )
 
         GotScreenFile filename result ->
             case result of
@@ -1317,22 +1315,22 @@ update msg model =
                                 newScreens =
                                     screen :: List.filter (\s -> s.name /= screen.name) currentScreens
                             in
-                            ( { model | screens = Just newScreens }, Cmd.none )
+                            ( { model | screens = Just newScreens }, Effect.none )
 
                         Err _ ->
-                            ( model, Cmd.none )
+                            ( model, Effect.none )
 
                 Err _ ->
-                    ( model, Cmd.none )
+                    ( model, Effect.none )
 
         SelectScreen name ->
             navigateToTab (Route.ScreensTab name) model
 
         UpdateNewScreenName name ->
-            ( { model | newScreenName = name, commitStatus = Naming.clearFailure model.commitStatus }, Cmd.none )
+            ( { model | newScreenName = name, commitStatus = Naming.clearFailure model.commitStatus }, Effect.none )
 
         UpdateNewScreenTemplate template ->
-            ( { model | newScreenTemplate = template }, Cmd.none )
+            ( { model | newScreenTemplate = template }, Effect.none )
 
         CreateScreen ->
             let
@@ -1341,7 +1339,7 @@ update msg model =
             in
             case Naming.check model.newScreenName (List.map .name currentScreens) of
                 Err problem ->
-                    ( { model | commitStatus = Just ( Failed, Naming.describe "screen" "Login" problem ) }, Cmd.none )
+                    ( { model | commitStatus = Just ( Failed, Naming.describe "screen" "Login" problem ) }, Effect.none )
 
                 Ok name ->
                     let
@@ -1352,7 +1350,7 @@ update msg model =
                                 |> Maybe.map (\t -> t.build name)
                                 |> Maybe.withDefault (Templates.emptyScreen name)
                     in
-                    ( { model | screens = Just (newScreen :: currentScreens), selectedScreenName = Just name, newScreenName = "", newScreenTemplate = "empty", commitStatus = Nothing }, Cmd.none )
+                    ( { model | screens = Just (newScreen :: currentScreens), selectedScreenName = Just name, newScreenName = "", newScreenTemplate = "empty", commitStatus = Nothing }, Effect.none )
 
         SaveScreen ->
             case ( model.token, model.selectedProject, model.selectedScreenName ) of
@@ -1387,14 +1385,14 @@ update msg model =
                                     }
                             in
                             ( { model | commitStatus = Just ( Working, "Validating " ++ screen.name ++ "..." ), pendingCommit = Just pending }
-                            , Ports.validateSchema { schema = "screens", data = jsonValue, context = Encode.null }
+                            , Effect.ValidateSchema { schema = "screens", data = jsonValue, context = Encode.null }
                             )
 
                         Nothing ->
-                            ( model, Cmd.none )
+                            ( model, Effect.none )
 
                 _ ->
-                    ( model, Cmd.none )
+                    ( model, Effect.none )
 
         AddComponentToScreen componentName ->
             case model.selectedScreenName of
@@ -1419,10 +1417,10 @@ update msg model =
                             else
                                 s
                     in
-                    ( { model | screens = Just (List.map updateScreen currentScreens) }, Cmd.none )
+                    ( { model | screens = Just (List.map updateScreen currentScreens) }, Effect.none )
 
                 Nothing ->
-                    ( model, Cmd.none )
+                    ( model, Effect.none )
 
         AddScreenToScreen screenName ->
             case model.selectedScreenName of
@@ -1447,10 +1445,10 @@ update msg model =
                             else
                                 s
                     in
-                    ( { model | screens = Just (List.map updateScreen currentScreens) }, Cmd.none )
+                    ( { model | screens = Just (List.map updateScreen currentScreens) }, Effect.none )
 
                 Nothing ->
-                    ( model, Cmd.none )
+                    ( model, Effect.none )
 
         RemoveScreenNode index ->
             case model.selectedScreenName of
@@ -1475,10 +1473,10 @@ update msg model =
                             else
                                 s
                     in
-                    ( { model | screens = Just (List.map updateScreen currentScreens) }, Cmd.none )
+                    ( { model | screens = Just (List.map updateScreen currentScreens) }, Effect.none )
 
                 Nothing ->
-                    ( model, Cmd.none )
+                    ( model, Effect.none )
 
         DeleteToken path ->
             case model.activeThemeName of
@@ -1487,7 +1485,7 @@ update msg model =
                         newTokens =
                             Maybe.map (List.filter (\( p, _ ) -> p /= path)) model.tokens
                     in
-                    ( { model | tokens = newTokens }, Cmd.none )
+                    ( { model | tokens = newTokens }, Effect.none )
 
                 Just activeName ->
                     let
@@ -1498,7 +1496,7 @@ update msg model =
                             else
                                 theme
                     in
-                    ( { model | themes = List.map updateTheme model.themes }, Cmd.none )
+                    ( { model | themes = List.map updateTheme model.themes }, Effect.none )
 
         DeleteTheme name ->
             case ( model.token, model.selectedProject ) of
@@ -1516,11 +1514,11 @@ update msg model =
                             }
                     in
                     ( { model | themes = List.filter (\t -> t.name /= name) model.themes, activeThemeName = Nothing, commitStatus = Just ( Working, "Deleting " ++ name ++ "..." ) }
-                    , GitLab.Commits.createCommit token project.id payload (GotCommitResult (CommitDeleteTheme name)) |> GitLab.Request.toCmd
+                    , GitLab.Commits.createCommit token project.id payload (GotCommitResult (CommitDeleteTheme name)) |> Effect.SendRequest
                     )
 
                 _ ->
-                    ( model, Cmd.none )
+                    ( model, Effect.none )
 
         DeleteComponent name ->
             case ( model.token, model.selectedProject ) of
@@ -1541,11 +1539,11 @@ update msg model =
                             model.components |> Maybe.withDefault []
                     in
                     ( { model | components = Just (List.filter (\c -> c.name /= name) currentComponents), selectedComponentName = Nothing, commitStatus = Just ( Working, "Deleting " ++ name ++ "..." ) }
-                    , GitLab.Commits.createCommit token project.id payload (GotCommitResult (CommitDeleteComponent name)) |> GitLab.Request.toCmd
+                    , GitLab.Commits.createCommit token project.id payload (GotCommitResult (CommitDeleteComponent name)) |> Effect.SendRequest
                     )
 
                 _ ->
-                    ( model, Cmd.none )
+                    ( model, Effect.none )
 
         DeleteScreen name ->
             case ( model.token, model.selectedProject ) of
@@ -1566,11 +1564,11 @@ update msg model =
                             model.screens |> Maybe.withDefault []
                     in
                     ( { model | screens = Just (List.filter (\s -> s.name /= name) currentScreens), selectedScreenName = Nothing, commitStatus = Just ( Working, "Deleting " ++ name ++ "..." ) }
-                    , GitLab.Commits.createCommit token project.id payload (GotCommitResult (CommitDeleteScreen name)) |> GitLab.Request.toCmd
+                    , GitLab.Commits.createCommit token project.id payload (GotCommitResult (CommitDeleteScreen name)) |> Effect.SendRequest
                     )
 
                 _ ->
-                    ( model, Cmd.none )
+                    ( model, Effect.none )
 
         GotContractFile filename result ->
             case result of
@@ -1584,19 +1582,19 @@ update msg model =
                                 newContracts =
                                     contract :: List.filter (\c -> c.component /= contract.component) currentContracts
                             in
-                            ( { model | contracts = Just newContracts }, Cmd.none )
+                            ( { model | contracts = Just newContracts }, Effect.none )
 
                         Err _ ->
-                            ( model, Cmd.none )
+                            ( model, Effect.none )
 
                 Err _ ->
-                    ( model, Cmd.none )
+                    ( model, Effect.none )
 
         UpdateNewContractRuleType type_ ->
-            ( { model | newContractRuleType = type_ }, Cmd.none )
+            ( { model | newContractRuleType = type_ }, Effect.none )
 
         UpdateNewContractRuleField key value ->
-            ( { model | newContractRuleFields = Dict.insert key value model.newContractRuleFields }, Cmd.none )
+            ( { model | newContractRuleFields = Dict.insert key value model.newContractRuleFields }, Effect.none )
 
         AddContractRule ->
             case model.selectedComponentName of
@@ -1686,13 +1684,13 @@ update msg model =
                                 newContracts =
                                     newContract :: List.filter (\c -> c.component /= compName) currentContracts
                             in
-                            ( { model | contracts = Just newContracts, newContractRuleFields = Dict.empty }, Cmd.none )
+                            ( { model | contracts = Just newContracts, newContractRuleFields = Dict.empty }, Effect.none )
 
                         Nothing ->
-                            ( model, Cmd.none )
+                            ( model, Effect.none )
 
                 Nothing ->
-                    ( model, Cmd.none )
+                    ( model, Effect.none )
 
         RemoveContractRule index ->
             case model.selectedComponentName of
@@ -1716,13 +1714,13 @@ update msg model =
                                 newContracts =
                                     newContract :: List.filter (\contract -> contract.component /= compName) currentContracts
                             in
-                            ( { model | contracts = Just newContracts }, Cmd.none )
+                            ( { model | contracts = Just newContracts }, Effect.none )
 
                         Nothing ->
-                            ( model, Cmd.none )
+                            ( model, Effect.none )
 
                 Nothing ->
-                    ( model, Cmd.none )
+                    ( model, Effect.none )
 
         SaveContract ->
             case ( model.token, model.selectedProject, model.selectedComponentName ) of
@@ -1759,16 +1757,16 @@ update msg model =
                                     }
                             in
                             ( { model | commitStatus = Just ( Working, "Validating contract for " ++ activeName ++ "..." ), pendingCommit = Just pending }
-                            , Ports.validateSchema { schema = "contracts", data = jsonValue, context = Encode.null }
+                            , Effect.ValidateSchema { schema = "contracts", data = jsonValue, context = Encode.null }
                             )
 
                         Nothing ->
                             -- No contract exists in the model yet, so there is nothing to
                             -- commit. Say so rather than letting the button look broken.
-                            ( { model | commitStatus = Just ( Failed, "Add at least one rule before saving." ) }, Cmd.none )
+                            ( { model | commitStatus = Just ( Failed, "Add at least one rule before saving." ) }, Effect.none )
 
                 _ ->
-                    ( model, Cmd.none )
+                    ( model, Effect.none )
 
         DeleteContract name ->
             case ( model.token, model.selectedProject ) of
@@ -1789,22 +1787,22 @@ update msg model =
                             model.contracts |> Maybe.withDefault []
                     in
                     ( { model | contracts = Just (List.filter (\c -> c.component /= name) currentContracts), commitStatus = Just ( Working, "Deleting contract for " ++ name ++ "..." ) }
-                    , GitLab.Commits.createCommit token project.id payload (GotCommitResult (CommitDeleteContract name)) |> GitLab.Request.toCmd
+                    , GitLab.Commits.createCommit token project.id payload (GotCommitResult (CommitDeleteContract name)) |> Effect.SendRequest
                     )
 
                 _ ->
-                    ( model, Cmd.none )
+                    ( model, Effect.none )
 
         JumpToComponent name ->
-            ( { model | activeTab = ComponentRegistry, selectedComponentName = Just name }, Cmd.none )
+            ( { model | activeTab = ComponentRegistry, selectedComponentName = Just name }, Effect.none )
 
         GotBranches result ->
             case result of
                 Ok branchList ->
-                    ( { model | branches = Just branchList }, Cmd.none )
+                    ( { model | branches = Just branchList }, Effect.none )
 
                 Err _ ->
-                    ( model, Cmd.none )
+                    ( model, Effect.none )
 
         -- Merge requests belong to the project, not the branch, so this arrives
         -- once with the rest of the repository and `SwitchBranch` leaves it be.
@@ -1813,29 +1811,29 @@ update msg model =
         GotMergeRequests result ->
             case result of
                 Ok mrs ->
-                    ( { model | mergeRequests = Just mrs }, Cmd.none )
+                    ( { model | mergeRequests = Just mrs }, Effect.none )
 
                 Err _ ->
-                    ( model, Cmd.none )
+                    ( model, Effect.none )
 
         SwitchBranch branchName ->
             case ( model.token, model.selectedProject ) of
                 ( Just token, Just project ) ->
                     ( { model | currentBranch = Just branchName, repositoryTree = Nothing, originalComponents = Nothing, components = Nothing, originalTokens = Nothing, tokens = Nothing, themes = [], screens = Nothing, existingComponents = [], existingThemes = [], existingScreens = [], tokensFileExists = False, commitStatus = Just ( Done, "On branch " ++ branchName ), contracts = Nothing, existingContracts = [], newContractRuleType = "allowedTokenGroups", newContractRuleFields = Dict.empty }
-                    , Cmd.batch
-                        [ GitLab.Files.listTree token project.id branchName GotTree |> GitLab.Request.toCmd
-                        , GitLab.Files.getFileRaw token project.id branchName "tokens/tokens.json" GotTokensFile |> GitLab.Request.toCmd
-                        , GitLab.Files.listTreeAtPath token project.id branchName "themes" (GotThemesTree branchName) |> GitLab.Request.toCmd
-                        , GitLab.Files.listTreeAtPath token project.id branchName "components" (GotComponentsTree branchName) |> GitLab.Request.toCmd
-                        , GitLab.Files.listTreeAtPath token project.id branchName "layouts" (GotScreensTree branchName) |> GitLab.Request.toCmd
+                    , Effect.batch
+                        [ GitLab.Files.listTree token project.id branchName GotTree |> Effect.SendRequest
+                        , GitLab.Files.getFileRaw token project.id branchName "tokens/tokens.json" GotTokensFile |> Effect.SendRequest
+                        , GitLab.Files.listTreeAtPath token project.id branchName "themes" (GotThemesTree branchName) |> Effect.SendRequest
+                        , GitLab.Files.listTreeAtPath token project.id branchName "components" (GotComponentsTree branchName) |> Effect.SendRequest
+                        , GitLab.Files.listTreeAtPath token project.id branchName "layouts" (GotScreensTree branchName) |> Effect.SendRequest
                         ]
                     )
 
                 _ ->
-                    ( model, Cmd.none )
+                    ( model, Effect.none )
 
         UpdateNewBranchName name ->
-            ( { model | newBranchName = name, commitStatus = Naming.clearFailure model.commitStatus }, Cmd.none )
+            ( { model | newBranchName = name, commitStatus = Naming.clearFailure model.commitStatus }, Effect.none )
 
         CreateBranch ->
             case ( model.token, model.selectedProject, model.currentBranch ) of
@@ -1850,15 +1848,15 @@ update msg model =
                     in
                     case Naming.check model.newBranchName existing of
                         Err problem ->
-                            ( { model | commitStatus = Just ( Failed, Naming.describe "branch" "feature/new-colors" problem ) }, Cmd.none )
+                            ( { model | commitStatus = Just ( Failed, Naming.describe "branch" "feature/new-colors" problem ) }, Effect.none )
 
                         Ok branchName ->
                             ( { model | commitStatus = Just ( Working, "Creating branch..." ) }
-                            , GitLab.Branches.createBranch token project.id branchName currentBranch GotCreateBranchResult |> GitLab.Request.toCmd
+                            , GitLab.Branches.createBranch token project.id branchName currentBranch GotCreateBranchResult |> Effect.SendRequest
                             )
 
                 _ ->
-                    ( model, Cmd.none )
+                    ( model, Effect.none )
 
         GotCreateBranchResult result ->
             case result of
@@ -1867,13 +1865,13 @@ update msg model =
                         currentBranches =
                             model.branches |> Maybe.withDefault []
                     in
-                    ( { model | branches = Just (branch :: currentBranches), commitStatus = Just ( Done, "Branch created" ), newBranchName = "", currentBranch = Just branch.name }, Cmd.none )
+                    ( { model | branches = Just (branch :: currentBranches), commitStatus = Just ( Done, "Branch created" ), newBranchName = "", currentBranch = Just branch.name }, Effect.none )
 
                 Err _ ->
-                    ( { model | commitStatus = Just ( Failed, "Couldn't create the branch" ) }, Cmd.none )
+                    ( { model | commitStatus = Just ( Failed, "Couldn't create the branch" ) }, Effect.none )
 
         UpdateMRTitle title ->
-            ( { model | mrTitle = title, commitStatus = Naming.clearFailure model.commitStatus }, Cmd.none )
+            ( { model | mrTitle = title, commitStatus = Naming.clearFailure model.commitStatus }, Effect.none )
 
         CreateMergeRequest ->
             case ( model.token, model.selectedProject, model.currentBranch ) of
@@ -1884,21 +1882,21 @@ update msg model =
                     -- "can't do that".
                     if currentBranch == project.defaultBranch then
                         ( { model | commitStatus = Just ( Failed, "You're on " ++ project.defaultBranch ++ " — create a branch, save your changes onto it, then open a merge request" ) }
-                        , Cmd.none
+                        , Effect.none
                         )
 
                     else if String.trim model.mrTitle == "" then
                         ( { model | commitStatus = Just ( Failed, "Describe what you changed in the merge request title" ) }
-                        , Cmd.none
+                        , Effect.none
                         )
 
                     else
                         ( { model | commitStatus = Just ( Working, "Opening merge request..." ) }
-                        , GitLab.MergeRequests.createMergeRequest token project.id currentBranch project.defaultBranch model.mrTitle GotMRResult |> GitLab.Request.toCmd
+                        , GitLab.MergeRequests.createMergeRequest token project.id currentBranch project.defaultBranch model.mrTitle GotMRResult |> Effect.SendRequest
                         )
 
                 _ ->
-                    ( model, Cmd.none )
+                    ( model, Effect.none )
 
         GotMRResult result ->
             case result of
@@ -1907,10 +1905,10 @@ update msg model =
                         currentMRs =
                             model.mergeRequests |> Maybe.withDefault []
                     in
-                    ( { model | mergeRequests = Just (mr :: currentMRs), commitStatus = Just ( Done, "Merge request opened" ), mrTitle = "" }, Cmd.none )
+                    ( { model | mergeRequests = Just (mr :: currentMRs), commitStatus = Just ( Done, "Merge request opened" ), mrTitle = "" }, Effect.none )
 
                 Err _ ->
-                    ( { model | commitStatus = Just ( Failed, "Couldn't open the merge request" ) }, Cmd.none )
+                    ( { model | commitStatus = Just ( Failed, "Couldn't open the merge request" ) }, Effect.none )
 
         ToggleExportTarget target ->
             let
@@ -1921,7 +1919,7 @@ update msg model =
                     else
                         target :: model.exportTargets
             in
-            ( { model | exportTargets = newTargets }, Cmd.none )
+            ( { model | exportTargets = newTargets }, Effect.none )
 
         RunExportPipeline ->
             case ( model.token, model.selectedProject, model.currentBranch ) of
@@ -1978,15 +1976,15 @@ update msg model =
                                     }
                             in
                             if List.isEmpty finalActions then
-                                ( { model | commitStatus = Just ( Failed, "Pick at least one export format" ) }, Cmd.none )
+                                ( { model | commitStatus = Just ( Failed, "Pick at least one export format" ) }, Effect.none )
 
                             else
                                 ( { model | commitStatus = Just ( Working, "Exporting..." ) }
-                                , GitLab.Commits.createCommit token project.id payload (GotCommitResult CommitOther) |> GitLab.Request.toCmd
+                                , GitLab.Commits.createCommit token project.id payload (GotCommitResult CommitOther) |> Effect.SendRequest
                                 )
 
                         Nothing ->
-                            ( { model | commitStatus = Just ( Failed, "Load tokens before exporting" ) }, Cmd.none )
+                            ( { model | commitStatus = Just ( Failed, "Load tokens before exporting" ) }, Effect.none )
 
                 _ ->
-                    ( { model | commitStatus = Just ( Failed, "Pick a repository and branch before exporting" ) }, Cmd.none )
+                    ( { model | commitStatus = Just ( Failed, "Pick a repository and branch before exporting" ) }, Effect.none )
