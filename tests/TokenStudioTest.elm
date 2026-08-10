@@ -86,18 +86,55 @@ suite =
                         |> Query.findAll [ Selector.tag "option" ]
                         |> Query.count (Expect.equal 0)
             ]
+        , describe "a read-only branch"
+            [ test "still shows every token, because reading is the point" <|
+                \_ ->
+                    renderWith readOnlyContext TokenBrowse.noFilters fewTokens
+                        |> Query.findAll [ Selector.attribute (Html.Attributes.attribute "list" "token-alias-list") ]
+                        |> Query.count (Expect.equal (List.length fewTokens))
+            , test "renders the value as readonly rather than disabled" <|
+                \_ ->
+                    -- disabled would take the whole list out of the keyboard's
+                    -- reach and stop a screen reader announcing the values,
+                    -- which is worse than the problem being solved.
+                    renderWith readOnlyContext TokenBrowse.noFilters fewTokens
+                        |> Query.findAll [ Selector.attribute (Html.Attributes.attribute "list" "token-alias-list") ]
+                        |> Query.each (Query.has [ Selector.attribute (Html.Attributes.readonly True) ])
+            , test "drops the per-row delete control instead of greying it" <|
+                \_ ->
+                    renderWith readOnlyContext TokenBrowse.noFilters fewTokens
+                        |> Query.findAll [ Selector.tag "button" ]
+                        |> Query.count (Expect.equal 0)
+            , test "and the same rows are editable on a branch of your own" <|
+                \_ ->
+                    render TokenBrowse.noFilters fewTokens
+                        |> Query.findAll [ Selector.attribute (Html.Attributes.attribute "list" "token-alias-list") ]
+                        |> Query.each (Query.has [ Selector.attribute (Html.Attributes.readonly False) ])
+            ]
         ]
 
 
 render : TokenBrowse.Filters -> List Tokens.FlatToken -> Query.Single Types.Msg
 render filters visibleTokens =
-    TokenStudio.viewTokenList context filters marks visibleTokens
+    renderWith context filters visibleTokens
+
+
+renderWith : TokenStudio.RowContext -> TokenBrowse.Filters -> List Tokens.FlatToken -> Query.Single Types.Msg
+renderWith rowContext filters visibleTokens =
+    TokenStudio.viewTokenList rowContext filters marks visibleTokens
         |> Query.fromHtml
 
 
 context : TokenStudio.RowContext
 context =
-    { newPartName = "", activeTheme = Nothing, displayTokens = manyTokens }
+    { newPartName = "", activeTheme = Nothing, displayTokens = manyTokens, writable = True }
+
+
+{-| The same list on a branch nobody may write to.
+-}
+readOnlyContext : TokenStudio.RowContext
+readOnlyContext =
+    { context | writable = False }
 
 
 marks : TokenBrowse.Marks

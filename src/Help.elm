@@ -1,6 +1,7 @@
 module Help exposing
     ( Topic
     , forTab
+    , readOnlyBranch
     , tokens, themes, tokenFilters, newToken
     , components, componentLayout, usageContract, componentEditor, componentVariant, componentState, componentSlot, componentContext
     , screens, addComponentToScreen, addScreenToScreen, screenEditor
@@ -27,6 +28,8 @@ broken once.
 @docs Topic
 
 @docs forTab
+
+@docs readOnlyBranch
 
 @docs tokens, themes, tokenFilters, newToken
 
@@ -288,15 +291,33 @@ screenEditor =
     }
 
 
+{-| The banner above every tab when the branch you are on cannot be written to.
+Sits first in `all` because it is the first thing the app has to explain: a
+reader who cannot type into anything needs this before they need the tab they
+were aiming for.
+-}
+readOnlyBranch : Topic
+readOnlyBranch =
+    { id = "read-only-branch"
+    , title = "Read-only branch"
+    , lede = Nothing
+    , body =
+        [ "The project's default branch is read-only in this app, and so is any branch GitLab reports as protected. Nothing on the other tabs can be edited while you're on one — the fields and buttons are there so you can read what's in the repository, not change it."
+        , "There's no backend and no draft state here: every save is a commit straight to the branch you're on. Requiring a branch of your own first is what keeps that from landing on everyone else's."
+        , "Name a branch above and create it. You stay exactly where you are, with anything already on screen intact, and the editors come alive. Save as usual, then open a merge request from Branches & reviews."
+        ]
+    }
+
+
 {-| -}
 gitWorkflows : Topic
 gitWorkflows =
     { id = "git-workflows"
     , title = "Branches & reviews"
-    , lede = Just "Every save is a commit. Create a branch here before editing if you don't want changes landing on the default branch."
+    , lede = Just "Editing requires a branch of your own: the default branch is read-only. Create one here, then save your changes onto it."
     , body =
         [ "This app has no backend of its own — every save is a commit, and every change set becomes a Git branch and, eventually, a merge request."
-        , "Pick or create a branch below, then save your changes on the tab you made them and open a merge request here when you're ready for review."
+        , "Create a branch below, then save your changes on the tab you made them and open a merge request here when you're ready for review."
         ]
     }
 
@@ -309,8 +330,9 @@ branch =
     , lede = Nothing
     , body =
         [ "Everything you save is a commit on the branch selected here. Switching branches reloads tokens, themes, components, screens and contracts from that branch's files."
+        , "The default branch and any protected branch are read-only: while you're on one, nothing in the app can be edited. Every other branch is editable."
         , "Switching discards unsaved edits, so save first — or create a branch, which keeps your edits in the browser so you can save them onto the new branch."
-        , "Create a branch before you start editing if you don't want changes landing on the project's default branch directly."
+        , "The branch you're on is part of the address, so a link to this page carries it and a reload keeps it."
         ]
     }
 
@@ -322,7 +344,7 @@ unsavedChanges =
     , title = "Unsaved changes"
     , lede = Nothing
     , body =
-        [ "Your edits live in this browser tab until you save. There's no staging step: each Save writes that file and commits it to the current branch in one go."
+        [ "Your edits live in this browser tab until you save. There's no staging step: each Save writes that file and commits it to the branch you're on, which has to be one you created — the default and protected branches are read-only."
         , "Nothing here survives a reload, a branch switch, or picking a different repository."
         , "This list covers tokens and components only — screen and contract edits won't appear in it even though they're just as unsaved."
         ]
@@ -337,7 +359,7 @@ mergeRequests =
     , lede = Nothing
     , body =
         [ "Opens a GitLab merge request from your current branch, so changes go through the same review process as any other code change."
-        , "You need to be on a branch other than the project's default one — there's nothing to merge otherwise."
+        , "You need to be on a branch other than the project's default one — there's nothing to merge otherwise. Since that's the only kind you can edit on anyway, being able to save means you can open one."
         ]
     }
 
@@ -360,10 +382,10 @@ export : Topic
 export =
     { id = "export"
     , title = "Export"
-    , lede = Just "Write your tokens out as CSS custom properties or a Tailwind config and commit them to the branch you're on."
+    , lede = Just "Write your tokens out as CSS custom properties or a Tailwind config and commit them to the branch you created."
     , body =
         [ "Writes your tokens out for other projects to consume: CSS custom properties (exports/variables.css) and a Tailwind config (exports/tailwind.config.js)."
-        , "Tokens only — components and screens are not exported. The files are committed to the branch you're working on, like any other save."
+        , "Tokens only — components and screens are not exported. The files are committed to the branch you're working on, like any other save, so this needs a branch of your own too."
         ]
     }
 
@@ -373,7 +395,8 @@ the catalog's shape the same way `TemplatesTest` locks `Templates`'.
 -}
 all : List Topic
 all =
-    [ tokens
+    [ readOnlyBranch
+    , tokens
     , themes
     , tokenFilters
     , newToken

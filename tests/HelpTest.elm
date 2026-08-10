@@ -12,7 +12,8 @@ suite =
         [ test "topic ids are exactly in order" <|
             \_ ->
                 Expect.equal
-                    [ "tokens"
+                    [ "read-only-branch"
+                    , "tokens"
                     , "themes"
                     , "token-filters"
                     , "new-token"

@@ -9,14 +9,29 @@ import Url
 type alias Branch =
     { name : String
     , commitId : String
+    , default : Bool
+    , protected : Bool
     }
 
 
+{-| `default` and `protected` are required rather than optional-with-a-`False`
+default, and that is the load-bearing decision in this module: the app decides
+whether a branch may be edited from these two fields, and a silently defaulted
+`protected = False` would present a protected branch as writable — the unsafe
+direction to be wrong in.
+
+Required means a schema surprise fails the whole list instead. `Model.branches`
+stays `Nothing`, `Guard` reads that as "nothing is known to be writable", and
+the app goes read-only and says so. Loud and closed beats quiet and open.
+
+-}
 branchDecoder : Decoder Branch
 branchDecoder =
-    Decode.map2 Branch
+    Decode.map4 Branch
         (Decode.field "name" Decode.string)
         (Decode.at [ "commit", "id" ] Decode.string)
+        (Decode.field "default" Decode.bool)
+        (Decode.field "protected" Decode.bool)
 
 
 listBranches : String -> Int -> (Result Http.Error (List Branch) -> msg) -> Request msg

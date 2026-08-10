@@ -2,7 +2,7 @@ module Pages.GitWorkflows exposing (viewGitWorkflows)
 
 import Contracts
 import Help
-import Html exposing (Html, a, button, div, h3, h4, input, li, option, select, span, strong, text, ul)
+import Html exposing (Html, a, button, div, h3, h4, input, li, span, strong, text, ul)
 import Html.Attributes exposing (href, value)
 import Html.Events exposing (onClick, onInput)
 import Tailwind as Tw exposing (classes)
@@ -40,19 +40,9 @@ viewBranch model =
             ]
         , div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.mb s3, Tw.flex_wrap ] ]
             [ span [ Ui.fieldLabel ] [ text "Working on" ]
-            , select
-                [ Ui.selectInput
-                , Html.Attributes.attribute "aria-label" "Current branch"
-                , onInput SwitchBranch
-                ]
-                (List.map
-                    (\branch ->
-                        option
-                            [ value branch.name, Html.Attributes.selected (model.currentBranch == Just branch.name) ]
-                            [ text branch.name ]
-                    )
-                    (model.branches |> Maybe.withDefault [])
-                )
+            , Ui.branchPicker
+                { label = "Current branch", current = model.currentBranch, onSwitch = SwitchBranch }
+                (model.branches |> Maybe.withDefault [])
             ]
         , Html.datalist [ Html.Attributes.id "branch-prefix-list" ]
             (List.map (\prefix -> Html.option [ value prefix ] []) branchPrefixes)

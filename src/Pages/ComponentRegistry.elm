@@ -4,6 +4,7 @@ import Components
 import Contracts
 import CssProperties
 import Dict
+import Guard
 import Help
 import Html exposing (Html, button, div, h3, h4, li, text, ul)
 import Html.Attributes exposing (value)
@@ -26,6 +27,9 @@ import Ui exposing (PillTone(..))
 viewLayoutEditorNode : Model -> Components.Component -> List Int -> Components.Layout -> Html Msg
 viewLayoutEditorNode model comp path layout =
     let
+        writable =
+            Guard.writable model
+
         ( nodeType, childrenNodes ) =
             case layout of
                 Components.Stack _ children ->
@@ -62,13 +66,17 @@ viewLayoutEditorNode model comp path layout =
                 ]
             ]
             [ Html.strong [ Ui.fieldLabel ] [ text nodeType ]
-            , button
-                [ Ui.iconButton
-                , onClick (DeleteLayoutNode path)
-                , Html.Attributes.attribute "aria-label" ("Remove this " ++ nodeType)
-                , Html.Attributes.title ("Remove this " ++ nodeType)
-                ]
-                [ text "×" ]
+            , if writable then
+                button
+                    [ Ui.iconButton
+                    , onClick (DeleteLayoutNode path)
+                    , Html.Attributes.attribute "aria-label" ("Remove this " ++ nodeType)
+                    , Html.Attributes.title ("Remove this " ++ nodeType)
+                    ]
+                    [ text "×" ]
+
+              else
+                text ""
             ]
         , case Components.styling layout of
             Just node ->
@@ -107,7 +115,12 @@ viewLayoutEditorNode model comp path layout =
                                 li [ classes [ Tw.flex, Tw.gap s2, Tw.items_center, Tw.mb s1 ] ]
                                     [ div [ Ui.mutedSmall, classes [ Tw.w s24, Tw.truncate ] ] [ text key ]
                                     , Html.input
-                                        [ Ui.textInput
+                                        [ if writable then
+                                            Ui.textInput
+
+                                          else
+                                            Ui.textInputReadOnly
+                                        , Html.Attributes.readonly (not writable)
                                         , value val
                                         , onInput (UpdateLayoutProperty path key)
                                         , Html.Attributes.attribute "aria-label" key
@@ -124,7 +137,7 @@ viewLayoutEditorNode model comp path layout =
 
                                       else
                                         Ui.pill Neutral "inherited"
-                                    , if isOwn then
+                                    , if isOwn && writable then
                                         let
                                             label =
                                                 if context == Components.baseContext then
@@ -149,7 +162,12 @@ viewLayoutEditorNode model comp path layout =
                         )
                     , div [ classes [ Tw.flex, Tw.gap s2, Tw.items_center ] ]
                         [ Html.input
-                            [ Ui.textInput
+                            [ if writable then
+                                Ui.textInput
+
+                              else
+                                Ui.textInputReadOnly
+                            , Html.Attributes.readonly (not writable)
                             , value model.newLayoutPropertyName
                             , onInput UpdateNewLayoutPropertyName
                             , Html.Attributes.placeholder "CSS property"
@@ -160,7 +178,12 @@ viewLayoutEditorNode model comp path layout =
                             ]
                             []
                         , Html.input
-                            [ Ui.textInput
+                            [ if writable then
+                                Ui.textInput
+
+                              else
+                                Ui.textInputReadOnly
+                            , Html.Attributes.readonly (not writable)
                             , value model.newLayoutPropertyValue
                             , onInput UpdateNewLayoutPropertyValue
                             , Html.Attributes.placeholder "Value or {token}"
@@ -184,6 +207,7 @@ viewLayoutEditorNode model comp path layout =
                         [ Html.input
                             [ Html.Attributes.type_ "checkbox"
                             , Html.Attributes.checked props.isSlot
+                            , Html.Attributes.disabled (not writable)
                             , onCheck (ToggleLayoutNodeIsSlot path)
                             ]
                             []
@@ -197,6 +221,7 @@ viewLayoutEditorNode model comp path layout =
                         else
                             Html.select
                                 [ onInput (UpdateLayoutText path)
+                                , Html.Attributes.disabled (not writable)
                                 , classes [ Tw.w_full, Tw.p s1, Tw.border, Tw.border_color (slate s300), Tw.rounded_sm ]
                                 ]
                                 (Html.option [ value "" ] [ text "-- Select a slot --" ]
@@ -205,7 +230,12 @@ viewLayoutEditorNode model comp path layout =
 
                       else
                         Html.input
-                            [ Ui.textInput
+                            [ if writable then
+                                Ui.textInput
+
+                              else
+                                Ui.textInputReadOnly
+                            , Html.Attributes.readonly (not writable)
                             , value content
                             , onInput (UpdateLayoutText path)
                             , Html.Attributes.placeholder "Text content"
@@ -222,6 +252,7 @@ viewLayoutEditorNode model comp path layout =
                     , div [ classes [ Tw.flex, Tw.gap s2, Tw.mb s2 ] ]
                         [ Html.select
                             [ onInput (UpdateLayoutWhenCondition path "variant")
+                            , Html.Attributes.disabled (not writable)
                             , classes [ Tw.w_full, Tw.p s1, Tw.border, Tw.border_color (slate s300), Tw.rounded_sm ]
                             ]
                             (Html.option [ value "" ] [ text "Any Variant" ]
@@ -229,6 +260,7 @@ viewLayoutEditorNode model comp path layout =
                             )
                         , Html.select
                             [ onInput (UpdateLayoutWhenCondition path "state")
+                            , Html.Attributes.disabled (not writable)
                             , classes [ Tw.w_full, Tw.p s1, Tw.border, Tw.border_color (slate s300), Tw.rounded_sm ]
                             ]
                             (Html.option [ value "" ] [ text "Any State" ]
@@ -238,13 +270,7 @@ viewLayoutEditorNode model comp path layout =
                     , div [ Ui.fieldLabel, classes [ Tw.mb s1 ] ] [ text "Inside" ]
                     , div [ classes [ Tw.pl s2, Tw.border_l_2, Tw.border_color (slate s100) ] ]
                         (List.indexedMap (\i child -> viewLayoutEditorNode model comp (path ++ [ i ]) child) childrenNodes)
-                    , div [ classes [ Tw.flex, Tw.gap s2, Tw.mt s1 ] ]
-                        [ button [ Ui.btnSmall, onClick (AddLayoutStack path) ] [ text "+ Stack" ]
-                        , button [ Ui.btnSmall, onClick (AddLayoutGrid path) ] [ text "+ Grid" ]
-                        , button [ Ui.btnSmall, onClick (AddLayoutWhen path) ] [ text "+ When" ]
-                        , button [ Ui.btnSmall, onClick (AddLayoutText path "New Text") ] [ text "+ Text" ]
-                        , button [ Ui.btnSmall, onClick (AddLayoutSlot path) ] [ text "+ Slot" ]
-                        ]
+                    , viewAddChildRow writable path
                     ]
 
             _ ->
@@ -252,14 +278,33 @@ viewLayoutEditorNode model comp path layout =
                     [ div [ Ui.fieldLabel, classes [ Tw.mb s1 ] ] [ text "Inside" ]
                     , div [ classes [ Tw.pl s2, Tw.border_l_2, Tw.border_color (slate s100) ] ]
                         (List.indexedMap (\i child -> viewLayoutEditorNode model comp (path ++ [ i ]) child) childrenNodes)
-                    , div [ classes [ Tw.flex, Tw.gap s2, Tw.mt s1 ] ]
-                        [ button [ Ui.btnSmall, onClick (AddLayoutStack path) ] [ text "+ Stack" ]
-                        , button [ Ui.btnSmall, onClick (AddLayoutGrid path) ] [ text "+ Grid" ]
-                        , button [ Ui.btnSmall, onClick (AddLayoutWhen path) ] [ text "+ When" ]
-                        , button [ Ui.btnSmall, onClick (AddLayoutText path "New Text") ] [ text "+ Text" ]
-                        , button [ Ui.btnSmall, onClick (AddLayoutSlot path) ] [ text "+ Slot" ]
-                        ]
+                    , viewAddChildRow writable path
                     ]
+        ]
+
+
+{-| The "+ Stack / + Grid / + When / + Text / + Slot" row, which appears under
+both a `When` node and an ordinary container.
+-}
+viewAddChildRow : Bool -> List Int -> Html Msg
+viewAddChildRow writable path =
+    let
+        add label msg =
+            Ui.actionButton Ui.btnSmall
+                (if writable then
+                    Ui.Do msg
+
+                 else
+                    Ui.Blocked "Create a branch before editing this layout"
+                )
+                [ text label ]
+    in
+    div [ classes [ Tw.flex, Tw.gap s2, Tw.mt s1 ] ]
+        [ add "+ Stack" (AddLayoutStack path)
+        , add "+ Grid" (AddLayoutGrid path)
+        , add "+ When" (AddLayoutWhen path)
+        , add "+ Text" (AddLayoutText path "New Text")
+        , add "+ Slot" (AddLayoutSlot path)
         ]
 
 
@@ -323,7 +368,7 @@ viewComponentList model components =
                             [ Html.Attributes.href
                                 (case model.selectedProject of
                                     Just p ->
-                                        Route.toString (Route.Repo p.pathWithNamespace (Route.ComponentsTab (Just c.name)))
+                                        Route.toString (Route.forProject p model.currentBranch (Route.ComponentsTab (Just c.name)))
 
                                     Nothing ->
                                         "#"
@@ -363,7 +408,12 @@ viewComponentList model components =
             )
         , div [ classes [ Tw.mt s3, Tw.pt s3, Tw.flex, Tw.flex_col, Tw.gap s2 ], Ui.divider ]
             [ Html.input
-                [ Ui.textInput
+                [ if Guard.writable model then
+                    Ui.textInput
+
+                  else
+                    Ui.textInputReadOnly
+                , Html.Attributes.readonly (not (Guard.writable model))
                 , value model.newComponentName
                 , onInput UpdateNewComponentName
                 , Html.Attributes.placeholder "New component"
@@ -374,13 +424,14 @@ viewComponentList model components =
             , div [ classes [ Tw.flex, Tw.gap s2 ] ]
                 [ Html.select
                     [ Ui.selectInput
+                    , Html.Attributes.disabled (not (Guard.writable model))
                     , Html.Events.onInput UpdateNewComponentTemplate
                     , value model.newComponentTemplate
                     , Html.Attributes.attribute "aria-label" "Start from"
                     , classes [ Tw.flex_1 ]
                     ]
                     (List.map (\t -> Html.option [ value t.id ] [ text t.label ]) Templates.componentTemplates)
-                , button [ Ui.btnNeutral, onClick CreateComponent ] [ text "Add" ]
+                , Ui.actionButton Ui.btnNeutral (Guard.action model CreateComponent) [ text "Add" ]
                 ]
             ]
         ]
@@ -431,8 +482,8 @@ viewComponentEditor model comp displayTokens =
                 , Ui.contextHelp Help.componentEditor
                 ]
             , div [ classes [ Tw.flex, Tw.gap s2 ] ]
-                [ button [ Ui.btnPrimary, onClick SaveComponent ] [ text "Save" ]
-                , button [ Ui.btnDanger, onClick (DeleteComponent comp.name) ] [ text "Delete" ]
+                [ Ui.actionButton Ui.btnPrimary (Guard.action model SaveComponent) [ text "Save" ]
+                , Ui.actionButton Ui.btnDanger (Guard.action model (DeleteComponent comp.name)) [ text "Delete" ]
                 ]
             ]
         , viewEditingContext model comp
@@ -445,6 +496,7 @@ viewComponentEditor model comp displayTokens =
             , onDraftChange = UpdateNewComponentVariant
             , onAdd = AddComponentVariant
             , onRemove = RemoveComponentVariant
+            , writable = Guard.writable model
             }
         , viewNameList
             { label = "States"
@@ -455,6 +507,7 @@ viewComponentEditor model comp displayTokens =
             , onDraftChange = UpdateNewComponentState
             , onAdd = AddComponentState
             , onRemove = RemoveComponentState
+            , writable = Guard.writable model
             }
         , viewNameList
             { label = "Slots"
@@ -465,6 +518,7 @@ viewComponentEditor model comp displayTokens =
             , onDraftChange = UpdateNewComponentSlot
             , onAdd = AddComponentSlot
             , onRemove = RemoveComponentSlot
+            , writable = Guard.writable model
             }
         , div [ classes [ Tw.mt s3, Tw.pt s3 ], Ui.divider ]
             [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.mb s2 ] ]
@@ -483,9 +537,9 @@ viewComponentEditor model comp displayTokens =
                         [ div [ Ui.muted, classes [ Tw.mb s2 ] ]
                             [ text "This component has nothing in it yet. Choose a root layout node:" ]
                         , div [ classes [ Tw.flex, Tw.gap s2 ] ]
-                            [ button [ Ui.btnNeutral, onClick (InitComponentLayout (Components.Stack { direction = "column", styles = Dict.empty, overrides = [] } [])) ] [ text "+ Stack" ]
-                            , button [ Ui.btnNeutral, onClick (InitComponentLayout (Components.Grid { columns = 1, styles = Dict.empty, overrides = [] } [])) ] [ text "+ Grid" ]
-                            , button [ Ui.btnNeutral, onClick (InitComponentLayout (Components.Element { isSlot = False, styles = Dict.empty, overrides = [] } "New Element")) ] [ text "+ Element" ]
+                            [ Ui.actionButton Ui.btnNeutral (Guard.action model (InitComponentLayout (Components.Stack { direction = "column", styles = Dict.empty, overrides = [] } []))) [ text "+ Stack" ]
+                            , Ui.actionButton Ui.btnNeutral (Guard.action model (InitComponentLayout (Components.Grid { columns = 1, styles = Dict.empty, overrides = [] } []))) [ text "+ Grid" ]
+                            , Ui.actionButton Ui.btnNeutral (Guard.action model (InitComponentLayout (Components.Element { isSlot = False, styles = Dict.empty, overrides = [] } "New Element"))) [ text "+ Element" ]
                             ]
                         ]
 
@@ -633,12 +687,13 @@ viewNameList :
     , suggestions : List String
     , names : List String
     , draft : String
+    , writable : Bool
     , onDraftChange : String -> Msg
     , onAdd : Msg
     , onRemove : String -> Msg
     }
     -> Html Msg
-viewNameList { label, helpTopic, suggestions, names, draft, onDraftChange, onAdd, onRemove } =
+viewNameList { label, helpTopic, suggestions, names, draft, writable, onDraftChange, onAdd, onRemove } =
     let
         datalistId =
             "suggestions-" ++ label
@@ -672,13 +727,17 @@ viewNameList { label, helpTopic, suggestions, names, draft, onDraftChange, onAdd
                                 ]
                             ]
                             [ text n
-                            , button
-                                [ onClick (onRemove n)
-                                , Html.Attributes.attribute "aria-label" ("Remove " ++ n)
-                                , Html.Attributes.title ("Remove " ++ n)
-                                , classes [ Tw.border_none, Tw.raw "bg-transparent", Tw.cursor_pointer, Tw.text_color (slate s400), hover [ Tw.text_color (slate s800) ] ]
-                                ]
-                                [ text "×" ]
+                            , if writable then
+                                button
+                                    [ onClick (onRemove n)
+                                    , Html.Attributes.attribute "aria-label" ("Remove " ++ n)
+                                    , Html.Attributes.title ("Remove " ++ n)
+                                    , classes [ Tw.border_none, Tw.raw "bg-transparent", Tw.cursor_pointer, Tw.text_color (slate s400), hover [ Tw.text_color (slate s800) ] ]
+                                    ]
+                                    [ text "×" ]
+
+                              else
+                                text ""
                             ]
                     )
                     names
@@ -691,7 +750,12 @@ viewNameList { label, helpTopic, suggestions, names, draft, onDraftChange, onAdd
                 (List.map (\n -> Html.option [ value n ] []) availableSuggestions)
         , div [ classes [ Tw.flex, Tw.gap s2 ] ]
             [ Html.input
-                ([ Ui.textInput
+                ([ if writable then
+                    Ui.textInput
+
+                   else
+                    Ui.textInputReadOnly
+                 , Html.Attributes.readonly (not writable)
                  , value draft
                  , onInput onDraftChange
                  , Html.Attributes.placeholder ("Add a " ++ String.toLower (String.dropRight 1 label))
@@ -705,7 +769,14 @@ viewNameList { label, helpTopic, suggestions, names, draft, onDraftChange, onAdd
                        )
                 )
                 []
-            , button [ Ui.btnSmall, onClick onAdd ] [ text "Add" ]
+            , Ui.actionButton Ui.btnSmall
+                (if writable then
+                    Ui.Do onAdd
+
+                 else
+                    Ui.Blocked ("Create a branch before adding a " ++ String.toLower (String.dropRight 1 label))
+                )
+                [ text "Add" ]
             ]
         ]
 
@@ -806,7 +877,11 @@ viewUsageContract model comp displayTokens =
                 (\index rule ->
                     div [ classes [ Tw.flex, Tw.items_center, Tw.justify_between, Tw.mb s1 ] ]
                         [ div [ Ui.mutedSmall ] [ text (ruleToString rule) ]
-                        , button [ Ui.btnQuiet, onClick (RemoveContractRule index) ] [ text "Remove" ]
+                        , if Guard.writable model then
+                            button [ Ui.btnQuiet, onClick (RemoveContractRule index) ] [ text "Remove" ]
+
+                          else
+                            text ""
                         ]
                 )
                 activeContract.rules
@@ -814,6 +889,7 @@ viewUsageContract model comp displayTokens =
         , div [ classes [ Tw.flex, Tw.flex_col, Tw.gap s2, Tw.mb s3 ] ]
             [ Html.select
                 [ Ui.selectInput
+                , Html.Attributes.disabled (not (Guard.writable model))
                 , value model.newContractRuleType
                 , onInput UpdateNewContractRuleType
                 , Html.Attributes.attribute "aria-label" "Rule type"
@@ -852,17 +928,22 @@ viewUsageContract model comp displayTokens =
 
                 _ ->
                     text ""
-            , button [ Ui.btnNeutral, onClick AddContractRule ] [ text "Add rule" ]
+            , Ui.actionButton Ui.btnNeutral (Guard.action model AddContractRule) [ text "Add rule" ]
             ]
         , div [ classes [ Tw.flex, Tw.gap s2 ] ]
-            ((if List.member comp.name model.existingComponents then
-                [ button [ Ui.btnPrimary, onClick SaveContract ] [ text "Save contract" ] ]
+            ([ Ui.actionButton Ui.btnPrimary
+                (if not (List.member comp.name model.existingComponents) then
+                    -- Reported ahead of the branch, because it is the more
+                    -- specific of the two and fixing it is a different job.
+                    Ui.Blocked "Save the component first before saving contracts"
 
-              else
-                [ button [ Ui.btnPrimary, Html.Attributes.disabled True, Html.Attributes.title "Save the component first before saving contracts" ] [ text "Save contract" ] ]
-             )
+                 else
+                    Guard.action model SaveContract
+                )
+                [ text "Save contract" ]
+             ]
                 ++ (if List.member comp.name model.existingContracts then
-                        [ button [ Ui.btnDanger, onClick (DeleteContract comp.name) ] [ text "Delete contract" ] ]
+                        [ Ui.actionButton Ui.btnDanger (Guard.action model (DeleteContract comp.name)) [ text "Delete contract" ] ]
 
                     else
                         []
@@ -885,7 +966,12 @@ viewRuleField : Model -> String -> String -> String -> String -> List (Html.Attr
 viewRuleField model key label placeholder hint extraAttrs =
     div []
         [ Html.input
-            ([ Ui.textInput
+            ([ if Guard.writable model then
+                Ui.textInput
+
+               else
+                Ui.textInputReadOnly
+             , Html.Attributes.readonly (not (Guard.writable model))
              , value (Dict.get key model.newContractRuleFields |> Maybe.withDefault "")
              , onInput (UpdateNewContractRuleField key)
              , Html.Attributes.placeholder placeholder

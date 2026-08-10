@@ -5,6 +5,7 @@ import Browser
 import Browser.Navigation as Nav
 import Effect
 import GitLab.Projects exposing (Project)
+import Guard
 import Help
 import Html exposing (Html, a, button, div, h2, img, input, li, span, text, ul)
 import Html.Attributes exposing (href, src)
@@ -18,7 +19,7 @@ import Ports
 import Route
 import Tailwind as Tw exposing (classes)
 import Tailwind.Breakpoints exposing (hover)
-import Tailwind.Theme exposing (red, s0, s0_dot_5, s14, s2, s200, s3, s4, s50, s6, s700, s8, s900, slate, white)
+import Tailwind.Theme exposing (s0, s0_dot_5, s14, s2, s200, s3, s4, s50, s6, s700, s8, s900, slate, white)
 import Types exposing (..)
 import Ui
 import Update exposing (update)
@@ -158,6 +159,7 @@ view model =
             [ viewAppBar model
             , div [ Ui.page ]
                 [ viewError model
+                , viewReadOnlyBanner model
                 , case model.startupStatus of
                     Booting ->
                         div [ classes [ Tw.py s14, Tw.flex, Tw.justify_center ] ]
@@ -232,16 +234,77 @@ viewStatus status =
             text ""
 
 
+{-| Repository, branch, and whether you can edit here.
+
+The branch belongs in the bar rather than only on the Branches tab because it
+now decides whether the rest of the app is editable at all. Somewhere in the
+chrome has to answer "why is this greyed out" without navigating away from the
+thing that is greyed out.
+
+Creating a branch is not here — it needs a text field, the bar has no room for
+one, and the read-only banner is where someone is standing when they find out
+they need it.
+
+-}
 viewRepoBadge : Model -> Html Msg
 viewRepoBadge model =
     case model.selectedProject of
         Just project ->
             div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2 ] ]
                 [ span [ classes [ Tw.text_sm, Tw.font_medium ] ] [ text project.pathWithNamespace ]
+                , case model.branches of
+                    Just branches ->
+                        Ui.branchPicker
+                            { label = "Branch", current = model.currentBranch, onSwitch = SwitchBranch }
+                            branches
+
+                    Nothing ->
+                        text ""
+                , case Guard.readOnly model of
+                    Just _ ->
+                        Ui.pill Ui.Neutral "read-only"
+
+                    Nothing ->
+                        text ""
                 , button [ Ui.btnNeutral, onClick UnselectProject ] [ text "Change" ]
                 ]
 
         Nothing ->
+            text ""
+
+
+{-| Why the editors are inert, and the way out, in the same box.
+
+It sits above every tab rather than on the Branches tab, because the moment a
+user needs it is the moment they tried to type somewhere else. The form is the
+same `newBranchName` / `CreateBranch` pair the Branches tab uses, so there is no
+new state and the two cannot disagree.
+
+-}
+viewReadOnlyBanner : Model -> Html Msg
+viewReadOnlyBanner model =
+    case ( model.selectedProject, Guard.readOnly model ) of
+        ( Just _, Just reason ) ->
+            Ui.notice Ui.Neutral
+                [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.raw "flex-wrap" ] ]
+                    [ span [] [ text (Guard.describe reason) ]
+                    , Ui.contextHelp Help.readOnlyBranch
+                    ]
+                , div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.mt s2, Tw.raw "flex-wrap" ] ]
+                    [ input
+                        [ Ui.textInput
+                        , Html.Attributes.placeholder "New branch, e.g. feature/new-colors"
+                        , Html.Attributes.attribute "aria-label" "New branch name"
+                        , Html.Attributes.spellcheck False
+                        , Html.Attributes.value model.newBranchName
+                        , onInput UpdateNewBranchName
+                        ]
+                        []
+                    , button [ Ui.btnPrimary, onClick CreateBranch ] [ text "Create branch" ]
+                    ]
+                ]
+
+        _ ->
             text ""
 
 
@@ -273,19 +336,7 @@ viewError : Model -> Html Msg
 viewError model =
     case model.error of
         Just err ->
-            div
-                [ classes
-                    [ Tw.mb s4
-                    , Tw.p s3
-                    , Tw.rounded_md
-                    , Tw.border
-                    , Tw.border_color (red s200)
-                    , Tw.bg_color (red s50)
-                    , Tw.text_sm
-                    , Tw.text_color (red s700)
-                    ]
-                ]
-                [ text err ]
+            Ui.notice Ui.Negative [ text err ]
 
         Nothing ->
             text ""
@@ -327,8 +378,8 @@ viewWorkspace model =
 {-| The signed-out and no-repository screens are the only surfaces a user
 passes through exactly once, which makes them the right place for the two
 things that are true of the whole app and fit nowhere inside it: what order
-the tabs go in, and that editing without branching first commits to the
-default branch. Neither fits in a tab's one-line lede.
+the tabs go in, and that editing anything at all requires a branch of your own.
+Neither fits in a tab's one-line lede.
 -}
 viewOrderOfOperations : Html Msg
 viewOrderOfOperations =
@@ -345,9 +396,9 @@ viewOrderOfOperations =
             , text " writes the tokens out for other projects."
             ]
         , div []
-            [ text "There's no backend and no draft state: every save is a commit. Start on "
+            [ text "There's no backend and no draft state: every save is a commit. So the default branch is read-only here, and so is any protected one — you open a repository to read it. Create a branch first and the editors come alive; everything you then save is a commit on that branch, ready to open as a merge request from "
             , span [ classes [ Tw.font_medium ] ] [ text "Branches & Reviews" ]
-            , text " and create a branch first, or your first save lands on the default branch."
+            , text "."
             ]
         ]
 
@@ -387,7 +438,7 @@ viewProjectPicker search projects =
                 (\p ->
                     li []
                         [ a
-                            [ href (Route.toString (Route.Repo p.pathWithNamespace Route.TokensTab))
+                            [ href (Route.toString (Route.Repo { path = p.pathWithNamespace, branch = Nothing, tab = Route.TokensTab }))
                             , classes
                                 [ Tw.w_full
                                 , Tw.block
@@ -447,8 +498,13 @@ viewTabs model =
                     tabUrl =
                         case model.selectedProject of
                             Just p ->
+                                -- Carrying the branch matters here more than
+                                -- anywhere: without it every tab click would
+                                -- navigate you off your branch and back onto
+                                -- the read-only default one.
                                 Route.toString
-                                    (Route.Repo p.pathWithNamespace
+                                    (Route.forProject p
+                                        model.currentBranch
                                         (Route.tabRouteFor tabId model.selectedComponentName model.selectedScreenName)
                                     )
 
@@ -493,7 +549,10 @@ viewRepositoryFiles : Model -> Project -> Html Msg
 viewRepositoryFiles model project =
     Html.details [ classes [ Tw.mt s4, Tw.text_sm ] ]
         [ Html.summary [ Ui.muted, classes [ Tw.cursor_pointer ] ]
-            [ text ("Files on " ++ project.defaultBranch) ]
+            -- The branch you are on, not the project's default one: this
+            -- listing is fetched at the current ref, and labelling it "main"
+            -- after a switch described the wrong branch's files.
+            [ text ("Files on " ++ Maybe.withDefault project.defaultBranch model.currentBranch) ]
         , case model.repositoryTree of
             Nothing ->
                 div [ Ui.muted, classes [ Tw.mt s2 ] ] [ text "Loading..." ]

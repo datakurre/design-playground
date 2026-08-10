@@ -14,6 +14,7 @@ because it was the better one anyway.
 -}
 
 import Dict
+import Guard
 import Help
 import Html exposing (Html, button, div, h3, li, span, text)
 import Html.Attributes exposing (style, value)
@@ -67,6 +68,7 @@ viewTokenStudio model =
                     { newPartName = model.newCompositePropertyName
                     , activeTheme = activeThemeObj
                     , displayTokens = displayTokens
+                    , writable = Guard.writable model
                     }
             in
             div [ Ui.panel ]
@@ -101,7 +103,12 @@ viewToolbar model =
                 [ Ui.themePicker (List.map .name model.themes) model.activeThemeName SelectTheme
                 , Ui.contextHelp Help.themes
                 , Html.input
-                    [ Ui.textInput
+                    [ if Guard.writable model then
+                        Ui.textInput
+
+                      else
+                        Ui.textInputReadOnly
+                    , Html.Attributes.readonly (not (Guard.writable model))
                     , value model.newThemeName
                     , onInput UpdateNewThemeName
                     , Html.Attributes.placeholder "New theme name"
@@ -109,21 +116,23 @@ viewToolbar model =
                     []
                 , Html.select
                     [ Ui.selectInput
+                    , Html.Attributes.disabled (not (Guard.writable model))
                     , onInput UpdateNewThemeTemplate
                     , value model.newThemeTemplate
                     , Html.Attributes.attribute "aria-label" "Start from"
                     ]
                     (List.map (\t -> Html.option [ value t.id ] [ text t.label ]) Templates.themeTemplates)
-                , button [ Ui.btnNeutral, onClick CreateTheme ] [ text "Add theme" ]
+                , Ui.actionButton Ui.btnNeutral (Guard.action model CreateTheme) [ text "Add theme" ]
                 , if model.activeThemeName == Nothing then
-                    button [ Ui.btnNeutral, onClick ApplyStarterTokenScale ] [ text "Add starter scale" ]
+                    Ui.actionButton Ui.btnNeutral (Guard.action model ApplyStarterTokenScale) [ text "Add starter scale" ]
 
                   else
                     text ""
                 ]
             ]
         , div [ classes [ Tw.flex, Tw.gap s2 ] ]
-            [ button [ Ui.btnPrimary, onClick SaveTokens ]
+            [ Ui.actionButton Ui.btnPrimary
+                (Guard.action model SaveTokens)
                 [ text
                     (if model.activeThemeName == Nothing then
                         "Save tokens"
@@ -133,7 +142,8 @@ viewToolbar model =
                     )
                 ]
             , if model.activeThemeName /= Nothing then
-                button [ Ui.btnDanger, onClick (DeleteTheme (Maybe.withDefault "" model.activeThemeName)) ]
+                Ui.actionButton Ui.btnDanger
+                    (Guard.action model (DeleteTheme (Maybe.withDefault "" model.activeThemeName)))
                     [ text "Delete theme" ]
 
               else
@@ -167,6 +177,12 @@ type alias RowContext =
     { newPartName : String
     , activeTheme : Maybe Theme
     , displayTokens : List Tokens.FlatToken
+
+    -- On a read-only branch every control in a row goes inert together, and
+    -- this is the flag that does it. It rides in the context rather than being
+    -- read from the model per row because `viewTokenList` is the tested entry
+    -- point and it takes this, not a `Model`.
+    , writable : Bool
     }
 
 
@@ -355,7 +371,12 @@ viewNewToken model =
             ]
         , div [ classes [ Tw.flex, Tw.gap s2, Tw.items_center, Tw.flex_wrap ] ]
             [ Html.input
-                [ Ui.textInput
+                [ if Guard.writable model then
+                    Ui.textInput
+
+                  else
+                    Ui.textInputReadOnly
+                , Html.Attributes.readonly (not (Guard.writable model))
                 , value model.newTokenPath
                 , onInput UpdateNewTokenPath
                 , Html.Attributes.placeholder "Name, e.g. color.primary"
@@ -366,6 +387,7 @@ viewNewToken model =
                 []
             , Html.select
                 [ Ui.selectInput
+                , Html.Attributes.disabled (not (Guard.writable model))
                 , onInput UpdateNewTokenType
                 , Html.Attributes.attribute "aria-label" "Token type"
                 ]
@@ -374,7 +396,12 @@ viewNewToken model =
                 , Html.option [ value "typography", Html.Attributes.selected (model.newTokenType == "typography") ] [ text "Typography" ]
                 ]
             , Html.input
-                [ Ui.textInput
+                [ if Guard.writable model then
+                    Ui.textInput
+
+                  else
+                    Ui.textInputReadOnly
+                , Html.Attributes.readonly (not (Guard.writable model))
                 , value model.newTokenValue
                 , onInput UpdateNewTokenValue
                 , Html.Attributes.placeholder "Value, or {another.token}"
@@ -384,21 +411,27 @@ viewNewToken model =
                 ]
                 []
             , if model.newTokenType == "color" then
-                viewColorWell model.newTokenValue UpdateNewTokenValue
+                viewColorWell (Guard.writable model) model.newTokenValue UpdateNewTokenValue
 
               else
                 text ""
-            , button [ Ui.btnNeutral, onClick CreateToken ] [ text "Add" ]
+            , Ui.actionButton Ui.btnNeutral (Guard.action model CreateToken) [ text "Add" ]
             ]
         ]
 
 
 {-| The native colour input, sized to match the text inputs beside it.
+
+`readonly` has no effect on `input type="color"`, so on a read-only branch this
+one really does have to be `disabled` — the exception to the rule the other
+fields follow.
+
 -}
-viewColorWell : String -> (String -> Msg) -> Html Msg
-viewColorWell currentValue toMsg =
+viewColorWell : Bool -> String -> (String -> Msg) -> Html Msg
+viewColorWell writable currentValue toMsg =
     Html.input
         [ Html.Attributes.type_ "color"
+        , Html.Attributes.disabled (not writable)
         , Html.Attributes.attribute "aria-label" "Pick a colour"
         , value
             (if String.startsWith "#" currentValue then
@@ -469,7 +502,12 @@ viewTokenEditor context path token =
                           else
                             text ""
                         , Html.input
-                            [ Ui.textInput
+                            [ if context.writable then
+                                Ui.textInput
+
+                              else
+                                Ui.textInputReadOnly
+                            , Html.Attributes.readonly (not context.writable)
                             , value s
                             , onInput (UpdateToken path)
                             , Html.Attributes.attribute "aria-label" ("Value of " ++ pathString)
@@ -479,7 +517,7 @@ viewTokenEditor context path token =
                             ]
                             []
                         , if token.type_ == "color" then
-                            viewColorWell resolvedColorStr (UpdateToken path)
+                            viewColorWell context.writable resolvedColorStr (UpdateToken path)
 
                           else
                             text ""
@@ -511,20 +549,31 @@ viewTokenEditor context path token =
 
               else
                 text ""
-            , button
-                [ Ui.iconButton
-                , onClick (DeleteToken path)
-                , Html.Attributes.attribute "aria-label" ("Delete " ++ pathString)
-                , Html.Attributes.title ("Delete " ++ pathString)
-                ]
-                [ text "×" ]
+            , if context.writable then
+                button
+                    [ Ui.iconButton
+                    , onClick (DeleteToken path)
+                    , Html.Attributes.attribute "aria-label" ("Delete " ++ pathString)
+                    , Html.Attributes.title ("Delete " ++ pathString)
+                    ]
+                    [ text "×" ]
+
+              else
+                -- A row control with nothing behind it is worse than no
+                -- control: the quiet ones are dropped rather than greyed, and
+                -- the banner above says why they are gone.
+                text ""
             ]
         , case token.value of
             Tokens.StringValue _ ->
-                div [ classes [ Tw.ml s48, Tw.mt s1 ] ]
-                    [ button [ Ui.btnQuiet, onClick (AddCompositeProperty path "newProperty") ]
-                        [ text "Split into parts" ]
-                    ]
+                if context.writable then
+                    div [ classes [ Tw.ml s48, Tw.mt s1 ] ]
+                        [ button [ Ui.btnQuiet, onClick (AddCompositeProperty path "newProperty") ]
+                            [ text "Split into parts" ]
+                        ]
+
+                else
+                    text ""
 
             Tokens.CompositeValue dict ->
                 div [ Ui.panelSunken, classes [ Tw.ml s48, Tw.mt s1 ] ]
@@ -534,7 +583,12 @@ viewTokenEditor context path token =
                                 div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.mb s1 ] ]
                                     [ div [ Ui.fieldLabel, classes [ Tw.w s32 ] ] [ text prop ]
                                     , Html.input
-                                        [ Ui.textInput
+                                        [ if context.writable then
+                                            Ui.textInput
+
+                                          else
+                                            Ui.textInputReadOnly
+                                        , Html.Attributes.readonly (not context.writable)
                                         , value val
                                         , onInput (UpdateCompositeToken path prop)
                                         , Html.Attributes.attribute "aria-label" (prop ++ " of " ++ pathString)
@@ -543,32 +597,41 @@ viewTokenEditor context path token =
                                         , classes [ Tw.flex_1 ]
                                         ]
                                         []
-                                    , button
-                                        [ Ui.iconButton
-                                        , onClick (DeleteCompositeProperty path prop)
-                                        , Html.Attributes.attribute "aria-label" ("Remove " ++ prop)
-                                        , Html.Attributes.title ("Remove " ++ prop)
-                                        ]
-                                        [ text "×" ]
+                                    , if context.writable then
+                                        button
+                                            [ Ui.iconButton
+                                            , onClick (DeleteCompositeProperty path prop)
+                                            , Html.Attributes.attribute "aria-label" ("Remove " ++ prop)
+                                            , Html.Attributes.title ("Remove " ++ prop)
+                                            ]
+                                            [ text "×" ]
+
+                                      else
+                                        text ""
                                     ]
                             )
                      )
-                        ++ [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.mt s2, Tw.pt s2 ], Ui.divider ]
-                                [ Html.input
-                                    [ Ui.textInput
-                                    , Html.Attributes.placeholder "Part name"
-                                    , Html.Attributes.attribute "aria-label" "New part name"
-                                    , value context.newPartName
-                                    , onInput UpdateNewCompositePropertyName
-                                    , Html.Attributes.spellcheck False
-                                    , classes [ Tw.w s32 ]
+                        ++ (if context.writable then
+                                [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.mt s2, Tw.pt s2 ], Ui.divider ]
+                                    [ Html.input
+                                        [ Ui.textInput
+                                        , Html.Attributes.placeholder "Part name"
+                                        , Html.Attributes.attribute "aria-label" "New part name"
+                                        , value context.newPartName
+                                        , onInput UpdateNewCompositePropertyName
+                                        , Html.Attributes.spellcheck False
+                                        , classes [ Tw.w s32 ]
+                                        ]
+                                        []
+                                    , button [ Ui.btnSmall, onClick (AddCompositeProperty path context.newPartName) ]
+                                        [ text "Add part" ]
+                                    , button [ Ui.btnDanger, onClick (RevertToSingleValue path) ]
+                                        [ text "Revert to single value" ]
                                     ]
-                                    []
-                                , button [ Ui.btnSmall, onClick (AddCompositeProperty path context.newPartName) ]
-                                    [ text "Add part" ]
-                                , button [ Ui.btnDanger, onClick (RevertToSingleValue path) ]
-                                    [ text "Revert to single value" ]
                                 ]
-                           ]
+
+                            else
+                                []
+                           )
                     )
         ]

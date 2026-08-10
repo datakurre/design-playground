@@ -47,6 +47,10 @@ and leaving every design decision as a Git object that CI and agents can act on.
 - **Usage contracts** — attach machine-checkable rules to a component. Four rule
   types are supported: allowed token groups, no hardcoded values, spacing on a
   named scale, and a minimum contrast ratio between two properties.
+- **Branch-first editing** — the repository's default branch is read-only in the
+  app, and so is any branch GitLab reports as protected. Open a repository and
+  you can read all of it; create a branch and the editors come alive. There is no
+  draft state to lose, because every save is a commit on the branch you made.
 - **Git workflows** — create branches, commit your work, and open merge requests
   without leaving the app. A "Contract check" panel validates every component
   against its contracts and lists the violations before you open the request.
@@ -54,8 +58,9 @@ and leaving every design decision as a Git object that CI and agents can act on.
   properties and a Tailwind config, committed to the branch you're on. Tokens
   only; components and screens are not exported.
 - **Shareable links** — every view has its own URL
-  (`#/namespace/project/components/Button`), so a link to a specific component
-  or screen survives a reload and can be pasted into a review.
+  (`#/namespace/project/components/Button?branch=feature/new-colors`), so a link
+  to a specific component or screen on a specific branch survives a reload and
+  can be pasted into a review.
 - **In-app help** — every tab and every major form carries a short explanation of
   what it does, and what it doesn't.
 
@@ -67,10 +72,14 @@ The app is hosted at
 1. Sign in with GitLab. Authentication is OAuth PKCE against `gitlab.com` with
    the `api` scope — there is no server in between, and the access token is
    cached in your browser's `localStorage`.
-2. Pick a project. This is the repository your design system lives in.
-3. Edit tokens, themes, components, screens, and contracts.
-4. Switch to Git Workflows to pick a branch, review the contract check, commit,
-   and open a merge request.
+2. Pick a project. This is the repository your design system lives in. You land
+   on its default branch, which is read-only — you can look at everything.
+3. Create a branch, from the banner across the top of any tab or from Branches &
+   Reviews. The editors are inert until you do.
+4. Edit tokens, themes, components, screens, and contracts. Each Save is a commit
+   on your branch.
+5. Switch to Branches & Reviews to review the contract check and open a merge
+   request.
 
 If you run your own copy, note that the OAuth client ID and redirect URI are
 compiled into `src/Auth.elm` and point at the hosted deployment above. You will

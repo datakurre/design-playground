@@ -144,9 +144,16 @@ Where things live, so you don't have to guess:
 - `src/Update.elm` — the single `update` loop (~2000 lines; the Refactor Agent's
   standing assignment)
 - `src/Effect.elm` — what `update` asks the runtime to do, as inspectable data
+- `src/Guard.elm` — whether the current branch may be written to, and which
+  `Msg`es count as writing. The default branch and any GitLab-protected branch
+  are read-only; `update` refuses every mutating message on one, and the pages
+  render their controls disabled to match
 - `src/Types.elm` — `Model`, `Msg`, `Tab`
-- `src/Route.elm` — fragment-based URL routing (`#/namespace/project/tab/item`);
-  fragments, not paths, because GitHub Pages has no history fallback
+- `src/Route.elm` — fragment-based URL routing
+  (`#/namespace/project/tab/item?branch=feature%2Fx`); fragments, not paths,
+  because GitHub Pages has no history fallback. The branch is a query parameter
+  inside the fragment, split off before the segments are, because branch names
+  contain slashes
 - `src/Ui.elm` — shared chrome: buttons, panels, inputs, pills, context-help widgets
 - `src/Help.elm` — the text of every in-app context-help topic
 
@@ -215,6 +222,12 @@ The rules that keep it that way:
    about the thing being rendered rather than about how a model got that way.
 6. **Every new `Msg` branch ships a test** asserting both the model change and
    the resulting `Effect`.
+7. **Every new `Msg` is classified in `Guard.isMutating`,** which the compiler
+   enforces: it is an exhaustive case with no catch-all, and adding `_ -> False`
+   would silently exempt every future message from the read-only rule. A message
+   is mutating if running it can change the bytes a later save would write, or
+   commits itself. The write paths take their branch from
+   `Guard.writableBranch`, never from `model.currentBranch` directly.
 
 ## Skills
 

@@ -18,8 +18,10 @@ than better.
 import Browser
 import Effect exposing (Effect)
 import Expect
+import GitLab.Branches
 import GitLab.Files
 import GitLab.Request
+import Guard
 import Http
 import Json.Decode as Decode
 import Json.Encode as Encode
@@ -39,7 +41,7 @@ suite =
         [ describe "saving decides create vs update from what the repository already has"
             [ test "a component the repository does not have is created" <|
                 \_ ->
-                    signedIn
+                    onBranch
                         |> withComponent "Button"
                         |> (\m -> { m | existingComponents = [] })
                         |> save
@@ -47,7 +49,7 @@ suite =
                         |> Expect.equal (Ok "create")
             , test "a component the repository already has is updated" <|
                 \_ ->
-                    signedIn
+                    onBranch
                         |> withComponent "Button"
                         |> (\m -> { m | existingComponents = [ "Button" ] })
                         |> save
@@ -55,7 +57,7 @@ suite =
                         |> Expect.equal (Ok "update")
             , test "it writes the component's own file path" <|
                 \_ ->
-                    signedIn
+                    onBranch
                         |> withComponent "Button"
                         |> save
                         |> commitField (Decode.at [ "actions", "0", "file_path" ] Decode.string)
@@ -64,30 +66,46 @@ suite =
         , describe "commits target the branch you are on"
             [ test "the current branch, not the project's default" <|
                 \_ ->
-                    -- Five separate `Maybe.withDefault project.defaultBranch
-                    -- model.currentBranch` expressions decide this. One going
-                    -- stale would be invisible.
-                    signedIn
+                    onBranch
                         |> withComponent "Button"
-                        |> (\m -> { m | currentBranch = Just "feature-x" })
                         |> save
                         |> commitField (Decode.field "branch" Decode.string)
                         |> Expect.equal (Ok "feature-x")
-            , test "falls back to the default branch when none is chosen" <|
+            , test "the branch the save was clicked on, even if you have since moved" <|
                 \_ ->
-                    signedIn
-                        |> withComponent "Button"
-                        |> (\m -> { m | currentBranch = Nothing })
-                        |> save
-                        |> commitField (Decode.field "branch" Decode.string)
-                        |> Expect.equal (Ok "main")
+                    -- Validation is a round trip through ajv in JavaScript, and
+                    -- the branch picker stays live throughout it. Resolving the
+                    -- branch when the result comes back committed one branch's
+                    -- edit onto another.
+                    let
+                        ( pending, _ ) =
+                            Update.update SaveComponent (withComponent "Button" onBranch)
+
+                        ( _, effect ) =
+                            Update.update
+                                (GotSchemaValidationResult { valid = True, errors = [], context = Encode.null })
+                                { pending | currentBranch = Just "release/1.0" }
+                    in
+                    commitField (Decode.field "branch" Decode.string) effect
+                        |> Expect.equal (Ok "feature-x")
+            , test "refuses to save when no branch is chosen, and sends nothing" <|
+                \_ ->
+                    -- This used to fall back to project.defaultBranch, which is
+                    -- to say: not choosing a branch committed to main. The
+                    -- fallback is gone, and its absence is the whole feature.
+                    let
+                        ( model, effect ) =
+                            Update.update SaveComponent (withComponent "Button" signedIn)
+                    in
+                    ( Maybe.map Tuple.first model.commitStatus, Effect.requests effect |> List.length )
+                        |> Expect.equal ( Just Failed, 0 )
             ]
         , describe "saving validates before it commits"
             [ test "SaveComponent asks for validation and issues no request yet" <|
                 \_ ->
                     let
                         ( _, effect ) =
-                            Update.update SaveComponent (withComponent "Button" signedIn)
+                            Update.update SaveComponent (withComponent "Button" onBranch)
                     in
                     ( Effect.requests effect |> List.length
                     , Effect.toList effect |> List.map isValidateSchema
@@ -97,7 +115,7 @@ suite =
                 \_ ->
                     let
                         ( pending, _ ) =
-                            Update.update SaveComponent (withComponent "Button" signedIn)
+                            Update.update SaveComponent (withComponent "Button" onBranch)
 
                         ( model, effect ) =
                             Update.update
@@ -113,7 +131,7 @@ suite =
                 \_ ->
                     let
                         ( pending, _ ) =
-                            Update.update SaveComponent (withComponent "Button" signedIn)
+                            Update.update SaveComponent (withComponent "Button" onBranch)
 
                         ( model, _ ) =
                             Update.update
@@ -159,7 +177,18 @@ suite =
                         |> Expect.equal [ "https://gitlab.com/api/v4/projects/acme%2Fdesign" ]
             ]
         , describe "switching branches"
-            [ test "refetches everything at the new ref" <|
+            [ test "is a navigation, so the address bar and the model cannot disagree" <|
+                \_ ->
+                    -- Doing the work here instead would leave a branch change
+                    -- invisible to the URL, un-shareable, and lost on reload —
+                    -- which now means silently back on a read-only branch.
+                    let
+                        ( _, effect ) =
+                            Update.update (SwitchBranch "feature-x") signedIn
+                    in
+                    Effect.toList effect
+                        |> Expect.equal [ Effect.PushUrl "#/acme/design/tokens?branch=feature-x" ]
+            , test "arriving on the new branch refetches everything at that ref" <|
                 \_ ->
                     -- Not project.defaultBranch. The Msg comment in Types
                     -- records that this exact bug already happened once:
@@ -167,23 +196,92 @@ suite =
                     -- under the new branch's name.
                     let
                         ( _, effect ) =
-                            Update.update (SwitchBranch "feature-x") signedIn
+                            Update.update (UrlChanged (url "#/acme/design/tokens?branch=feature-x")) signedIn
                     in
                     Effect.requests effect
                         |> List.map .url
-                        |> List.filter (\u -> not (String.contains "feature-x" u))
+                        |> List.filter (\u -> not (String.contains "ref=feature-x" u))
+                        |> Expect.equal []
+            , test "and refetches the contracts too, not five of the six files" <|
+                \_ ->
+                    -- Switching used to leave contracts.json alone, so the
+                    -- contracts panel kept showing the previous branch's rules.
+                    let
+                        ( _, effect ) =
+                            Update.update (UrlChanged (url "#/acme/design/tokens?branch=feature-x")) signedIn
+                    in
+                    Effect.requests effect
+                        |> List.length
+                        |> Expect.equal 6
+            , test "a branch name with a slash in it is escaped in the ref, not truncated" <|
+                \_ ->
+                    let
+                        ( _, effect ) =
+                            Update.update (UrlChanged (url "#/acme/design/tokens?branch=feature%2Fx")) signedIn
+                    in
+                    Effect.requests effect
+                        |> List.map .url
+                        |> List.filter (\u -> not (String.contains "ref=feature%2Fx" u))
                         |> Expect.equal []
             , test "forgets the branch you were on before" <|
                 \_ ->
                     let
                         ( model, _ ) =
-                            Update.update (SwitchBranch "feature-x")
+                            Update.update (UrlChanged (url "#/acme/design/tokens?branch=feature-x"))
                                 (withComponent "Button" signedIn
                                     |> (\m -> { m | existingComponents = [ "Button" ], tokensFileExists = True })
                                 )
                     in
                     ( model.components, model.existingComponents, model.tokensFileExists )
                         |> Expect.equal ( Nothing, [], False )
+            , test "changing tabs on a branch refetches nothing" <|
+                \_ ->
+                    -- Every tab click runs through applyRoute, so without the
+                    -- "is this actually a change?" guard in applyBranch each one
+                    -- would forget the repository and refetch all six files.
+                    -- That would present as the app being slow, not as a bug.
+                    let
+                        ( _, effect ) =
+                            Update.update (UrlChanged (url "#/acme/design/components?branch=feature-x")) onBranch
+                    in
+                    ( Effect.requests effect |> List.length, Update.update (UrlChanged (url "#/acme/design/components?branch=feature-x")) onBranch |> Tuple.first |> .currentBranch )
+                        |> Expect.equal ( 0, Just "feature-x" )
+            , test "a URL with no branch means the default branch, and is read-only" <|
+                \_ ->
+                    let
+                        ( model, _ ) =
+                            Update.update (UrlChanged (url "#/acme/design/tokens")) onBranch
+                    in
+                    ( model.currentBranch, Guard.readOnly model )
+                        |> Expect.equal ( Just "main", Just (Guard.DefaultBranch "main") )
+            ]
+        , describe "creating a branch takes your work with you"
+            [ test "moves onto the new branch and says so in the URL" <|
+                \_ ->
+                    let
+                        ( model, effect ) =
+                            Update.update (GotCreateBranchResult (Ok featureBranch))
+                                { signedIn | currentBranch = Just "main", newBranchName = "feature-x" }
+                    in
+                    ( model.currentBranch, Effect.toList effect )
+                        |> Expect.equal
+                            ( Just "feature-x", [ Effect.PushUrl "#/acme/design/tokens?branch=feature-x" ] )
+            , test "and the navigation that follows refetches nothing, so edits in hand survive" <|
+                \_ ->
+                    -- The asymmetry with SwitchBranch is deliberate: the model
+                    -- moves branch first, so applyBranch sees no change. Edits
+                    -- made while browsing the default branch come along to the
+                    -- branch just cut for them.
+                    let
+                        ( created, _ ) =
+                            Update.update (GotCreateBranchResult (Ok featureBranch))
+                                (withComponent "Button" { signedIn | currentBranch = Just "main" })
+
+                        ( arrived, effect ) =
+                            Update.update (UrlChanged (url "#/acme/design/tokens?branch=feature-x")) created
+                    in
+                    ( Effect.requests effect |> List.length, Maybe.map (List.map .name) arrived.components )
+                        |> Expect.equal ( 0, Just [ "Button" ] )
             ]
         , describe "listing the components directory"
             [ test "fetches every component and contract at the ref it was listed from" <|
@@ -241,7 +339,7 @@ suite =
                     -- branch takes three steps to fix. Collapsing them into one
                     -- message would lose that.
                     let
-                        ( onBranch, _ ) =
+                        ( onDefault, _ ) =
                             Update.update CreateMergeRequest
                                 { signedIn | currentBranch = Just "main", mrTitle = "Title" }
 
@@ -249,7 +347,7 @@ suite =
                             Update.update CreateMergeRequest
                                 { signedIn | currentBranch = Just "feature-x", mrTitle = "  " }
                     in
-                    ( Maybe.map Tuple.second untitled.commitStatus /= Maybe.map Tuple.second onBranch.commitStatus
+                    ( Maybe.map Tuple.second untitled.commitStatus /= Maybe.map Tuple.second onDefault.commitStatus
                     , Maybe.map Tuple.first untitled.commitStatus
                     , Effect.requests effect |> List.length
                     )
@@ -299,7 +397,7 @@ suite =
                     let
                         ( _, effect ) =
                             Update.update (DeleteComponent "Button")
-                                { signedIn
+                                { onBranch
                                     | existingComponents = [ "Button" ]
                                     , components = Just [ { name = "Button", description = Nothing, variants = [], slots = [], states = [], layout = Nothing } ]
                                     , existingContracts = [ "Button" ]
@@ -364,6 +462,16 @@ suite =
                                 }
                     in
                     model.startupStatus |> Expect.equal Types.Ready
+            , test "and going home does not put it back, so the landing page is not a throbber" <|
+                \_ ->
+                    -- Home clears the project state, and "clear" used to include
+                    -- startupStatus. Nothing was in flight to end the loading it
+                    -- restarted, so #/ showed the boot throbber forever.
+                    let
+                        ( model, _ ) =
+                            Update.update (UrlChanged (url "#/")) { signedIn | startupStatus = Types.Ready }
+                    in
+                    model.startupStatus |> Expect.equal Types.Ready
             , test "an expired token ends loading rather than spinning forever" <|
                 \_ ->
                     let
@@ -392,7 +500,7 @@ suite =
                     let
                         ( model, effect ) =
                             Update.update CreateToken
-                                { signedIn | tokens = Just [], newTokenPath = "  " }
+                                { onBranch | tokens = Just [], newTokenPath = "  " }
                     in
                     ( Maybe.map Tuple.first model.commitStatus
                     , Effect.requests effect |> List.length
@@ -403,7 +511,7 @@ suite =
                     let
                         ( model, _ ) =
                             Update.update CreateToken
-                                { signedIn | tokens = Nothing, newTokenPath = "color.brand.500" }
+                                { onBranch | tokens = Nothing, newTokenPath = "color.brand.500" }
                     in
                     model.commitStatus
                         |> Expect.equal (Just ( Working, "Tokens are still loading" ))
@@ -411,14 +519,100 @@ suite =
                 \_ ->
                     let
                         ( model, effect ) =
-                            Update.update RunExportPipeline { signedIn | exportTargets = [] }
+                            Update.update RunExportPipeline { onBranch | exportTargets = [] }
                     in
                     ( Maybe.map Tuple.first model.commitStatus
                     , Effect.requests effect |> List.length
                     )
                         |> Expect.equal ( Just Failed, 0 )
             ]
+        , describe "the default branch is read-only"
+            [ test "every write refuses on the default branch and sends nothing" <|
+                \_ ->
+                    -- The test this whole change exists for. Nine buttons across
+                    -- four tabs used to commit straight to main; four of them go
+                    -- through schema validation first and five do not, so a guard
+                    -- placed at either end alone would have missed the other.
+                    writeMessages
+                        |> List.map (refuseOn { signedIn | currentBranch = Just "main" })
+                        |> Expect.equal (List.repeat (List.length writeMessages) ( Just Failed, 0 ))
+            , test "and on a protected branch that is not the default one" <|
+                \_ ->
+                    writeMessages
+                        |> List.map (refuseOn { onBranch | currentBranch = Just "release/1.0" })
+                        |> Expect.equal (List.repeat (List.length writeMessages) ( Just Failed, 0 ))
+            , test "and while the branch list has not loaded, because nothing is known to be safe" <|
+                \_ ->
+                    writeMessages
+                        |> List.map (refuseOn { onBranch | branches = Nothing })
+                        |> Expect.equal (List.repeat (List.length writeMessages) ( Just Failed, 0 ))
+            , test "local edits are refused too, leaving the model untouched" <|
+                \_ ->
+                    -- Not just "no request went out": the point of full read-only
+                    -- is that nothing accumulates in memory either, so the branch
+                    -- you eventually create starts from what the repository says.
+                    let
+                        readOnlyModel =
+                            { signedIn
+                                | currentBranch = Just "main"
+                                , tokens = Just []
+                                , newTokenPath = "color.brand.500"
+                                , newTokenValue = "#fff"
+                                , newThemeName = "Dark"
+                                , newComponentName = "Button"
+                                , newScreenName = "Home"
+                            }
+
+                        after m =
+                            { tokens = m.tokens, themes = m.themes, components = m.components, screens = m.screens }
+                    in
+                    [ CreateToken, CreateTheme, CreateComponent, CreateScreen, AddContractRule ]
+                        |> List.map (\msg -> Update.update msg readOnlyModel |> Tuple.first |> after)
+                        |> Expect.equal (List.repeat 5 (after readOnlyModel))
+            , test "the escape hatch still works from inside the read-only state" <|
+                \_ ->
+                    -- If creating a branch were ever classified as a mutation,
+                    -- the only way off the default branch would be a reload.
+                    let
+                        ( _, effect ) =
+                            Update.update CreateBranch
+                                { signedIn | currentBranch = Just "main", newBranchName = "feature/new-colors" }
+                    in
+                    Effect.requests effect
+                        |> List.map .url
+                        |> Expect.equal
+                            [ "https://gitlab.com/api/v4/projects/7/repository/branches?branch=feature%2Fnew-colors&ref=main" ]
+            , test "so does switching branch, and reading is never blocked" <|
+                \_ ->
+                    [ SwitchBranch "feature-x", UpdateNewBranchName "x", UpdateMRTitle "x" ]
+                        |> List.map
+                            (\msg ->
+                                Update.update msg { signedIn | currentBranch = Just "main" }
+                                    |> Tuple.first
+                                    |> .commitStatus
+                                    |> Maybe.map Tuple.first
+                            )
+                        |> List.filter (\level -> level == Just Failed)
+                        |> Expect.equal []
+            ]
         ]
+
+
+{-| The nine buttons in the app that write to the repository. Kept in one place
+so the read-only tests cannot drift out of sync with each other.
+-}
+writeMessages : List Msg
+writeMessages =
+    [ SaveTokens
+    , SaveComponent
+    , SaveScreen
+    , SaveContract
+    , DeleteTheme "Dark"
+    , DeleteComponent "Button"
+    , DeleteScreen "Home"
+    , DeleteContract "Button"
+    , RunExportPipeline
+    ]
 
 
 
@@ -440,6 +634,37 @@ signedIn =
                 }
         , repositoryTree = Just []
     }
+
+
+{-| A repository open and a branch of your own checked out, with the branch list
+loaded — the state in which the app will actually write anything.
+
+`signedIn` deliberately stops short of this. It has no branch and no branch
+list, which `Guard` reads as read-only, so it is the fixture the refusal tests
+want and every write test starts from `onBranch` instead.
+
+-}
+onBranch : Types.Model
+onBranch =
+    { signedIn
+        | currentBranch = Just "feature-x"
+        , branches = Just [ mainBranch, protectedBranch, featureBranch ]
+    }
+
+
+mainBranch : GitLab.Branches.Branch
+mainBranch =
+    { name = "main", commitId = "aaa", default = True, protected = True }
+
+
+protectedBranch : GitLab.Branches.Branch
+protectedBranch =
+    { name = "release/1.0", commitId = "bbb", default = False, protected = True }
+
+
+featureBranch : GitLab.Branches.Branch
+featureBranch =
+    { name = "feature-x", commitId = "ccc", default = False, protected = False }
 
 
 signedOutWithToken : Types.Model
@@ -516,10 +741,9 @@ tree already contains `tree`.
 exporting : { targets : List String, tree : List String } -> Effect Msg
 exporting { targets, tree } =
     Update.update RunExportPipeline
-        { signedIn
+        { onBranch
             | exportTargets = targets
             , tokens = Just []
-            , currentBranch = Just "main"
             , repositoryTree =
                 Just
                     (List.map
@@ -530,6 +754,18 @@ exporting { targets, tree } =
                     )
         }
         |> Tuple.second
+
+
+{-| How a refusal looks from outside: a `Failed` status, and nothing on the
+wire.
+-}
+refuseOn : Types.Model -> Msg -> ( Maybe StatusLevel, Int )
+refuseOn model msg =
+    let
+        ( after, effect ) =
+            Update.update msg model
+    in
+    ( Maybe.map Tuple.first after.commitStatus, Effect.requests effect |> List.length )
 
 
 commitField : Decode.Decoder a -> Effect Msg -> Result Decode.Error a

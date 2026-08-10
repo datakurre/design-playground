@@ -1,6 +1,7 @@
 module Pages.ExportPipeline exposing (viewExportPipeline)
 
-import Html exposing (Html, button, div, h3, input, label, text)
+import Guard
+import Html exposing (Html, div, h3, input, label, text)
 import Html.Attributes exposing (checked, type_)
 import Html.Events exposing (onClick)
 import Tailwind as Tw exposing (classes)
@@ -17,7 +18,10 @@ viewExportPipeline model =
             [ viewTarget model "css" "CSS custom properties" "exports/variables.css"
             , viewTarget model "tailwind" "Tailwind config" "exports/tailwind.config.js"
             ]
-        , button [ Ui.btnPrimary, onClick RunExportPipeline ] [ text "Export and commit" ]
+        , -- The checkboxes above stay live on a read-only branch: choosing a
+          -- format changes a selection, not a file. This is the control that
+          -- writes.
+          Ui.actionButton Ui.btnPrimary (Guard.action model RunExportPipeline) [ text "Export and commit" ]
         ]
 
 

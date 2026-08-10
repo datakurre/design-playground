@@ -127,8 +127,18 @@ type alias Model =
     }
 
 
+{-| A save that has been asked for but not yet issued, because the JSON is out
+being validated by ajv.
+
+`branch` is resolved when the button is clicked, not when the validation result
+comes back. The gap between the two is a round trip through JavaScript, and the
+user can switch branches inside it — which used to mean the edit you made on one
+branch was committed to another.
+
+-}
 type alias PendingCommit =
     { commitContext : CommitContext
+    , branch : String
     , actionType : String
     , filePath : String
     , commitMessage : String

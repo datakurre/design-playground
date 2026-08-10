@@ -1,5 +1,6 @@
 module Route exposing
-    ( Route(..), TabRoute(..), parse, toString
+    ( Route(..), RepoRoute, TabRoute(..), parse, toString
+    , forProject, branchOf
     , tabRouteFor, toTab
     )
 
@@ -12,7 +13,14 @@ deep link would 404 the moment anyone refreshed or shared one. A fragment never
 reaches the server, so every URL the app produces survives a reload without any
 hosting configuration.
 
-@docs Route, TabRoute, parse, toString
+The branch rides along as `?branch=…` **inside** the fragment. It has to be in
+the URL at all because the branch now decides whether the app is editable, and a
+reload that silently dropped you back onto the read-only default branch would
+look like lost work. It cannot be another path segment, because branch names
+contain slashes — the app itself suggests `feature/`, `fix/` and friends.
+
+@docs Route, RepoRoute, TabRoute, parse, toString
+@docs forProject, branchOf
 @docs tabRouteFor, toTab
 
 -}
@@ -24,7 +32,22 @@ import Url exposing (Url)
 {-| -}
 type Route
     = Home
-    | Repo String TabRoute
+    | Repo RepoRoute
+
+
+{-| A record rather than three positional arguments: `path` and `branch` are
+both strings, and an argument order is a poor place to keep the difference.
+
+`branch = Nothing` means "the project's default branch", not "unspecified".
+That is what keeps `#/acme/design/tokens` the canonical URL for read-only
+browsing instead of every history entry growing a `?branch=main`.
+
+-}
+type alias RepoRoute =
+    { path : String
+    , branch : Maybe String
+    , tab : TabRoute
+    }
 
 
 {-| -}
@@ -53,15 +76,93 @@ minProjectSegments =
     2
 
 
-{-| -}
+{-| The branch is split off before the segments are, so everything below it
+parses exactly the URLs it always did.
+
+Splitting on the first raw `?` is unambiguous, which is easier to believe with
+the two reasons written down. Git refuses `?` in a ref name
+(`git-check-ref-format`), so a branch can never contribute one. And
+`Url.percentEncode` escapes `?` to `%3F`, so a component called `Why?` never
+puts a raw one in the path either.
+
+-}
 parse : Url -> Maybe Route
 parse url =
-    url.fragment
-        |> Maybe.withDefault ""
+    let
+        ( pathPart, queryPart ) =
+            splitOnFirst "?" (Maybe.withDefault "" url.fragment)
+    in
+    pathPart
         |> String.split "/"
         |> List.filter (\s -> not (String.isEmpty s))
         |> List.map (\s -> Url.percentDecode s |> Maybe.withDefault s)
         |> fromSegments
+        |> Maybe.map (withBranch (branchParam queryPart))
+
+
+{-| The branch a URL asks for, for the places that hold a `Url` rather than a
+`Route`. `Nothing` for `Home`, for a URL that names no branch, and for one whose
+`branch=` is empty — all three mean the same thing here.
+-}
+branchOf : Url -> Maybe String
+branchOf url =
+    case parse url of
+        Just (Repo repo) ->
+            repo.branch
+
+        _ ->
+            Nothing
+
+
+splitOnFirst : String -> String -> ( String, String )
+splitOnFirst separator string =
+    case String.indexes separator string of
+        first :: _ ->
+            ( String.left first string, String.dropLeft (first + String.length separator) string )
+
+        [] ->
+            ( string, "" )
+
+
+{-| `branch=feature%2Fx` out of a query string, tolerating the other parameters
+this app does not write but a hand-edited URL might carry. A present-but-empty
+`?branch=` reads as absent rather than as a branch called "".
+-}
+branchParam : String -> Maybe String
+branchParam query =
+    query
+        |> String.split "&"
+        |> List.filterMap
+            (\pair ->
+                case splitOnFirst "=" pair of
+                    ( "branch", value ) ->
+                        Url.percentDecode value
+                            |> Maybe.withDefault value
+                            |> nonEmpty
+
+                    _ ->
+                        Nothing
+            )
+        |> List.head
+
+
+nonEmpty : String -> Maybe String
+nonEmpty string =
+    if String.isEmpty string then
+        Nothing
+
+    else
+        Just string
+
+
+withBranch : Maybe String -> Route -> Route
+withBranch branch route =
+    case route of
+        Home ->
+            Home
+
+        Repo repo ->
+            Repo { repo | branch = branch }
 
 
 fromSegments : List String -> Maybe Route
@@ -79,7 +180,7 @@ fromSegments segments =
                     -- No tab named, so `#/acme/design` means "open this project
                     -- where it opens by default".
                     if List.length segments >= minProjectSegments then
-                        Just (Repo (String.join "/" segments) TokensTab)
+                        Just (Repo { path = String.join "/" segments, branch = Nothing, tab = TokensTab })
 
                     else
                         Nothing
@@ -150,7 +251,7 @@ keyword that is really part of the project's own name gets rejected.
 repoWith : List String -> TabRoute -> Maybe Route
 repoWith reversedPath tab =
     if List.length reversedPath >= minProjectSegments then
-        Just (Repo (String.join "/" (List.reverse reversedPath)) tab)
+        Just (Repo { path = String.join "/" (List.reverse reversedPath), branch = Nothing, tab = tab })
 
     else
         Nothing
@@ -200,6 +301,31 @@ tabRouteFor tab selectedComponent selectedScreen =
             ExportPipelineTab
 
 
+{-| The route for a tab of a repository, with the branch attached only when it
+is not the project's default one.
+
+This is the one place that decision is made. Every link in the app goes through
+it, so a tab click or a component link cannot quietly drop the branch and put
+the user back on the read-only default.
+
+It takes an extensible record rather than importing `GitLab.Projects`, the same
+way `Ui.contextHelp` takes one rather than importing `Help`.
+
+-}
+forProject : { r | pathWithNamespace : String, defaultBranch : String } -> Maybe String -> TabRoute -> Route
+forProject project branch tab =
+    Repo
+        { path = project.pathWithNamespace
+        , branch =
+            if branch == Just project.defaultBranch then
+                Nothing
+
+            else
+                branch
+        , tab = tab
+        }
+
+
 {-| -}
 toString : Route -> String
 toString route =
@@ -207,12 +333,20 @@ toString route =
         Home ->
             "#/"
 
-        Repo path tab ->
+        Repo repo ->
             let
                 base =
-                    "#/" ++ encodePath path
+                    "#/" ++ encodePath repo.path
+
+                query =
+                    case repo.branch of
+                        Just branch ->
+                            "?branch=" ++ Url.percentEncode branch
+
+                        Nothing ->
+                            ""
             in
-            case tab of
+            (case repo.tab of
                 TokensTab ->
                     base ++ "/tokens"
 
@@ -233,6 +367,8 @@ toString route =
 
                 ExportPipelineTab ->
                     base ++ "/export"
+            )
+                ++ query
 
 
 {-| `Url.percentEncode` escapes `/` too, so the separators have to be put back

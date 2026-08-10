@@ -2,9 +2,10 @@ module Ui exposing
     ( pageTitle, sectionTitle, fieldLabel, muted, mutedSmall
     , panel, panelSunken, page, divider
     , btnPrimary, btnNeutral, btnDanger, btnBrand, btnSmall, btnQuiet, iconButton
-    , textInput, selectInput
-    , tabLink, themePicker
-    , PillTone(..), pill
+    , btnDisabled, Action(..), actionButton
+    , textInput, textInputReadOnly, selectInput
+    , tabLink, themePicker, branchPicker
+    , PillTone(..), pill, notice
     , previewSurface
     , contextHelp, tabLede
     , throbber
@@ -36,21 +37,22 @@ Three steps, and no more.
 # Buttons
 
 @docs btnPrimary, btnNeutral, btnDanger, btnBrand, btnSmall, btnQuiet, iconButton
+@docs btnDisabled, Action, actionButton
 
 
 # Form controls
 
-@docs textInput, selectInput
+@docs textInput, textInputReadOnly, selectInput
 
 
 # Navigation
 
-@docs tabLink, themePicker
+@docs tabLink, themePicker, branchPicker
 
 
 # Status
 
-@docs PillTone, pill
+@docs PillTone, pill, notice
 
 
 # Preview
@@ -278,6 +280,67 @@ btnQuiet =
         ]
 
 
+{-| A button that cannot be pressed, as a complete look of its own.
+
+It has to replace the tone bundle rather than sit on top of one.
+`Tailwind.classes` is `Html.Attributes.class`, and elm/virtual-dom concatenates
+repeated `className` attributes instead of replacing them — so
+`[ btnPrimary, btnDisabled ]` would emit both `cursor-pointer` and
+`cursor-not-allowed`, and which one won would be decided by the order Tailwind
+happened to emit them in the stylesheet. Use `actionButton`, which cannot get
+this wrong.
+
+-}
+btnDisabled : Attribute msg
+btnDisabled =
+    classes
+        [ Tw.inline_flex
+        , Tw.items_center
+        , Tw.gap s1_dot_5
+        , Tw.px s3
+        , Tw.py s1_dot_5
+        , Tw.rounded_md
+        , Tw.text_sm
+        , Tw.font_medium
+        , Tw.border
+        , Tw.cursor_not_allowed
+        , Tw.whitespace_nowrap
+        , Tw.bg_color (slate s100)
+        , Tw.border_color (slate s300)
+        , Tw.text_color (slate s400)
+        ]
+
+
+{-| What a button does, or why it cannot.
+-}
+type Action msg
+    = Do msg
+    | Blocked String
+
+
+{-| A button that knows how to be unavailable.
+
+`Blocked reason` is the whole point: an action the app is refusing should look
+refused and say why on hover, rather than being live and reporting a failure
+after the click. The reason is a sentence, not a label — "Create a branch
+before editing on main", not "disabled".
+
+-}
+actionButton : Attribute msg -> Action msg -> List (Html msg) -> Html msg
+actionButton tone action children =
+    case action of
+        Do msg ->
+            Html.button [ tone, Html.Events.onClick msg ] children
+
+        Blocked reason ->
+            Html.button
+                [ btnDisabled
+                , Html.Attributes.disabled True
+                , Html.Attributes.title reason
+                ]
+                children
+
+
 {-| A bare glyph. Callers must pass an aria-label — the glyph alone says
 nothing to a screen reader.
 -}
@@ -315,6 +378,30 @@ textInput =
         , Tw.rounded_md
         , Tw.bg_simple white
         , Tw.text_color (slate s900)
+        ]
+
+
+{-| The same field, showing a value you may read but not change.
+
+Deliberately `readonly` and not `disabled`, and the difference matters here more
+than it usually does: a read-only branch is one you are meant to be reading. A
+`readonly` input keeps its text selectable, focusable and announced by a screen
+reader; `disabled` would take a whole token list out of the keyboard's reach.
+`disabled` is still right for buttons, selects and checkboxes, where `readonly`
+does nothing at all.
+
+-}
+textInputReadOnly : Attribute msg
+textInputReadOnly =
+    classes
+        [ Tw.px s2
+        , Tw.py s1_dot_5
+        , Tw.text_sm
+        , Tw.border
+        , Tw.border_color (slate s200)
+        , Tw.rounded_md
+        , Tw.bg_color (slate s50)
+        , Tw.text_color (slate s500)
         ]
 
 
@@ -414,6 +501,40 @@ themePicker themeNames active toMsg =
         )
 
 
+{-| Which branch you are working on, with the read-only ones marked as such.
+
+Takes an extensible record so `Ui` does not have to import `GitLab.Branches`,
+the same trick `contextHelp` uses to stay clear of `Help`. Both the app bar and
+the Branches tab render this, so the two cannot describe a branch differently.
+
+-}
+branchPicker :
+    { label : String, current : Maybe String, onSwitch : String -> msg }
+    -> List { r | name : String, default : Bool, protected : Bool }
+    -> Html msg
+branchPicker config branches =
+    Html.select
+        [ selectInput
+        , Html.Attributes.attribute "aria-label" config.label
+        , onInput config.onSwitch
+        ]
+        (List.map
+            (\branch ->
+                Html.option
+                    [ value branch.name, selected (config.current == Just branch.name) ]
+                    [ Html.text
+                        (if branch.default || branch.protected then
+                            branch.name ++ " · read-only"
+
+                         else
+                            branch.name
+                        )
+                    ]
+            )
+            branches
+        )
+
+
 
 -- STATUS
 
@@ -452,6 +573,42 @@ pill tone label =
             ]
         ]
         [ Html.text label ]
+
+
+{-| A full-width banner across the top of the page, for something the user has
+to know before reading what is under it.
+
+It reuses `PillTone` rather than introducing a second tone enum. `Negative` is
+the error banner; `Neutral` is the read-only notice, and the slate is the point
+— being on a read-only branch is a fact about where you are, not a failure, and
+colouring it red would say otherwise every time anyone opened a repository.
+
+Takes children rather than a string because the read-only banner carries a
+form: the way out of read-only mode has to be inside the thing telling you that
+you are in it.
+
+-}
+notice : PillTone -> List (Html msg) -> Html msg
+notice tone children =
+    Html.div
+        [ classes
+            [ Tw.mb s4
+            , Tw.p s3
+            , Tw.rounded_md
+            , Tw.border
+            , Tw.text_sm
+            , case tone of
+                Neutral ->
+                    batch [ Tw.border_color (slate s200), Tw.bg_color (slate s50), Tw.text_color (slate s700) ]
+
+                Positive ->
+                    batch [ Tw.border_color (emerald s200), Tw.bg_color (emerald s50), Tw.text_color (emerald s700) ]
+
+                Negative ->
+                    batch [ Tw.border_color (red s200), Tw.bg_color (red s50), Tw.text_color (red s700) ]
+            ]
+        ]
+        children
 
 
 

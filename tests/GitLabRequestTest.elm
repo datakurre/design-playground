@@ -77,6 +77,21 @@ suite =
                 \_ ->
                     (GitLab.Branches.createBranch "t" 7 "a&b" "main" (always Ignored)).url
                         |> Expect.equal "https://gitlab.com/api/v4/projects/7/repository/branches?branch=a%26b&ref=main"
+            , test "reading a tree encodes the ref, so a slash in a branch name survives" <|
+                \_ ->
+                    -- createBranch has always encoded the ref; the read side
+                    -- interpolated it raw, so every "feature/x" branch the app
+                    -- itself suggests creating was unreadable afterwards.
+                    (GitLab.Files.listTree "t" 7 "feature/x" (always Ignored)).url
+                        |> Expect.equal "https://gitlab.com/api/v4/projects/7/repository/tree?ref=feature%2Fx"
+            , test "reading a subdirectory encodes an ampersand in the ref" <|
+                \_ ->
+                    (GitLab.Files.listTreeAtPath "t" 7 "a&b" "components" (always Ignored)).url
+                        |> Expect.equal "https://gitlab.com/api/v4/projects/7/repository/tree?ref=a%26b&path=components"
+            , test "reading a file encodes the ref as well as the path" <|
+                \_ ->
+                    (GitLab.Files.getFileRaw "t" 7 "feature/x" "tokens/tokens.json" (always Ignored)).url
+                        |> Expect.equal "https://gitlab.com/api/v4/projects/7/repository/files/tokens%2Ftokens.json/raw?ref=feature%2Fx"
             ]
         , describe "commit payloads"
             [ test "carries the branch, the message and one action per file" <|

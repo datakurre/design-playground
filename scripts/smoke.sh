@@ -113,6 +113,11 @@ check home "$BASE" || failed=1
 # expected, not a bug. What this catches is a route that crashes the app.
 check route "${BASE}#/acme/design/components/Button" || failed=1
 
+# The same, carrying a branch. The branch is split off the fragment before the
+# segments are, on the first raw "?" — this is the only place that pre-pass is
+# exercised in a real browser rather than in a unit test.
+check branch "${BASE}#/acme/design/tokens?branch=feature%2Fx" || failed=1
+
 if [ "$failed" -ne 0 ]; then
     echo "smoke: FAILED" >&2
     exit 1

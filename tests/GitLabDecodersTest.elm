@@ -78,7 +78,9 @@ suite =
                                 "name": "main",
                                 "commit": {
                                     "id": "7b5c3df"
-                                }
+                                },
+                                "default": true,
+                                "protected": true
                             }
                             """
                     in
@@ -87,6 +89,8 @@ suite =
                             Expect.all
                                 [ \b -> Expect.equal "main" b.name
                                 , \b -> Expect.equal "7b5c3df" b.commitId
+                                , \b -> Expect.equal True b.default
+                                , \b -> Expect.equal True b.protected
                                 ]
                                 branch
 

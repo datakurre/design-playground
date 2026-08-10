@@ -2,10 +2,11 @@ module Pages.ScreenComposer exposing (viewScreenComposer)
 
 import Components
 import Dict
+import Guard
 import Help
-import Html exposing (Html, button, div, h3, h4, li, text, ul)
+import Html exposing (Html, div, h3, h4, li, text, ul)
 import Html.Attributes exposing (value)
-import Html.Events exposing (onClick, onInput)
+import Html.Events exposing (onInput)
 import Renderer
 import Route
 import Screens exposing (Screen)
@@ -44,7 +45,7 @@ viewScreenList model screens =
                             [ Html.Attributes.href
                                 (case model.selectedProject of
                                     Just p ->
-                                        Route.toString (Route.Repo p.pathWithNamespace (Route.ScreensTab (Just s.name)))
+                                        Route.toString (Route.forProject p model.currentBranch (Route.ScreensTab (Just s.name)))
 
                                     Nothing ->
                                         "#"
@@ -82,7 +83,12 @@ viewScreenList model screens =
             )
         , div [ classes [ Tw.mt s3, Tw.pt s3, Tw.flex, Tw.gap s2 ], Ui.divider ]
             [ Html.input
-                [ Ui.textInput
+                [ if Guard.writable model then
+                    Ui.textInput
+
+                  else
+                    Ui.textInputReadOnly
+                , Html.Attributes.readonly (not (Guard.writable model))
                 , value model.newScreenName
                 , onInput UpdateNewScreenName
                 , Html.Attributes.placeholder "New screen"
@@ -92,12 +98,13 @@ viewScreenList model screens =
                 []
             , Html.select
                 [ Ui.selectInput
+                , Html.Attributes.disabled (not (Guard.writable model))
                 , onInput UpdateNewScreenTemplate
                 , value model.newScreenTemplate
                 , Html.Attributes.attribute "aria-label" "Start from"
                 ]
                 (List.map (\t -> Html.option [ value t.id ] [ text t.label ]) Templates.screenTemplates)
-            , button [ Ui.btnNeutral, onClick CreateScreen ] [ text "Add" ]
+            , Ui.actionButton Ui.btnNeutral (Guard.action model CreateScreen) [ text "Add" ]
             ]
         ]
 
@@ -175,8 +182,8 @@ viewScreenEditor model screen screens screensDict =
                 , div [ Ui.mutedSmall, classes [ Tw.font_mono ] ] [ text screen.path ]
                 ]
             , div [ classes [ Tw.flex, Tw.gap s2 ] ]
-                [ button [ Ui.btnPrimary, onClick SaveScreen ] [ text "Save" ]
-                , button [ Ui.btnDanger, onClick (DeleteScreen screen.name) ] [ text "Delete" ]
+                [ Ui.actionButton Ui.btnPrimary (Guard.action model SaveScreen) [ text "Save" ]
+                , Ui.actionButton Ui.btnDanger (Guard.action model (DeleteScreen screen.name)) [ text "Delete" ]
                 ]
             ]
         , div [ classes [ Tw.mb s3 ] ]
@@ -187,17 +194,19 @@ viewScreenEditor model screen screens screensDict =
 
                 Screens.Container _ children ->
                     ul [ classes [ Tw.list_none, Tw.p s0, Tw.m s0 ] ]
-                        (List.indexedMap (viewAddedNode screensDict screen.name) children)
+                        (List.indexedMap (viewAddedNode (Guard.writable model) screensDict screen.name) children)
 
                 _ ->
                     div [ Ui.mutedSmall ] [ text "Invalid root node." ]
             ]
-        , viewAdders "Add a component"
+        , viewAdders (Guard.writable model)
+            "Add a component"
             Help.addComponentToScreen
             (model.components |> Maybe.withDefault [] |> List.map .name)
             AddComponentToScreen
             "No components yet — create one on the Components tab."
-        , viewAdders "Add another screen"
+        , viewAdders (Guard.writable model)
+            "Add another screen"
             Help.addScreenToScreen
             (screens |> List.filter (\s -> s.name /= screen.name) |> List.map .name)
             AddScreenToScreen
@@ -205,8 +214,8 @@ viewScreenEditor model screen screens screensDict =
         ]
 
 
-viewAddedNode : Dict.Dict String Screen -> String -> Int -> Screens.ScreenNode -> Html Msg
-viewAddedNode screensDict parentName index node =
+viewAddedNode : Bool -> Dict.Dict String Screen -> String -> Int -> Screens.ScreenNode -> Html Msg
+viewAddedNode writable screensDict parentName index node =
     let
         ( nodeName, nodeType ) =
             case node of
@@ -245,10 +254,13 @@ viewAddedNode screensDict parentName index node =
               else
                 text ""
             ]
-        , button
-            [ Ui.btnDanger
-            , onClick (RemoveScreenNode index)
-            ]
+        , Ui.actionButton Ui.btnDanger
+            (if writable then
+                Ui.Do (RemoveScreenNode index)
+
+             else
+                Ui.Blocked "Create a branch before removing from this screen"
+            )
             [ text "Remove" ]
         ]
 
@@ -256,8 +268,8 @@ viewAddedNode screensDict parentName index node =
 {-| Both adders append to the top level of the screen. The old labels said
 "Insert Component into Root", which named an implementation detail of the tree.
 -}
-viewAdders : String -> Help.Topic -> List String -> (String -> Msg) -> String -> Html Msg
-viewAdders label topic names toMsg emptyHint =
+viewAdders : Bool -> String -> Help.Topic -> List String -> (String -> Msg) -> String -> Html Msg
+viewAdders writable label topic names toMsg emptyHint =
     div [ classes [ Tw.mt s3, Tw.pt s3 ], Ui.divider ]
         [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.mb s2 ] ]
             [ h4 [ Ui.sectionTitle ] [ text label ]
@@ -269,7 +281,16 @@ viewAdders label topic names toMsg emptyHint =
           else
             div [ classes [ Tw.flex, Tw.flex_wrap, Tw.gap s2 ] ]
                 (List.map
-                    (\name -> button [ Ui.btnSmall, onClick (toMsg name) ] [ text ("+ " ++ name) ])
+                    (\name ->
+                        Ui.actionButton Ui.btnSmall
+                            (if writable then
+                                Ui.Do (toMsg name)
+
+                             else
+                                Ui.Blocked "Create a branch before adding to this screen"
+                            )
+                            [ text ("+ " ++ name) ]
+                    )
                     names
                 )
         ]

@@ -12,6 +12,7 @@ import GitLab.Commits
 import GitLab.Files
 import GitLab.MergeRequests
 import GitLab.Projects
+import Guard
 import Http
 import Json.Decode as Decode
 import Json.Encode as Encode
@@ -236,18 +237,61 @@ clearProjectState model =
         , projectsPage = model.projectsPage
         , projectSearch = model.projectSearch
         , activeTab = model.activeTab
+
+        -- Whether the app has finished booting is a fact about the session,
+        -- not about the repository. Dropping it here sent `#/` back to
+        -- `Booting`, and since nothing else was in flight to end it, the home
+        -- route showed the loading throbber forever.
+        , startupStatus = model.startupStatus
     }
 
 
-resetForProject : GitLab.Projects.Project -> Model -> Model
-resetForProject project model =
+{-| Opening a repository, on the branch the URL asked for. `Nothing` means the
+project's default branch — which is read-only, and is the right place to land:
+browsing is what you do before you decide to change anything.
+-}
+resetForProject : GitLab.Projects.Project -> Maybe String -> Model -> Model
+resetForProject project branch model =
     let
         cleared =
             clearProjectState model
     in
     { cleared
         | selectedProject = Just project
-        , currentBranch = Just project.defaultBranch
+        , currentBranch = Just (Maybe.withDefault project.defaultBranch branch)
+    }
+
+
+{-| The state a branch change leaves behind: everything read from the old branch
+forgotten, so nothing from it can be saved onto the new one.
+
+`pendingCommit` is in here for a reason of its own. A save in flight belongs to
+the branch it was clicked on, and letting one survive a switch meant its
+validation result arriving later and committing against a model that had moved.
+It carries its own branch now, but dropping it is still the honest thing to do:
+the user navigated away from that save.
+
+-}
+forgetBranchState : String -> Model -> Model
+forgetBranchState branchName model =
+    { model
+        | currentBranch = Just branchName
+        , repositoryTree = Nothing
+        , originalComponents = Nothing
+        , components = Nothing
+        , originalTokens = Nothing
+        , tokens = Nothing
+        , themes = []
+        , screens = Nothing
+        , existingComponents = []
+        , existingThemes = []
+        , existingScreens = []
+        , tokensFileExists = False
+        , contracts = Nothing
+        , existingContracts = []
+        , newContractRuleType = "allowedTokenGroups"
+        , newContractRuleFields = Dict.empty
+        , pendingCommit = Nothing
     }
 
 
@@ -262,12 +306,50 @@ applyRoute route model =
         Route.Home ->
             ( { model | activeTab = TokenStudio } |> clearProjectState, Effect.none )
 
-        Route.Repo path tabRoute ->
+        Route.Repo repo ->
             let
-                ( opened, cmd ) =
-                    openProject path model
+                ( opened, openEffect ) =
+                    openProject repo.path repo.branch model
+
+                ( branched, branchEffect ) =
+                    applyBranch repo.branch opened
             in
-            ( selectFromRoute tabRoute opened, cmd )
+            ( selectFromRoute repo.tab branched, Effect.batch [ openEffect, branchEffect ] )
+
+
+{-| Moves to the branch the URL names, if that is a move at all.
+
+The "if that is a move at all" is load-bearing. Every tab click is a navigation
+and so runs through here, and without the check each one would forget the
+repository and refetch all six files. That would present as the app being slow,
+not as a routing bug, which is why `UpdateTest` asserts that switching tabs
+issues no requests.
+
+`openProject` has already put a freshly opened repository on the right branch,
+so this sees no change there either.
+
+-}
+applyBranch : Maybe String -> Model -> ( Model, Effect Msg )
+applyBranch requested model =
+    case ( model.token, model.selectedProject ) of
+        ( Just token, Just project ) ->
+            let
+                wanted =
+                    Maybe.withDefault project.defaultBranch requested
+            in
+            if model.currentBranch == Just wanted then
+                ( model, Effect.none )
+
+            else
+                ( forgetBranchState wanted model
+                    |> (\m -> { m | commitStatus = Just ( Done, "On branch " ++ wanted ) })
+                , fetchAtRef token project wanted
+                )
+
+        _ ->
+            -- No repository yet: `GotProject` will land on the right branch
+            -- once it arrives.
+            ( model, Effect.none )
 
 
 {-| A route only speaks for its own tab. Leaving the other tab's selection alone
@@ -326,8 +408,8 @@ lands after the navigation that asked for it.
 selectFromUrl : Url.Url -> Model -> Model
 selectFromUrl url model =
     case Route.parse url of
-        Just (Route.Repo _ tabRoute) ->
-            selectFromRoute tabRoute model
+        Just (Route.Repo repo) ->
+            selectFromRoute repo.tab model
 
         _ ->
             model
@@ -341,7 +423,7 @@ navigateToTab : Route.TabRoute -> Model -> ( Model, Effect Msg )
 navigateToTab tabRoute model =
     case model.selectedProject of
         Just project ->
-            ( model, Effect.PushUrl (Route.toString (Route.Repo project.pathWithNamespace tabRoute)) )
+            ( model, Effect.PushUrl (Route.toString (Route.forProject project model.currentBranch tabRoute)) )
 
         Nothing ->
             ( selectFromRoute tabRoute model, Effect.none )
@@ -352,8 +434,8 @@ be one we've already listed, in which case we have its id and can go straight fo
 the contents; otherwise — a deep link, a fresh tab — it has to be looked up by
 path first, and `GotProject` picks the work back up.
 -}
-openProject : String -> Model -> ( Model, Effect Msg )
-openProject path model =
+openProject : String -> Maybe String -> Model -> ( Model, Effect Msg )
+openProject path branch model =
     if Maybe.map .pathWithNamespace model.selectedProject == Just path then
         ( model, Effect.none )
 
@@ -372,7 +454,9 @@ openProject path model =
                 in
                 case alreadyListed of
                     Just project ->
-                        ( resetForProject project model, fetchProjectData token project )
+                        ( resetForProject project branch model
+                        , fetchProjectData token project (Maybe.withDefault project.defaultBranch branch)
+                        )
 
                     Nothing ->
                         ( { model | selectedProject = Nothing, commitStatus = Just ( Working, "Loading repository..." ) }
@@ -396,17 +480,34 @@ projectErrorMessage error =
             "Couldn't reach GitLab to open that repository."
 
 
-fetchProjectData : String -> GitLab.Projects.Project -> Effect Msg
-fetchProjectData token project =
+{-| Everything the app reads out of a repository, at one ref.
+
+Opening a repository and switching branch want exactly this list, and they used
+to spell it out separately — with the switch missing `contracts.json`, so the
+contracts you saw after a switch were still the previous branch's.
+
+-}
+fetchAtRef : String -> GitLab.Projects.Project -> String -> Effect Msg
+fetchAtRef token project ref =
     Effect.batch
-        [ GitLab.Files.listTree token project.id project.defaultBranch GotTree |> Effect.SendRequest
-        , GitLab.Files.getFileRaw token project.id project.defaultBranch "tokens/tokens.json" GotTokensFile |> Effect.SendRequest
-        , GitLab.Files.listTreeAtPath token project.id project.defaultBranch "themes" (GotThemesTree project.defaultBranch) |> Effect.SendRequest
-        , GitLab.Files.listTreeAtPath token project.id project.defaultBranch "components" (GotComponentsTree project.defaultBranch) |> Effect.SendRequest
-        , GitLab.Files.listTreeAtPath token project.id project.defaultBranch "layouts" (GotScreensTree project.defaultBranch) |> Effect.SendRequest
+        [ GitLab.Files.listTree token project.id ref GotTree |> Effect.SendRequest
+        , GitLab.Files.getFileRaw token project.id ref "tokens/tokens.json" GotTokensFile |> Effect.SendRequest
+        , GitLab.Files.listTreeAtPath token project.id ref "themes" (GotThemesTree ref) |> Effect.SendRequest
+        , GitLab.Files.listTreeAtPath token project.id ref "components" (GotComponentsTree ref) |> Effect.SendRequest
+        , GitLab.Files.listTreeAtPath token project.id ref "layouts" (GotScreensTree ref) |> Effect.SendRequest
+        , GitLab.Files.getFileRaw token project.id ref "contracts.json" (GotContractFile "contracts.json") |> Effect.SendRequest
+        ]
+
+
+{-| The above, plus the two things that belong to the repository rather than to
+any one branch.
+-}
+fetchProjectData : String -> GitLab.Projects.Project -> String -> Effect Msg
+fetchProjectData token project ref =
+    Effect.batch
+        [ fetchAtRef token project ref
         , GitLab.Branches.listBranches token project.id GotBranches |> Effect.SendRequest
         , GitLab.MergeRequests.listMergeRequests token project.id GotMergeRequests |> Effect.SendRequest
-        , GitLab.Files.getFileRaw token project.id project.defaultBranch "contracts.json" (GotContractFile "contracts.json") |> Effect.SendRequest
         ]
 
 
@@ -496,8 +597,31 @@ updateTokenPathLogic model msg path =
             ( { model | themes = List.map updateTheme model.themes }, Effect.none )
 
 
+{-| One choke point for the read-only rule, in front of everything else.
+
+The alternative was to disable the controls in the views and leave it there.
+That is cheaper and it is also unverifiable: nothing at this level could be
+tested, and any second route to the same message — a link, a keyboard shortcut,
+a view branch someone forgets to gate — would silently reopen the hole. The
+views disable their controls _as well_; a disabled button is the affordance,
+this is the guarantee.
+
+-}
 update : Msg -> Model -> ( Model, Effect Msg )
 update msg model =
+    case ( Guard.isMutating msg, Guard.readOnly model ) of
+        ( True, Just reason ) ->
+            ( { model | commitStatus = Just ( Failed, Guard.refusal reason ) }, Effect.none )
+
+        _ ->
+            updateAllowed msg model
+
+
+{-| Everything `update` used to be, reached only once the branch has been found
+writable. Kept private so there is no way to skip the check.
+-}
+updateAllowed : Msg -> Model -> ( Model, Effect Msg )
+updateAllowed msg model =
     case msg of
         LinkClicked urlRequest ->
             case urlRequest of
@@ -593,7 +717,7 @@ update msg model =
                 -- the loading screen off.
                 stillFetchingProject =
                     case Route.parse model.url of
-                        Just (Route.Repo _ _) ->
+                        Just (Route.Repo _) ->
                             model.selectedProject == Nothing
 
                         _ ->
@@ -637,7 +761,9 @@ update msg model =
             ( { model | projectSearch = search }, Effect.none )
 
         SelectProject project ->
-            ( model, Effect.PushUrl (Route.toString (Route.Repo project.pathWithNamespace Route.TokensTab)) )
+            -- No branch yet: the project has not been fetched, so its default
+            -- branch is not known. `applyRoute` fills it in once it is.
+            ( model, Effect.PushUrl (Route.toString (Route.Repo { path = project.pathWithNamespace, branch = Nothing, tab = Route.TokensTab })) )
 
         UnselectProject ->
             ( model, Effect.PushUrl (Route.toString Route.Home) )
@@ -651,11 +777,14 @@ update msg model =
                     -- link to a component would land on the right tab with
                     -- nothing chosen the moment the repository arrived.
                     let
+                        branch =
+                            Route.branchOf model.url
+
                         resetModel =
-                            resetForProject project model |> selectFromUrl model.url
+                            resetForProject project branch model |> selectFromUrl model.url
                     in
                     ( { resetModel | startupStatus = Ready }
-                    , fetchProjectData token project
+                    , fetchProjectData token project (Maybe.withDefault project.defaultBranch branch)
                     )
 
                 ( Ok _, Nothing ) ->
@@ -680,7 +809,12 @@ update msg model =
                             ( Just token, Just project ) ->
                                 let
                                     payload =
-                                        { branch = Maybe.withDefault project.defaultBranch model.currentBranch
+                                        -- pending.branch, not the branch the
+                                        -- model is on now: validation is a
+                                        -- round trip through JavaScript, and
+                                        -- the user can switch branches inside
+                                        -- it.
+                                        { branch = pending.branch
                                         , commitMessage = pending.commitMessage
                                         , actions =
                                             [ { action = pending.actionType
@@ -929,9 +1063,13 @@ update msg model =
         ClearTokenFilters ->
             ( { model | tokenSearch = "", tokenTypeFilter = "", tokenOverriddenOnly = False, tokenChangedOnly = False }, Effect.none )
 
+        -- The four Save handlers resolve the branch here, at the click, and
+        -- carry it in the pending commit. `Guard.writableBranch` returns
+        -- Nothing when there is no project open, so it subsumes the
+        -- `selectedProject` check these used to make.
         SaveTokens ->
-            case ( model.token, model.selectedProject ) of
-                ( Just token, Just project ) ->
+            case ( model.token, Guard.writableBranch model ) of
+                ( Just token, Just branch ) ->
                     case model.activeThemeName of
                         Nothing ->
                             case model.tokens of
@@ -945,6 +1083,7 @@ update msg model =
 
                                         pending =
                                             { commitContext = CommitTokens
+                                            , branch = branch
                                             , actionType =
                                                 if model.tokensFileExists then
                                                     "update"
@@ -979,6 +1118,7 @@ update msg model =
 
                                         pending =
                                             { commitContext = CommitTheme activeName
+                                            , branch = branch
                                             , actionType =
                                                 if List.member activeName model.existingThemes then
                                                     "update"
@@ -1158,8 +1298,8 @@ update msg model =
                 |> Tuple.mapFirst (forgetEditingState name)
 
         SaveComponent ->
-            case ( model.token, model.selectedProject, model.selectedComponentName ) of
-                ( Just token, Just project, Just activeName ) ->
+            case ( model.token, Guard.writableBranch model, model.selectedComponentName ) of
+                ( Just token, Just branch, Just activeName ) ->
                     let
                         currentComponents =
                             model.components |> Maybe.withDefault []
@@ -1185,6 +1325,7 @@ update msg model =
 
                                 pending =
                                     { commitContext = CommitComponent comp.name
+                                    , branch = branch
                                     , actionType = actionType
                                     , filePath = "components/" ++ comp.name ++ ".json"
                                     , commitMessage = "Save component " ++ comp.name
@@ -1385,8 +1526,8 @@ update msg model =
                     ( { model | screens = Just (newScreen :: currentScreens), selectedScreenName = Just name, newScreenName = "", newScreenTemplate = "empty", commitStatus = Nothing }, Effect.none )
 
         SaveScreen ->
-            case ( model.token, model.selectedProject, model.selectedScreenName ) of
-                ( Just token, Just project, Just activeName ) ->
+            case ( model.token, Guard.writableBranch model, model.selectedScreenName ) of
+                ( Just token, Just branch, Just activeName ) ->
                     let
                         currentScreens =
                             model.screens |> Maybe.withDefault []
@@ -1405,6 +1546,7 @@ update msg model =
 
                                 pending =
                                     { commitContext = CommitScreen screen.name
+                                    , branch = branch
                                     , actionType =
                                         if List.member activeName model.existingScreens then
                                             "update"
@@ -1531,11 +1673,11 @@ update msg model =
                     ( { model | themes = List.map updateTheme model.themes }, Effect.none )
 
         DeleteTheme name ->
-            case ( model.token, model.selectedProject ) of
-                ( Just token, Just project ) ->
+            case ( model.token, model.selectedProject, Guard.writableBranch model ) of
+                ( Just token, Just project, Just branch ) ->
                     let
                         payload =
-                            { branch = Maybe.withDefault project.defaultBranch model.currentBranch
+                            { branch = branch
                             , commitMessage = "Delete theme " ++ name
                             , actions =
                                 [ { action = "delete"
@@ -1553,8 +1695,8 @@ update msg model =
                     ( model, Effect.none )
 
         DeleteComponent name ->
-            case ( model.token, model.selectedProject ) of
-                ( Just token, Just project ) ->
+            case ( model.token, model.selectedProject, Guard.writableBranch model ) of
+                ( Just token, Just project, Just branch ) ->
                     let
                         contractActions =
                             if List.member name model.existingContracts then
@@ -1568,7 +1710,7 @@ update msg model =
                                 []
 
                         payload =
-                            { branch = Maybe.withDefault project.defaultBranch model.currentBranch
+                            { branch = branch
                             , commitMessage = "Delete component " ++ name
                             , actions =
                                 { action = "delete"
@@ -1597,11 +1739,11 @@ update msg model =
                     ( model, Effect.none )
 
         DeleteScreen name ->
-            case ( model.token, model.selectedProject ) of
-                ( Just token, Just project ) ->
+            case ( model.token, model.selectedProject, Guard.writableBranch model ) of
+                ( Just token, Just project, Just branch ) ->
                     let
                         payload =
-                            { branch = Maybe.withDefault project.defaultBranch model.currentBranch
+                            { branch = branch
                             , commitMessage = "Delete screen " ++ name
                             , actions =
                                 [ { action = "delete"
@@ -1774,8 +1916,8 @@ update msg model =
                     ( model, Effect.none )
 
         SaveContract ->
-            case ( model.token, model.selectedProject, model.selectedComponentName ) of
-                ( Just token, Just project, Just activeName ) ->
+            case ( model.token, Guard.writableBranch model, model.selectedComponentName ) of
+                ( Just token, Just branch, Just activeName ) ->
                     let
                         currentContracts =
                             model.contracts |> Maybe.withDefault []
@@ -1801,6 +1943,7 @@ update msg model =
 
                                 pending =
                                     { commitContext = CommitContract activeName
+                                    , branch = branch
                                     , actionType = actionType
                                     , filePath = "components/" ++ activeName ++ ".contract.json"
                                     , commitMessage = "Save contract for " ++ activeName
@@ -1820,11 +1963,11 @@ update msg model =
                     ( model, Effect.none )
 
         DeleteContract name ->
-            case ( model.token, model.selectedProject ) of
-                ( Just token, Just project ) ->
+            case ( model.token, model.selectedProject, Guard.writableBranch model ) of
+                ( Just token, Just project, Just branch ) ->
                     let
                         payload =
-                            { branch = Maybe.withDefault project.defaultBranch model.currentBranch
+                            { branch = branch
                             , commitMessage = "Delete contract for " ++ name
                             , actions =
                                 [ { action = "delete"
@@ -1853,7 +1996,15 @@ update msg model =
                     ( { model | branches = Just branchList }, Effect.none )
 
                 Err _ ->
-                    ( model, Effect.none )
+                    -- This used to be swallowed, which was defensible when the
+                    -- list only filled a dropdown. It decides whether the app
+                    -- is editable at all now: without it `Guard` finds nothing
+                    -- known to be writable and everything goes read-only, so
+                    -- staying quiet would present as the app being inexplicably
+                    -- frozen.
+                    ( { model | error = Just "Couldn't list this repository's branches, so editing is off until it can. Reload to try again." }
+                    , Effect.none
+                    )
 
         -- Merge requests belong to the project, not the branch, so this arrives
         -- once with the rest of the repository and `SwitchBranch` leaves it be.
@@ -1867,20 +2018,24 @@ update msg model =
                 Err _ ->
                     ( model, Effect.none )
 
+        -- A branch change is a navigation, like changing tabs and changing
+        -- selection: pushing the URL and letting `applyRoute` do the work is
+        -- what keeps the address bar and the model from disagreeing, and it is
+        -- what makes Back walk you off a branch again.
         SwitchBranch branchName ->
-            case ( model.token, model.selectedProject ) of
-                ( Just token, Just project ) ->
-                    ( { model | currentBranch = Just branchName, repositoryTree = Nothing, originalComponents = Nothing, components = Nothing, originalTokens = Nothing, tokens = Nothing, themes = [], screens = Nothing, existingComponents = [], existingThemes = [], existingScreens = [], tokensFileExists = False, commitStatus = Just ( Done, "On branch " ++ branchName ), contracts = Nothing, existingContracts = [], newContractRuleType = "allowedTokenGroups", newContractRuleFields = Dict.empty }
-                    , Effect.batch
-                        [ GitLab.Files.listTree token project.id branchName GotTree |> Effect.SendRequest
-                        , GitLab.Files.getFileRaw token project.id branchName "tokens/tokens.json" GotTokensFile |> Effect.SendRequest
-                        , GitLab.Files.listTreeAtPath token project.id branchName "themes" (GotThemesTree branchName) |> Effect.SendRequest
-                        , GitLab.Files.listTreeAtPath token project.id branchName "components" (GotComponentsTree branchName) |> Effect.SendRequest
-                        , GitLab.Files.listTreeAtPath token project.id branchName "layouts" (GotScreensTree branchName) |> Effect.SendRequest
-                        ]
+            case model.selectedProject of
+                Just project ->
+                    ( model
+                    , Effect.PushUrl
+                        (Route.toString
+                            (Route.forProject project
+                                (Just branchName)
+                                (Route.tabRouteFor model.activeTab model.selectedComponentName model.selectedScreenName)
+                            )
+                        )
                     )
 
-                _ ->
+                Nothing ->
                     ( model, Effect.none )
 
         UpdateNewBranchName name ->
@@ -1915,8 +2070,36 @@ update msg model =
                     let
                         currentBranches =
                             model.branches |> Maybe.withDefault []
+
+                        moved =
+                            { model
+                                | branches = Just (branch :: currentBranches)
+                                , commitStatus = Just ( Done, "Branch created" )
+                                , newBranchName = ""
+                                , currentBranch = Just branch.name
+                            }
                     in
-                    ( { model | branches = Just (branch :: currentBranches), commitStatus = Just ( Done, "Branch created" ), newBranchName = "", currentBranch = Just branch.name }, Effect.none )
+                    -- Note the order, and do not "tidy" it into a plain
+                    -- PushUrl: `currentBranch` moves *first*, so the
+                    -- `applyBranch` that the pushed URL triggers sees no change
+                    -- and does not refetch. That is what lets edits you made
+                    -- while browsing the default branch come with you onto the
+                    -- branch you just cut for them, which is the whole reason
+                    -- read-only mode is bearable.
+                    ( moved
+                    , case model.selectedProject of
+                        Just project ->
+                            Effect.PushUrl
+                                (Route.toString
+                                    (Route.forProject project
+                                        (Just branch.name)
+                                        (Route.tabRouteFor moved.activeTab moved.selectedComponentName moved.selectedScreenName)
+                                    )
+                                )
+
+                        Nothing ->
+                            Effect.none
+                    )
 
                 Err _ ->
                     ( { model | commitStatus = Just ( Failed, "Couldn't create the branch" ) }, Effect.none )
@@ -1973,8 +2156,8 @@ update msg model =
             ( { model | exportTargets = newTargets }, Effect.none )
 
         RunExportPipeline ->
-            case ( model.token, model.selectedProject, model.currentBranch ) of
-                ( Just token, Just project, Just currentBranch ) ->
+            case ( model.token, model.selectedProject, Guard.writableBranch model ) of
+                ( Just token, Just project, Just branch ) ->
                     case model.tokens of
                         Just tokensList ->
                             let
@@ -2021,7 +2204,7 @@ update msg model =
                                         actions
 
                                 payload =
-                                    { branch = currentBranch
+                                    { branch = branch
                                     , commitMessage = "Export Design Tokens pipeline"
                                     , actions = finalActions
                                     }
