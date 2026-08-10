@@ -534,7 +534,7 @@ update msg model =
                     )
 
                 Err _ ->
-                    ( { model | error = Just "Failed to exchange authorization code for token." }, Effect.none )
+                    ( { model | error = Just "Failed to exchange authorization code for token.", startupStatus = Ready }, Effect.none )
 
         GotProfile result ->
             case result of
@@ -550,7 +550,7 @@ update msg model =
 
                 Err _ ->
                     -- On error (e.g., token expired), clear the token
-                    ( { model | token = Nothing, user = Nothing, error = Just "Failed to fetch profile. Token may have expired." }
+                    ( { model | token = Nothing, user = Nothing, error = Just "Failed to fetch profile. Token may have expired.", startupStatus = Ready }
                     , Effect.ClearToken
                     )
 
@@ -580,12 +580,38 @@ update msg model =
                     ( model, Effect.none )
 
         GotProjects result ->
+            let
+                -- A deep link names a repository, so the project list arriving
+                -- is not the end of loading — `GotProject` still has to answer.
+                -- Revealing the picker in between would flash it for a moment
+                -- and then replace it with the editor.
+                --
+                -- This asks the URL rather than comparing `commitStatus`
+                -- against "Loading repository...". Inferring control flow from
+                -- the text of a status message is how `StatusLevel` came to
+                -- exist (see its docstring): a copy edit would silently turn
+                -- the loading screen off.
+                stillFetchingProject =
+                    case Route.parse model.url of
+                        Just (Route.Repo _ _) ->
+                            model.selectedProject == Nothing
+
+                        _ ->
+                            False
+
+                status =
+                    if stillFetchingProject then
+                        Booting
+
+                    else
+                        Ready
+            in
             case result of
                 Ok projects ->
-                    ( { model | projects = Just projects, projectsPage = 1 }, Effect.none )
+                    ( { model | projects = Just projects, projectsPage = 1, startupStatus = status }, Effect.none )
 
                 Err _ ->
-                    ( { model | error = Just "Failed to fetch projects." }, Effect.none )
+                    ( { model | error = Just "Failed to fetch projects.", startupStatus = status }, Effect.none )
 
         LoadMoreProjects ->
             case ( model.token, model.projectsPage ) of
@@ -624,15 +650,19 @@ update msg model =
                     -- route still says, so it applies again — otherwise a deep
                     -- link to a component would land on the right tab with
                     -- nothing chosen the moment the repository arrived.
-                    ( resetForProject project model |> selectFromUrl model.url
+                    let
+                        resetModel =
+                            resetForProject project model |> selectFromUrl model.url
+                    in
+                    ( { resetModel | startupStatus = Ready }
                     , fetchProjectData token project
                     )
 
                 ( Ok _, Nothing ) ->
-                    ( { model | commitStatus = Nothing }, Effect.none )
+                    ( { model | commitStatus = Nothing, startupStatus = Ready }, Effect.none )
 
                 ( Err error, _ ) ->
-                    ( { model | error = Just (projectErrorMessage error), commitStatus = Nothing }, Effect.none )
+                    ( { model | error = Just (projectErrorMessage error), commitStatus = Nothing, startupStatus = Ready }, Effect.none )
 
         GotTree result ->
             case result of

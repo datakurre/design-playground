@@ -17,6 +17,11 @@ import Tokens
 import Url exposing (Url)
 
 
+type StartupStatus
+    = Booting
+    | Ready
+
+
 type alias Flags =
     { token : Maybe String
     , pkceChallenge : String
@@ -51,6 +56,7 @@ type alias Model =
     { url : Url
     , token : Maybe String
     , user : Maybe Auth.User
+    , startupStatus : StartupStatus
     , error : Maybe String
     , projects : Maybe (List Project)
     , projectsPage : Int
@@ -140,6 +146,7 @@ initial url flags =
     { url = url
     , token = flags.token
     , user = Nothing
+    , startupStatus = Booting
     , error = Nothing
     , projects = Nothing
     , projectsPage = 1

@@ -7,6 +7,7 @@ module Ui exposing
     , PillTone(..), pill
     , previewSurface
     , contextHelp, tabLede
+    , throbber
     )
 
 {-| The app's own chrome, in one place.
@@ -61,6 +62,11 @@ Three steps, and no more.
 
 @docs contextHelp, tabLede
 
+
+# Loading
+
+@docs throbber
+
 -}
 
 import Html exposing (Attribute, Html)
@@ -68,7 +74,7 @@ import Html.Attributes exposing (selected, value)
 import Html.Events exposing (onInput)
 import Tailwind as Tw exposing (Tailwind, batch, classes)
 import Tailwind.Breakpoints exposing (hover)
-import Tailwind.Theme exposing (emerald, orange, red, s0, s0_dot_5, s1, s100, s1_dot_5, s2, s200, s3, s300, s4, s400, s5, s50, s500, s6, s600, s700, s800, s900, slate, white)
+import Tailwind.Theme exposing (emerald, orange, red, s0, s0_dot_5, s1, s100, s1_dot_5, s2, s200, s3, s300, s4, s400, s5, s50, s500, s6, s600, s700, s8, s800, s900, slate, white)
 
 
 
@@ -537,6 +543,42 @@ contextHelp topic =
                 :: List.map (\p -> Html.p [ muted, classes [ Tw.mt s1 ] ] [ Html.text p ]) topic.body
             )
         ]
+
+
+{-| A generic loading spinner.
+
+Built from a bordered `div` rather than an `<svg>` because `Html.node "svg"`
+does not work: it creates the element in the HTML namespace via
+`document.createElement`, so the browser treats `<svg>` and `<circle>` as
+unknown elements and renders nothing at all. (The giveaway is the attribute
+arriving as `viewbox` rather than `viewBox` — HTML lowercases attribute names,
+SVG is case-sensitive.) Real SVG needs `elm/svg`, which uses `createElementNS`
+and is not a dependency here. A spinner does not need one.
+
+`role="status"` with a label because the alternative is a screen reader
+announcing nothing while the page sits empty.
+
+-}
+throbber : Html msg
+throbber =
+    Html.div
+        [ Html.Attributes.attribute "role" "status"
+        , Html.Attributes.attribute "aria-label" "Loading"
+        , classes
+            [ Tw.w s8
+            , Tw.h s8
+            , Tw.rounded_full
+            , Tw.border_4
+            , Tw.border_color (slate s200)
+
+            -- No border_t_color in the generated API, so the one side that
+            -- differs is raw. Tw.raw takes a literal, which the elm-tailwind
+            -- extractor sees, so it survives into the stylesheet.
+            , Tw.raw "border-t-slate-500"
+            , Tw.raw "animate-spin"
+            ]
+        ]
+        []
 
 
 {-| The sentence under the tab bar saying what this tab is for, with the tab's

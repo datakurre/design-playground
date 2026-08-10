@@ -93,13 +93,20 @@ init flags url key =
         -- link or a refresh would land on an empty Tokens tab no matter what
         -- the URL said. The token comes from flags, so the repository can start
         -- loading right away.
+        modelWithStatus =
+            if urlCode == Nothing && flags.token == Nothing then
+                { initialModel | startupStatus = Ready }
+
+            else
+                initialModel
+
         ( routedModel, routeEffect ) =
             case Route.parse url of
                 Just route ->
-                    Update.applyRoute route initialModel
+                    Update.applyRoute route modelWithStatus
 
                 Nothing ->
-                    ( initialModel, Effect.none )
+                    ( modelWithStatus, Effect.none )
     in
     ( { key = key, app = routedModel }
     , Effect.perform key (Effect.batch (routeEffect :: effects))
@@ -151,7 +158,13 @@ view model =
             [ viewAppBar model
             , div [ Ui.page ]
                 [ viewError model
-                , viewWorkspace model
+                , case model.startupStatus of
+                    Booting ->
+                        div [ classes [ Tw.py s14, Tw.flex, Tw.justify_center ] ]
+                            [ Ui.throbber ]
+
+                    Ready ->
+                        viewWorkspace model
                 ]
             ]
         ]
@@ -285,22 +298,22 @@ viewWorkspace : Model -> Html Msg
 viewWorkspace model =
     case ( model.token, model.user ) of
         ( Just _, Just _ ) ->
-            case model.projects of
+            case model.selectedProject of
+                Just project ->
+                    viewEditor model project
+
                 Nothing ->
-                    div [ classes [ Tw.text_center, Tw.py s8 ] ]
-                        [ div [ Ui.muted, classes [ Tw.mb s3 ] ]
-                            [ text "Your design tokens, components and screens live in a GitLab repository." ]
-                        , button [ Ui.btnPrimary, onClick FetchProjects ] [ text "Choose a repository" ]
-                        , viewOrderOfOperations
-                        ]
-
-                Just projects ->
-                    case model.selectedProject of
+                    case model.projects of
                         Nothing ->
-                            viewProjectPicker model.projectSearch projects
+                            div [ classes [ Tw.text_center, Tw.py s8 ] ]
+                                [ div [ Ui.muted, classes [ Tw.mb s3 ] ]
+                                    [ text "Your design tokens, components and screens live in a GitLab repository." ]
+                                , button [ Ui.btnPrimary, onClick FetchProjects ] [ text "Choose a repository" ]
+                                , viewOrderOfOperations
+                                ]
 
-                        Just project ->
-                            viewEditor model project
+                        Just projects ->
+                            viewProjectPicker model.projectSearch projects
 
         _ ->
             div [ classes [ Tw.text_center, Tw.py s8 ] ]

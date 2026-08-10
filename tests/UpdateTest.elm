@@ -20,6 +20,7 @@ import Effect exposing (Effect)
 import Expect
 import GitLab.Files
 import GitLab.Request
+import Http
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Test exposing (Test, describe, test)
@@ -301,6 +302,73 @@ suite =
                         |> Tuple.second
                         |> Effect.toList
                         |> Expect.equal [ Effect.LoadUrl "https://gitlab.com/oauth/authorize" ]
+            ]
+        , describe "the startup screen gets out of the way"
+            [ test "the project list arriving is the end of loading" <|
+                \_ ->
+                    let
+                        ( model, _ ) =
+                            Update.update (GotProjects (Ok []))
+                                { signedOutWithToken | startupStatus = Types.Booting }
+                    in
+                    model.startupStatus |> Expect.equal Types.Ready
+            , test "failing to fetch the project list still ends loading" <|
+                \_ ->
+                    -- Otherwise the throbber spins forever over an error the
+                    -- user cannot see.
+                    let
+                        ( model, _ ) =
+                            Update.update (GotProjects (Err (Http.BadStatus 500)))
+                                { signedOutWithToken | startupStatus = Types.Booting }
+                    in
+                    model.startupStatus |> Expect.equal Types.Ready
+            , test "a deep link keeps loading until the repository itself arrives" <|
+                \_ ->
+                    -- The list is not what a deep link is waiting for. Going
+                    -- Ready here would flash the repository picker and then
+                    -- replace it with the editor.
+                    let
+                        ( model, _ ) =
+                            Update.update (GotProjects (Ok []))
+                                { signedOutWithToken
+                                    | url = url "#/acme/design/tokens"
+                                    , selectedProject = Nothing
+                                    , startupStatus = Types.Booting
+                                }
+                    in
+                    model.startupStatus |> Expect.equal Types.Booting
+            , test "and stops once that repository has arrived" <|
+                \_ ->
+                    let
+                        ( model, _ ) =
+                            Update.update (GotProjects (Ok []))
+                                { signedIn
+                                    | url = url "#/acme/design/tokens"
+                                    , startupStatus = Types.Booting
+                                }
+                    in
+                    model.startupStatus |> Expect.equal Types.Ready
+            , test "an expired token ends loading rather than spinning forever" <|
+                \_ ->
+                    let
+                        ( model, _ ) =
+                            Update.update (GotProfile (Err (Http.BadStatus 401)))
+                                { signedOutWithToken | startupStatus = Types.Booting }
+                    in
+                    ( model.startupStatus, model.token )
+                        |> Expect.equal ( Types.Ready, Nothing )
+            , test "a failed project fetch ends loading and says why" <|
+                \_ ->
+                    let
+                        ( model, _ ) =
+                            Update.update (GotProject (Err (Http.BadStatus 404)))
+                                { signedOutWithToken | startupStatus = Types.Booting }
+                    in
+                    ( model.startupStatus, model.error )
+                        |> Expect.equal
+                            ( Types.Ready
+                            , Just "No repository at that address, or you don't have access to it."
+                            )
             ]
         , describe "refusals do not reach the network"
             [ test "creating a token with a blank name says so and sends nothing" <|
