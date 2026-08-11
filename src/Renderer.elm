@@ -23,7 +23,7 @@ camelToKebab str =
         |> String.fromList
 
 
-resolveToken : String -> List FlatToken -> Tokens.TokenValue
+resolveToken : String -> Tokens.Index -> Tokens.TokenValue
 resolveToken path tokens =
     let
         cleanPath =
@@ -40,9 +40,8 @@ resolveToken path tokens =
             String.split "." aliasPath |> List.map String.trim |> List.filter (\s -> s /= "")
 
         tokenValue =
-            List.filter (\( p, _ ) -> p == parsedPath) tokens
-                |> List.head
-                |> Maybe.map (\( _, t ) -> Tokens.resolveAliasValue tokens t.value)
+            Dict.get parsedPath tokens
+                |> Maybe.map (\t -> Tokens.resolveAliasValueWith tokens t.value)
     in
     case tokenValue of
         Just v ->
@@ -51,7 +50,7 @@ resolveToken path tokens =
         Nothing ->
             -- If it's not a single direct token match, resolve any embedded aliases
             -- e.g., "1px solid {color.primary}" -> "1px solid #ff0000"
-            Tokens.StringValue (Tokens.resolveAlias tokens path)
+            Tokens.StringValue (Tokens.resolveAliasWith tokens path)
 
 
 {-| Turns a node's styles into inline style attributes, dropping anything the
@@ -70,7 +69,7 @@ already in the build for the editor's datalist — and an unknown property is a
 typo worth not rendering silently.
 
 -}
-renderStyles : List FlatToken -> Dict String String -> List (Html.Attribute msg)
+renderStyles : Tokens.Index -> Dict String String -> List (Html.Attribute msg)
 renderStyles tokens stylesDict =
     Dict.toList stylesDict
         |> List.concatMap
@@ -119,8 +118,17 @@ isSafeStyleValue value =
         && not (String.contains ";" lowered)
 
 
+{-| The index is built once here and threaded down, rather than rebuilt at
+every node. The public signature still takes the flat list, because that is what
+every caller has.
+-}
 renderScreenNode : Dict String Component -> Dict String Screen -> List String -> List FlatToken -> ScreenNode -> Html msg
 renderScreenNode components screens visited tokens node =
+    renderScreenNodeWith components screens visited (Tokens.index tokens) node
+
+
+renderScreenNodeWith : Dict String Component -> Dict String Screen -> List String -> Tokens.Index -> ScreenNode -> Html msg
+renderScreenNodeWith components screens visited tokens node =
     case node of
         ComponentInstance props ->
             case Dict.get props.componentName components of
@@ -151,7 +159,7 @@ renderScreenNode components screens visited tokens node =
             else
                 case Dict.get props.screenName screens of
                     Just screen ->
-                        renderScreenNode components screens (props.screenName :: visited) tokens screen.root
+                        renderScreenNodeWith components screens (props.screenName :: visited) tokens screen.root
 
                     Nothing ->
                         previewProblem ("There is no screen called " ++ props.screenName ++ ".")
@@ -163,7 +171,7 @@ renderScreenNode components screens visited tokens node =
                  ]
                     ++ renderStyles tokens props.styles
                 )
-                (List.map (renderScreenNode components screens visited tokens) children)
+                (List.map (renderScreenNodeWith components screens visited tokens) children)
 
         TextNode content ->
             text content
@@ -183,7 +191,7 @@ type alias Env =
     { components : Dict String Component
     , screens : Dict String Screen
     , visited : List String
-    , tokens : List FlatToken
+    , tokens : Tokens.Index
     , slots : Dict String (List ScreenNode)
     , activeVariant : Maybe String
     , activeState : Maybe String
@@ -245,7 +253,7 @@ renderLayout env layout =
                     Just slotChildren ->
                         div
                             [ style "display" "contents" ]
-                            (List.map (renderScreenNode env.components env.screens env.visited env.tokens) slotChildren)
+                            (List.map (renderScreenNodeWith env.components env.screens env.visited env.tokens) slotChildren)
 
                     Nothing ->
                         div
@@ -271,7 +279,7 @@ renderWithConditions tokens activeVariant activeState layout =
         { components = Dict.empty
         , screens = Dict.empty
         , visited = []
-        , tokens = tokens
+        , tokens = Tokens.index tokens
         , slots = Dict.empty
         , activeVariant = activeVariant
         , activeState = activeState

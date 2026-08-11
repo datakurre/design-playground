@@ -1,4 +1,4 @@
-module GitLab.MergeRequests exposing (MergeRequest, createMergeRequest, decoder, listMergeRequests)
+module GitLab.MergeRequests exposing (MergeRequest, createMergeRequest, decoder, listMergeRequests, pageSize)
 
 import GitLab.Request exposing (Body(..), Request)
 import Http
@@ -27,15 +27,33 @@ decoder =
 
 {-| Only the open ones: the panel exists to answer "what of mine is waiting for
 review", and a busy repository's merged history would bury that.
+
+`per_page` was 20 with no way to ask for more, which is a cap rather than a
+default — a repository with twenty-one open merge requests simply didn't show
+the twenty-first.
+
 -}
-listMergeRequests : String -> Int -> (Result Http.Error (List MergeRequest) -> msg) -> Request msg
-listMergeRequests token projectId toMsg =
+listMergeRequests : String -> Int -> Int -> (Result Http.Error (List MergeRequest) -> msg) -> Request msg
+listMergeRequests token projectId page toMsg =
     { method = "GET"
-    , url = "https://gitlab.com/api/v4/projects/" ++ String.fromInt projectId ++ "/merge_requests?state=opened&per_page=20"
+    , url =
+        "https://gitlab.com/api/v4/projects/"
+            ++ String.fromInt projectId
+            ++ "/merge_requests?state=opened&per_page="
+            ++ String.fromInt pageSize
+            ++ "&page="
+            ++ String.fromInt page
     , headers = GitLab.Request.authorized token
     , body = EmptyBody
     , expect = Http.expectJson toMsg (Decode.list decoder)
     }
+
+
+{-| How many merge requests one request asks for.
+-}
+pageSize : Int
+pageSize =
+    100
 
 
 createMergeRequest : String -> Int -> String -> String -> String -> (Result Http.Error MergeRequest -> msg) -> Request msg

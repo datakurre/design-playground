@@ -137,6 +137,50 @@ encoder contract =
         ]
 
 
+{-| What the rules need to look values up with, computed once per `validate`
+rather than per node.
+-}
+type alias Resolver =
+    { tokens : Tokens.Index
+    , scales : Dict String (List String)
+    }
+
+
+{-| The resolved values of every scale any `SpacingOnScale` rule names, keyed by
+the dotted path that named it.
+-}
+scalesFor : List Tokens.FlatToken -> Contract -> Dict String (List String)
+scalesFor tokens contract =
+    let
+        indexed =
+            Tokens.index tokens
+
+        valuesUnder scale =
+            tokens
+                |> List.filter (\( tp, _ ) -> isPrefixOf scale tp)
+                |> List.filterMap
+                    (\( _, t ) ->
+                        case Tokens.resolveAliasValueWith indexed t.value of
+                            Tokens.StringValue s ->
+                                Just s
+
+                            _ ->
+                                Nothing
+                    )
+    in
+    contract.rules
+        |> List.filterMap
+            (\rule ->
+                case rule of
+                    SpacingOnScale _ scale ->
+                        Just ( String.join "." scale, valuesUnder scale )
+
+                    _ ->
+                        Nothing
+            )
+        |> Dict.fromList
+
+
 {-| Every rule, against every node, in every context the component actually
 styles.
 
@@ -158,8 +202,17 @@ validate tokens contract component =
                 nodes =
                     styleNodes layout
 
+                -- Indexed once for the whole component, and each
+                -- `SpacingOnScale` rule's scale resolved once with it. Both
+                -- used to be rebuilt inside `applyRule`, which runs per node
+                -- per context.
+                resolver =
+                    { tokens = Tokens.index tokens
+                    , scales = scalesFor tokens contract
+                    }
+
                 violationsIn context =
-                    List.concatMap (\( path, node ) -> checkNode tokens contract path context node) nodes
+                    List.concatMap (\( path, node ) -> checkNode resolver contract path context node) nodes
 
                 baseViolations =
                     violationsIn Components.baseContext
@@ -194,8 +247,8 @@ background still changes the pairing — so it reads the fully resolved styles,
 and the caller drops whatever that duplicates from the base.
 
 -}
-checkNode : List Tokens.FlatToken -> Contract -> List Int -> Components.StyleContext -> Components.Styling -> List Violation
-checkNode tokens contract path context node =
+checkNode : Resolver -> Contract -> List Int -> Components.StyleContext -> Components.Styling -> List Violation
+checkNode resolver contract path context node =
     let
         resolved =
             Components.resolveStyles context node
@@ -218,11 +271,11 @@ checkNode tokens contract path context node =
             else
                 Just context
     in
-    List.concatMap (applyRule tokens path tag { scoped = scoped, resolved = resolved }) contract.rules
+    List.concatMap (applyRule resolver path tag { scoped = scoped, resolved = resolved }) contract.rules
 
 
-applyRule : List Tokens.FlatToken -> List Int -> Maybe Components.StyleContext -> { scoped : Dict String String, resolved : Dict String String } -> Rule -> List Violation
-applyRule tokens path context nodeStyles rule =
+applyRule : Resolver -> List Int -> Maybe Components.StyleContext -> { scoped : Dict String String, resolved : Dict String String } -> Rule -> List Violation
+applyRule resolver path context nodeStyles rule =
     let
         styles =
             nodeStyles.scoped
@@ -285,17 +338,8 @@ applyRule tokens path context nodeStyles rule =
         SpacingOnScale properties scale ->
             let
                 scaleValues =
-                    tokens
-                        |> List.filter (\( tp, _ ) -> isPrefixOf scale tp)
-                        |> List.filterMap
-                            (\( _, t ) ->
-                                case Tokens.resolveAliasValue tokens t.value of
-                                    Tokens.StringValue s ->
-                                        Just s
-
-                                    _ ->
-                                        Nothing
-                            )
+                    Dict.get (String.join "." scale) resolver.scales
+                        |> Maybe.withDefault []
             in
             styles
                 |> Dict.toList
@@ -304,7 +348,7 @@ applyRule tokens path context nodeStyles rule =
                         if propertyMatches properties property then
                             let
                                 resolved =
-                                    Tokens.resolveAlias tokens value
+                                    Tokens.resolveAliasWith resolver.tokens value
                             in
                             if Tokens.isUnresolved resolved then
                                 -- A reference that didn't resolve isn't off the
@@ -341,10 +385,10 @@ applyRule tokens path context nodeStyles rule =
                 ( Just fg, Just bg ) ->
                     let
                         fgRes =
-                            Tokens.resolveAlias tokens fg
+                            Tokens.resolveAliasWith resolver.tokens fg
 
                         bgRes =
-                            Tokens.resolveAlias tokens bg
+                            Tokens.resolveAliasWith resolver.tokens bg
 
                         unverifiable why =
                             [ { path = path

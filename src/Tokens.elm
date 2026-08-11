@@ -113,12 +113,39 @@ isUnresolved value =
         || String.contains "{" value
 
 
+{-| Tokens keyed by path, for the places that resolve more than one value.
+
+`resolveAlias` used to scan the whole association list per alias occurrence,
+recursively, up to its depth budget — so rendering a screen with a thousand
+tokens and five hundred styled properties did on the order of half a million
+list comparisons per frame, and `Contracts.validate` did the same per node per
+context. `List String` is `comparable` in Elm, so a `Dict` keyed by the path
+needs no encoding step.
+
+Build it once and pass it down. The list-taking functions remain, and build an
+index per call, so the many one-off callers didn't all have to move at once.
+
+-}
+type alias Index =
+    Dict TokenPath DesignToken
+
+
+index : List FlatToken -> Index
+index =
+    Dict.fromList
+
+
 resolveAlias : List FlatToken -> String -> String
 resolveAlias tokens value =
+    resolveAliasWith (index tokens) value
+
+
+resolveAliasWith : Index -> String -> String
+resolveAliasWith tokens value =
     resolveAliasHelp tokens value 10
 
 
-resolveAliasHelp : List FlatToken -> String -> Int -> String
+resolveAliasHelp : Index -> String -> Int -> String
 resolveAliasHelp tokens value depth =
     if depth <= 0 then
         -- Out of budget means an alias chain longer than any real token graph,
@@ -144,10 +171,9 @@ resolveAliasHelp tokens value depth =
                                 String.split "." aliasPathStr
 
                             resolvedAlias =
-                                List.filter (\( p, _ ) -> p == aliasPath) tokens
-                                    |> List.head
+                                Dict.get aliasPath tokens
                                     |> Maybe.map
-                                        (\( _, t ) ->
+                                        (\t ->
                                             case t.value of
                                                 StringValue s ->
                                                     resolveAliasHelp tokens s (depth - 1)
@@ -212,13 +238,21 @@ insertIntoAst ( path, token ) ast =
 
 
 resolveAliasValue : List FlatToken -> TokenValue -> TokenValue
-resolveAliasValue tokens tv =
+resolveAliasValue tokens =
+    resolveAliasValueWith (index tokens)
+
+
+resolveAliasValueWith : Index -> TokenValue -> TokenValue
+resolveAliasValueWith tokens tv =
     case tv of
         StringValue s ->
-            StringValue (resolveAlias tokens s)
+            StringValue (resolveAliasWith tokens s)
 
         CompositeValue dict ->
-            CompositeValue (Dict.map (\_ v -> resolveAlias tokens v) dict)
+            -- One index for every sub-property, rather than one per property:
+            -- a composite token is exactly where rebuilding it per lookup hurt
+            -- most.
+            CompositeValue (Dict.map (\_ v -> resolveAliasWith tokens v) dict)
 
 
 tokenValueEncoder : TokenValue -> Value

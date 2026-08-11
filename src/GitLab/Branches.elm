@@ -1,4 +1,4 @@
-module GitLab.Branches exposing (Branch, branchDecoder, createBranch, listBranches)
+module GitLab.Branches exposing (Branch, branchDecoder, createBranch, listBranches, pageSize)
 
 import GitLab.Request exposing (Body(..), Request)
 import Http
@@ -34,10 +34,27 @@ branchDecoder =
         (Decode.field "protected" Decode.bool)
 
 
-listBranches : String -> Int -> (Result Http.Error (List Branch) -> msg) -> Request msg
-listBranches token projectId toMsg =
+{-| How many branches one request asks for. This used to send no `per_page` at
+all, so GitLab's default of 20 applied — and a branch beyond the first twenty
+was not merely hidden from the picker. `Guard.writability` fails closed on a
+branch it can't find in the list, so being on branch twenty-one made the whole
+app read-only, with a message about an unknown branch.
+-}
+pageSize : Int
+pageSize =
+    100
+
+
+listBranches : String -> Int -> Int -> (Result Http.Error (List Branch) -> msg) -> Request msg
+listBranches token projectId page toMsg =
     { method = "GET"
-    , url = "https://gitlab.com/api/v4/projects/" ++ String.fromInt projectId ++ "/repository/branches"
+    , url =
+        "https://gitlab.com/api/v4/projects/"
+            ++ String.fromInt projectId
+            ++ "/repository/branches?per_page="
+            ++ String.fromInt pageSize
+            ++ "&page="
+            ++ String.fromInt page
     , headers = GitLab.Request.authorized token
     , body = EmptyBody
     , expect = Http.expectJson toMsg (Decode.list branchDecoder)

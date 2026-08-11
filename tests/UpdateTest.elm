@@ -207,15 +207,19 @@ suite =
                 \_ ->
                     -- Switching used to leave the contracts behind, so the
                     -- contracts panel kept showing the previous branch's rules.
-                    -- They now arrive through the components tree listing, which
-                    -- is one of these five.
+                    -- Two requests now: the recursive tree, which every other
+                    -- file is read from once it lands, and the tokens file,
+                    -- whose path is fixed and needs no listing to find.
                     let
                         ( _, effect ) =
                             Update.update (UrlChanged (url "#/acme/design/tokens?branch=feature-x")) signedIn
                     in
                     Effect.requests effect
-                        |> List.length
-                        |> Expect.equal 5
+                        |> List.map .url
+                        |> Expect.equal
+                            [ "https://gitlab.com/api/v4/projects/7/repository/tree?recursive=true&ref=feature-x&per_page=100&page=1"
+                            , "https://gitlab.com/api/v4/projects/7/repository/files/tokens%2Ftokens.json/raw?ref=feature-x"
+                            ]
             , test "no request goes to a root contracts.json, because nothing writes one" <|
                 \_ ->
                     -- It was a read-only second convention: every save writes
@@ -299,45 +303,92 @@ suite =
                     ( Effect.requests effect |> List.length, Maybe.map (List.map .name) arrived.components )
                         |> Expect.equal ( 0, Just [ "Button" ] )
             ]
-        , describe "listing the components directory"
-            [ test "fetches every component and contract at the ref it was listed from" <|
+        , describe "reading the design system off the repository tree"
+            [ test "fetches every file at the ref the tree was listed from" <|
                 \_ ->
+                    -- One recursive listing, not four per-directory ones. The
+                    -- per-directory listings weren't recursive and had no
+                    -- per_page, so GitLab's default of 20 silently capped each.
                     let
                         ( _, effect ) =
-                            Update.update
-                                (GotComponentsTree "feature-x"
-                                    (Ok
-                                        [ treeItem "Button.json"
-                                        , treeItem "Button.contract.json"
-                                        , treeItem "README.md"
-                                        ]
-                                    )
-                                )
-                                signedIn
+                            Update.update (GotTree "feature-x" 1 (Ok designSystemTree)) signedIn
                     in
                     Effect.requests effect
                         |> List.map .url
                         |> Expect.equal
-                            [ "https://gitlab.com/api/v4/projects/7/repository/files/components%2FButton.json/raw?ref=feature-x"
+                            [ "https://gitlab.com/api/v4/projects/7/repository/files/themes%2FDark.json/raw?ref=feature-x"
+                            , "https://gitlab.com/api/v4/projects/7/repository/files/components%2FButton.json/raw?ref=feature-x"
                             , "https://gitlab.com/api/v4/projects/7/repository/files/components%2FButton.contract.json/raw?ref=feature-x"
+                            , "https://gitlab.com/api/v4/projects/7/repository/files/layouts%2FHome.json/raw?ref=feature-x"
                             ]
             , test "tells a contract apart from the component it belongs to" <|
                 \_ ->
                     let
                         ( model, _ ) =
-                            Update.update
-                                (GotComponentsTree "main"
-                                    (Ok
-                                        [ treeItem "Button.json"
-                                        , treeItem "Button.contract.json"
-                                        , treeItem "README.md"
-                                        ]
-                                    )
-                                )
-                                signedIn
+                            Update.update (GotTree "main" 1 (Ok designSystemTree)) signedIn
                     in
                     ( model.existingComponents, model.existingContracts )
                         |> Expect.equal ( [ "Button" ], [ "Button" ] )
+            , test "ignores files that aren't part of the design system" <|
+                \_ ->
+                    let
+                        ( model, _ ) =
+                            Update.update (GotTree "main" 1 (Ok designSystemTree)) signedIn
+                    in
+                    ( model.existingThemes, model.existingScreens )
+                        |> Expect.equal ( [ "Dark" ], [ "Home" ] )
+            , test "a full page asks for the next one instead of reading a partial tree" <|
+                \_ ->
+                    -- A full page is the only evidence there might be another,
+                    -- and reading the design system off half a listing would
+                    -- present the missing half as deleted.
+                    let
+                        fullPage =
+                            List.repeat GitLab.Files.treePageSize (blob "components/Button.json")
+
+                        ( _, effect ) =
+                            Update.update (GotTree "main" 1 (Ok fullPage)) signedIn
+                    in
+                    Effect.requests effect
+                        |> List.map .url
+                        |> Expect.equal
+                            [ "https://gitlab.com/api/v4/projects/7/repository/tree?recursive=true&ref=main&per_page=100&page=2" ]
+            ]
+        , describe "listings that used to stop at twenty"
+            [ test "a full page of branches asks for the next one" <|
+                \_ ->
+                    -- listBranches sent no per_page at all, so GitLab's default
+                    -- of 20 applied — and Guard.writability fails closed on a
+                    -- branch missing from the list, so being on branch 21 made
+                    -- the whole app read-only.
+                    let
+                        fullPage =
+                            List.repeat GitLab.Branches.pageSize featureBranch
+
+                        ( _, effect ) =
+                            Update.update (GotBranches 1 (Ok fullPage)) signedIn
+                    in
+                    Effect.requests effect
+                        |> List.map .url
+                        |> Expect.equal
+                            [ "https://gitlab.com/api/v4/projects/7/repository/branches?per_page=100&page=2" ]
+            , test "a short page of branches stops" <|
+                \_ ->
+                    let
+                        ( model, effect ) =
+                            Update.update (GotBranches 1 (Ok [ mainBranch ])) signedIn
+                    in
+                    ( Effect.requests effect |> List.length, Maybe.map List.length model.branches )
+                        |> Expect.equal ( 0, Just 1 )
+            , test "later pages append rather than replace" <|
+                \_ ->
+                    let
+                        ( model, _ ) =
+                            Update.update (GotBranches 2 (Ok [ featureBranch ]))
+                                { signedIn | branches = Just [ mainBranch ] }
+                    in
+                    Maybe.map (List.map .name) model.branches
+                        |> Expect.equal (Just [ "main", "feature-x" ])
             ]
         , describe "opening a merge request"
             [ test "refuses on the default branch, with a remedy, and sends nothing" <|
@@ -882,16 +933,45 @@ withComponent name model =
     }
 
 
-{-| A tree entry as GitLab lists it. Only `name` and `path` matter here.
+{-| A tree entry as GitLab lists it, given its full repository path. `type_`
+matters as much as the path: a recursive listing includes the directories
+themselves, and treating one as a file asks GitLab for the contents of
+`components`.
 -}
-treeItem : String -> GitLab.Files.TreeItem
-treeItem name =
+blob : String -> GitLab.Files.TreeItem
+blob path =
     { id = "abc123"
-    , name = name
+    , name = path |> String.split "/" |> List.reverse |> List.head |> Maybe.withDefault path
     , type_ = "blob"
-    , path = "components/" ++ name
+    , path = path
     , mode = "100644"
     }
+
+
+treeDir : String -> GitLab.Files.TreeItem
+treeDir path =
+    let
+        item =
+            blob path
+    in
+    { item | type_ = "tree" }
+
+
+{-| One of each kind of file, plus the directories a recursive listing includes
+and two files that are not part of the design system at all.
+-}
+designSystemTree : List GitLab.Files.TreeItem
+designSystemTree =
+    [ treeDir "themes"
+    , treeDir "components"
+    , treeDir "layouts"
+    , blob "themes/Dark.json"
+    , blob "components/Button.json"
+    , blob "components/Button.contract.json"
+    , blob "components/README.md"
+    , blob "layouts/Home.json"
+    , blob "README.md"
+    ]
 
 
 url : String -> Url.Url

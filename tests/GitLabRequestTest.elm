@@ -167,7 +167,7 @@ suite =
                 \_ ->
                     -- The panel answers "what of mine is waiting for review", and
                     -- a busy repository's merged history would bury that.
-                    (GitLab.MergeRequests.listMergeRequests "t" 7 (always Ignored)).url
+                    (GitLab.MergeRequests.listMergeRequests "t" 7 1 (always Ignored)).url
                         |> String.contains "state=opened"
                         |> Expect.equal True
             ]

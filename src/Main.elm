@@ -268,6 +268,11 @@ viewRepoBadge model =
 
                     Nothing ->
                         text ""
+                , -- Re-reads the branch. Every save now sends the version it
+                  -- was based on, so a file that moved in GitLab is refused
+                  -- rather than overwritten — and this is what the refusal
+                  -- tells you to do about it.
+                  button [ Ui.btnNeutral, onClick ReloadBranch ] [ text "Reload" ]
                 , button [ Ui.btnNeutral, onClick UnselectProject ] [ text "Change" ]
                 ]
 

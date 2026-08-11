@@ -142,11 +142,11 @@ suite =
             , test "responses from GitLab are never mutations, or nothing could load" <|
                 \_ ->
                     [ GotTokensFile (Ok { content = "{}", lastCommitId = Nothing })
-                    , GotThemesTree "main" (Ok [])
-                    , GotComponentsTree "main" (Ok [])
-                    , GotScreensTree "main" (Ok [])
+                    , GotTree "main" 1 (Ok [])
+                    , GotThemeFile "themes/Dark.json" (Ok { content = "{}", lastCommitId = Nothing })
+                    , GotScreenFile "layouts/Home.json" (Ok { content = "{}", lastCommitId = Nothing })
                     , GotContractFile "components/Button.contract.json" (Ok { content = "{}", lastCommitId = Nothing })
-                    , GotBranches (Ok [])
+                    , GotBranches 1 (Ok [])
                     ]
                         |> List.map Guard.isMutating
                         |> Expect.equal (List.repeat 6 False)

@@ -611,6 +611,93 @@ projectErrorMessage error =
             "Couldn't reach GitLab to open that repository."
 
 
+{-| Which files a design system is made of, read off the one recursive tree
+listing rather than asked for a directory at a time.
+
+`fetchAtRef` used to issue four tree requests — the root, then `themes/`,
+`components/` and `layouts/` — none of them recursive and all of them capped at
+GitLab's default of 20 entries. So a repository with 21 components showed 20,
+and a nested path never appeared in the root listing at all, which is what made
+the export pipeline send `create` over a file that was already there.
+
+-}
+type alias DesignSystemFiles =
+    { themes : List String
+    , components : List String
+    , contracts : List String
+    , screens : List String
+    }
+
+
+designSystemFiles : List GitLab.Files.TreeItem -> DesignSystemFiles
+designSystemFiles tree =
+    let
+        blobsIn directory =
+            tree
+                |> List.filter (\item -> item.type_ == "blob")
+                |> List.filter (\item -> String.startsWith (directory ++ "/") item.path)
+                |> List.map .path
+
+        componentBlobs =
+            blobsIn "components"
+    in
+    { themes = blobsIn "themes" |> List.filter (String.endsWith ".json")
+    , components =
+        componentBlobs
+            |> List.filter (\path -> String.endsWith ".json" path && not (RepoPaths.isContractFile path))
+    , contracts = componentBlobs |> List.filter RepoPaths.isContractFile
+    , screens = blobsIn "layouts" |> List.filter (String.endsWith ".json")
+    }
+
+
+{-| Reads every file the design system is made of, once the tree is complete.
+
+This runs when the last page of the tree arrives rather than alongside it,
+because until then there is no way to know whether a directory listing is
+finished or merely full.
+
+-}
+loadDesignSystem : String -> List GitLab.Files.TreeItem -> Model -> ( Model, Effect Msg )
+loadDesignSystem ref tree model =
+    let
+        files =
+            designSystemFiles tree
+
+        withNames =
+            { model
+                | existingThemes = List.map RepoPaths.nameFromThemeFile files.themes
+                , existingComponents = List.map RepoPaths.nameFromComponentFile files.components
+                , existingContracts = List.map RepoPaths.nameFromContractFile files.contracts
+                , existingScreens = List.map RepoPaths.nameFromScreenFile files.screens
+
+                -- `Just []` rather than `Nothing`: the difference between
+                -- "nothing here" and "not loaded yet" is what the empty states
+                -- read, and the tree has now answered.
+                , themes = []
+                , components = Just []
+                , contracts = Just []
+                , screens = Just []
+            }
+    in
+    case ( model.token, model.selectedProject ) of
+        ( Just token, Just project ) ->
+            let
+                fetch toMsg path =
+                    GitLab.Files.getFileRaw token project.id ref path (toMsg path) |> Effect.SendRequest
+            in
+            ( withNames
+            , Effect.batch
+                (List.map (fetch GotThemeFile) files.themes
+                    ++ List.map (fetch GotComponentFile) files.components
+                    ++ List.map (fetch GotContractFile) files.contracts
+                    ++ List.map (fetch GotScreenFile) files.screens
+                )
+            )
+
+        _ ->
+            ( withNames, Effect.none )
+
+
 {-| Everything the app reads out of a repository, at one ref.
 
 Opening a repository and switching branch want exactly this list, and they used
@@ -632,9 +719,6 @@ fetchAtRef token project ref =
     Effect.batch
         [ GitLab.Files.listTree token project.id ref 1 (GotTree ref 1) |> Effect.SendRequest
         , GitLab.Files.getFileRaw token project.id ref RepoPaths.tokensFile GotTokensFile |> Effect.SendRequest
-        , GitLab.Files.listTreeAtPath token project.id ref "themes" (GotThemesTree ref) |> Effect.SendRequest
-        , GitLab.Files.listTreeAtPath token project.id ref "components" (GotComponentsTree ref) |> Effect.SendRequest
-        , GitLab.Files.listTreeAtPath token project.id ref "layouts" (GotScreensTree ref) |> Effect.SendRequest
         ]
 
 
@@ -645,8 +729,8 @@ fetchProjectData : String -> GitLab.Projects.Project -> String -> Effect Msg
 fetchProjectData token project ref =
     Effect.batch
         [ fetchAtRef token project ref
-        , GitLab.Branches.listBranches token project.id GotBranches |> Effect.SendRequest
-        , GitLab.MergeRequests.listMergeRequests token project.id GotMergeRequests |> Effect.SendRequest
+        , GitLab.Branches.listBranches token project.id 1 (GotBranches 1) |> Effect.SendRequest
+        , GitLab.MergeRequests.listMergeRequests token project.id 1 (GotMergeRequests 1) |> Effect.SendRequest
         ]
 
 
@@ -847,6 +931,22 @@ updateAllowed msg model =
         DismissLoadErrors ->
             ( { model | loadErrors = [] }, Effect.none )
 
+        ReloadBranch ->
+            -- The way out of a stale-write conflict, and the only one offered:
+            -- the app cannot know what the other change was, so it re-reads
+            -- rather than trying to merge. `forgetBranchState` drops the file
+            -- versions with everything else, which is what makes the next save
+            -- based on what is actually there.
+            case ( model.token, model.selectedProject, model.currentBranch ) of
+                ( Just token, Just project, Just branch ) ->
+                    ( forgetBranchState branch model
+                        |> (\m -> { m | commitStatus = Just ( Working, "Reloading " ++ branch ++ "..." ) })
+                    , fetchAtRef token project branch
+                    )
+
+                _ ->
+                    ( model, Effect.none )
+
         Logout ->
             ( clearProjectState
                 { model
@@ -979,20 +1079,28 @@ updateAllowed msg model =
                         -- A full page is the only evidence there might be
                         -- another one; GitLab's total-count headers aren't
                         -- readable from here.
-                        more =
-                            if List.length tree < GitLab.Files.treePageSize then
-                                Effect.none
+                        lastPage =
+                            List.length tree < GitLab.Files.treePageSize
 
-                            else
-                                case ( model.token, model.selectedProject ) of
-                                    ( Just token, Just project ) ->
-                                        GitLab.Files.listTree token project.id ref (page + 1) (GotTree ref (page + 1))
-                                            |> Effect.SendRequest
-
-                                    _ ->
-                                        Effect.none
+                        withTree =
+                            { model | repositoryTree = Just accumulated }
                     in
-                    ( { model | repositoryTree = Just accumulated }, more )
+                    -- The design system is read once the listing is complete,
+                    -- not alongside it: until the last page there is no way to
+                    -- tell a finished directory from a merely full one.
+                    if lastPage then
+                        loadDesignSystem ref accumulated withTree
+
+                    else
+                        case ( model.token, model.selectedProject ) of
+                            ( Just token, Just project ) ->
+                                ( withTree
+                                , GitLab.Files.listTree token project.id ref (page + 1) (GotTree ref (page + 1))
+                                    |> Effect.SendRequest
+                                )
+
+                            _ ->
+                                ( withTree, Effect.none )
 
                 Err _ ->
                     ( { model | error = Just "Failed to fetch repository tree." }, Effect.none )
@@ -1132,31 +1240,6 @@ updateAllowed msg model =
                 -- not an error. The Tokens page shows an empty state for it.
                 Err _ ->
                     ( { model | tokens = Just [], originalTokens = Just [], tokensFileExists = False, error = Nothing }, Effect.none )
-
-        GotThemesTree ref result ->
-            case result of
-                Ok tree ->
-                    let
-                        jsonFiles =
-                            List.filter (\item -> String.endsWith ".json" item.name) tree
-
-                        themeNames =
-                            List.map (\item -> RepoPaths.nameFromThemeFile item.name) jsonFiles
-
-                        cmds =
-                            case ( model.token, model.selectedProject ) of
-                                ( Just token, Just project ) ->
-                                    List.map
-                                        (\file -> GitLab.Files.getFileRaw token project.id ref file.path (GotThemeFile file.path) |> Effect.SendRequest)
-                                        jsonFiles
-
-                                _ ->
-                                    []
-                    in
-                    ( { model | existingThemes = themeNames }, Effect.batch cmds )
-
-                Err _ ->
-                    ( { model | existingThemes = [] }, Effect.none )
 
         GotThemeFile path result ->
             case result of
@@ -1372,46 +1455,6 @@ updateAllowed msg model =
 
         SwitchTab tab ->
             navigateToTab (Route.tabRouteFor tab model.selectedComponentName model.selectedScreenName) model
-
-        GotComponentsTree ref result ->
-            case result of
-                Ok tree ->
-                    let
-                        jsonFiles =
-                            List.filter (\item -> String.endsWith ".json" item.name && not (RepoPaths.isContractFile item.name)) tree
-
-                        componentNames =
-                            List.map (\item -> RepoPaths.nameFromComponentFile item.name) jsonFiles
-
-                        contractFiles =
-                            List.filter (\item -> RepoPaths.isContractFile item.name) tree
-
-                        contractComponentNames =
-                            List.map (\item -> RepoPaths.nameFromContractFile item.name) contractFiles
-
-                        cmds =
-                            case ( model.token, model.selectedProject ) of
-                                ( Just token, Just project ) ->
-                                    List.map
-                                        (\file -> GitLab.Files.getFileRaw token project.id ref file.path (GotComponentFile file.path) |> Effect.SendRequest)
-                                        jsonFiles
-                                        ++ List.map
-                                            (\file -> GitLab.Files.getFileRaw token project.id ref file.path (GotContractFile file.path) |> Effect.SendRequest)
-                                            contractFiles
-
-                                _ ->
-                                    []
-                    in
-                    -- `contracts` is emptied rather than merged into because
-                    -- this is the listing that says which contracts the branch
-                    -- has at all; a contract for a component deleted on another
-                    -- branch must not survive into this one. `forgetBranchState`
-                    -- clears it too, so nothing loaded for this ref can be in
-                    -- here yet.
-                    ( { model | components = Just [], existingComponents = componentNames, contracts = Just [], existingContracts = contractComponentNames }, Effect.batch cmds )
-
-                Err _ ->
-                    ( { model | components = Just [], contracts = Just [] }, Effect.none )
 
         GotComponentFile path result ->
             case result of
@@ -1693,31 +1736,6 @@ updateAllowed msg model =
 
                 index :: reversedParent ->
                     updateLayoutAt (List.reverse reversedParent) (removeChildAt index) model
-
-        GotScreensTree ref result ->
-            case result of
-                Ok tree ->
-                    let
-                        jsonFiles =
-                            List.filter (\item -> String.endsWith ".json" item.name) tree
-
-                        screenNames =
-                            List.map (\item -> RepoPaths.nameFromScreenFile item.name) jsonFiles
-
-                        cmds =
-                            case ( model.token, model.selectedProject ) of
-                                ( Just token, Just project ) ->
-                                    List.map
-                                        (\file -> GitLab.Files.getFileRaw token project.id ref file.path (GotScreenFile file.path) |> Effect.SendRequest)
-                                        jsonFiles
-
-                                _ ->
-                                    []
-                    in
-                    ( { model | screens = Just [], existingScreens = screenNames }, Effect.batch cmds )
-
-                Err _ ->
-                    ( { model | screens = Just [], existingScreens = [] }, Effect.none )
 
         GotScreenFile path result ->
             case result of
@@ -2241,10 +2259,30 @@ updateAllowed msg model =
         JumpToComponent name ->
             ( { model | activeTab = ComponentRegistry, selectedComponentName = Just name }, Effect.none )
 
-        GotBranches result ->
+        GotBranches page result ->
             case result of
                 Ok branchList ->
-                    ( { model | branches = Just branchList }, Effect.none )
+                    let
+                        accumulated =
+                            if page == 1 then
+                                branchList
+
+                            else
+                                (model.branches |> Maybe.withDefault []) ++ branchList
+                    in
+                    ( { model | branches = Just accumulated }
+                    , if List.length branchList < GitLab.Branches.pageSize then
+                        Effect.none
+
+                      else
+                        case ( model.token, model.selectedProject ) of
+                            ( Just token, Just project ) ->
+                                GitLab.Branches.listBranches token project.id (page + 1) (GotBranches (page + 1))
+                                    |> Effect.SendRequest
+
+                            _ ->
+                                Effect.none
+                    )
 
                 Err _ ->
                     -- This used to be swallowed, which was defensible when the
@@ -2261,10 +2299,30 @@ updateAllowed msg model =
         -- once with the rest of the repository and `SwitchBranch` leaves it be.
         -- A repository can perfectly well have none, and failing to list them
         -- is no reason to put an error across the page.
-        GotMergeRequests result ->
+        GotMergeRequests page result ->
             case result of
                 Ok mrs ->
-                    ( { model | mergeRequests = Just mrs }, Effect.none )
+                    let
+                        accumulated =
+                            if page == 1 then
+                                mrs
+
+                            else
+                                (model.mergeRequests |> Maybe.withDefault []) ++ mrs
+                    in
+                    ( { model | mergeRequests = Just accumulated }
+                    , if List.length mrs < GitLab.MergeRequests.pageSize then
+                        Effect.none
+
+                      else
+                        case ( model.token, model.selectedProject ) of
+                            ( Just token, Just project ) ->
+                                GitLab.MergeRequests.listMergeRequests token project.id (page + 1) (GotMergeRequests (page + 1))
+                                    |> Effect.SendRequest
+
+                            _ ->
+                                Effect.none
+                    )
 
                 Err _ ->
                     ( model, Effect.none )

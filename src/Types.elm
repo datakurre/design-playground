@@ -284,6 +284,7 @@ type Msg
     | GotTokenResult (Result Http.Error Auth.Session)
     | GotRefreshResult (Result Http.Error Auth.Session)
     | DismissLoadErrors
+    | ReloadBranch
     | Logout
     | FetchProjects
     | GotProjects (Result Http.Error (List Project))
@@ -301,7 +302,6 @@ type Msg
       -- per-file fetches they fan out into read the same branch. They used to
       -- reach for `project.defaultBranch`, which meant switching branches
       -- showed you the default branch's contents under the new branch's name.
-    | GotThemesTree String (Result Http.Error (List TreeItem))
     | GotThemeFile String (Result Http.Error GitLab.Files.FileContent)
     | SelectTheme (Maybe String)
     | UpdateNewThemeName String
@@ -326,7 +326,6 @@ type Msg
     | ToggleTokenChangedOnly
     | ClearTokenFilters
     | SwitchTab Tab
-    | GotComponentsTree String (Result Http.Error (List TreeItem))
     | GotComponentFile String (Result Http.Error GitLab.Files.FileContent)
     | SelectComponent (Maybe String)
     | UpdateNewComponentName String
@@ -359,7 +358,6 @@ type Msg
     | ClearEditingContext
     | UpdateNewLayoutPropertyName String
     | UpdateNewLayoutPropertyValue String
-    | GotScreensTree String (Result Http.Error (List TreeItem))
     | GotScreenFile String (Result Http.Error GitLab.Files.FileContent)
     | SelectScreen (Maybe String)
     | UpdateNewScreenName String
@@ -379,9 +377,9 @@ type Msg
     | DeleteTheme String
     | DeleteComponent String
     | DeleteScreen String
-    | GotBranches (Result Http.Error (List Branch))
+    | GotBranches Int (Result Http.Error (List Branch))
     | GotMRResult (Result Http.Error MergeRequest)
-    | GotMergeRequests (Result Http.Error (List MergeRequest))
+    | GotMergeRequests Int (Result Http.Error (List MergeRequest))
     | ToggleExportTarget String
     | RunExportPipeline
     | GotContractFile String (Result Http.Error GitLab.Files.FileContent)

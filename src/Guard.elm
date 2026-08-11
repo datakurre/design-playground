@@ -241,6 +241,12 @@ isMutating msg =
         DismissLoadErrors ->
             False
 
+        -- Re-reading the branch writes nothing, and it is the offered way out
+        -- of a conflict, so blocking it on a read-only branch would make the
+        -- refusal message unactionable.
+        ReloadBranch ->
+            False
+
         Logout ->
             False
 
@@ -279,9 +285,6 @@ isMutating msg =
 
         -- Tokens and themes
         GotTokensFile _ ->
-            False
-
-        GotThemesTree _ _ ->
             False
 
         GotThemeFile _ _ ->
@@ -357,9 +360,6 @@ isMutating msg =
             False
 
         -- Components
-        GotComponentsTree _ _ ->
-            False
-
         GotComponentFile _ _ ->
             False
 
@@ -458,9 +458,6 @@ isMutating msg =
             False
 
         -- Screens
-        GotScreensTree _ _ ->
-            False
-
         GotScreenFile _ _ ->
             False
 
@@ -520,13 +517,13 @@ isMutating msg =
         DeleteScreen _ ->
             True
 
-        GotBranches _ ->
+        GotBranches _ _ ->
             False
 
         GotMRResult _ ->
             False
 
-        GotMergeRequests _ ->
+        GotMergeRequests _ _ ->
             False
 
         -- Export: picking targets is a selection, running the pipeline commits
