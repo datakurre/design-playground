@@ -105,9 +105,16 @@ right. It also fails when Tailwind class extraction has silently degraded the
 stylesheet (see Prerequisites).
 
 Run `make smoke` for any change touching views, routing, `src/main.js`, ports, or
-the build. It is not a substitute for tests: it cannot reach anything behind
-GitLab sign-in, which is impossible locally because `clientId`/`redirectUri` in
-`src/Auth.elm` are hardcoded to the deployed instance.
+the build. It is not a substitute for tests: it signs in to nothing, so
+everything behind GitLab sign-in is out of its reach.
+
+Signing in locally *is* possible now — `VITE_GITLAB_CLIENT_ID` and
+`VITE_GITLAB_REDIRECT_URI` come from the environment rather than being compiled
+into `src/Auth.elm` (see `.env.example`) — but it needs a GitLab OAuth
+application registered against wherever you are serving the app, so it is a
+deliberate step rather than something `make dev` does for you. The things that
+can only be checked that way: the sign-in round trip, a stale-write conflict
+between two tabs, and any listing long enough to paginate.
 
 ### Git hooks
 
@@ -141,7 +148,7 @@ Where things live, so you don't have to guess:
 
 - `src/Main.elm` — entry point, app bar, tab chrome, project picker. Also holds
   the `Nav.Key` in its `AppModel` wrapper and runs effects via `Effect.perform`
-- `src/Update.elm` — the single `update` loop (~2000 lines; the Refactor Agent's
+- `src/Update.elm` — the single `update` loop (~2500 lines; the Refactor Agent's
   standing assignment)
 - `src/Effect.elm` — what `update` asks the runtime to do, as inspectable data
 - `src/Guard.elm` — whether the current branch may be written to, and which
@@ -165,7 +172,14 @@ Where things live, so you don't have to guess:
   state), and `resolveStyles` is the one place that decides which layer wins.
   Anything asking "what does this node look like as X?" — the renderer, the
   editor, the contract validator — goes through it.
-- `src/Contracts.elm` — usage-contract schema, codecs, and `validate`
+- `src/Contracts.elm` — usage-contract schema, codecs, `validate`, and
+  `ruleFromFields`/`ruleTypes`, which are the one statement of the rule
+  vocabulary the "Add rule" form and `update` both go through. A `Violation`
+  carries a `Severity`: `Unverifiable` means the rule couldn't read its input
+  (a non-hex colour, an alias that doesn't resolve) and is neither a pass nor a
+  failure
+- `src/RepoPaths.elm` — where a design system lives inside a repository, and the
+  only place that turns a name into a path or a path back into a name
 - `src/Export.elm` — CSS variables and Tailwind config generators
 - `src/Templates.elm` — component, screen, and theme starter templates
 - `src/TokenScale.elm` — starter token ramps; `src/TokenBrowse.elm` — grouping,
@@ -178,13 +192,17 @@ Where things live, so you don't have to guess:
 - `src/GitLab/` — REST bindings: `Branches`, `Commits`, `Files`,
   `MergeRequests`, `Projects`. They return a `GitLab.Request.Request` — method,
   url, headers and body as data — and `GitLab.Request.toCmd` is the only place
-  `Http.request` is called
-- `src/Auth.elm` + `src/Ports.elm` — OAuth PKCE and the `localStorage` token cache
+  `Http.request` is called. Every listing paginates; a read carries the file's
+  `last_commit_id` back out and a write sends it in, which is what makes GitLab
+  refuse a save over someone else's newer one rather than take it
+- `src/Auth.elm` + `src/Ports.elm` — OAuth PKCE and the `localStorage` session
+  cache. `Auth.Config` (client id, redirect URI, scope, per-attempt `state`)
+  arrives through `Flags` from Vite environment variables; see `.env.example`.
+  Nothing about the OAuth application is compiled in
 - `src/Ports.elm` also carries `validateSchema`/`schemaValidationResult`, the ajv
-  bridge wired up in `src/main.js` against the JSON Schemas in `schemas/`.
-  Note the incoming half is currently dead: `Main.subscriptions` is `Sub.none`,
-  so validation results are sent from JS and nothing in Elm listens. Wire the
-  subscription before building anything on top of it.
+  bridge wired up in `src/main.js` against the JSON Schemas in `schemas/`. Every
+  save goes out through it and waits for the result, so `Main.subscriptions`
+  listening is what makes saving work at all
 
 **Views**
 
@@ -262,6 +280,7 @@ When an agent is summoned, it should adopt one of the following personas dependi
 - Maintain backward compatibility where possible.
 - Usage contracts (`src/Contracts.elm`, stored as `components/<name>.contract.json`) are a first-class schema here, not an add-on: they are the layer DTCG itself doesn't standardize. Adding a rule type means extending `Rule`, its codecs, `validate`, and `tests/ContractsTest.elm` together — plus the form and the help topic. The `add-contract-rule` skill lists all seven places.
 - The JSON Schemas in `schemas/` are load-bearing: `src/main.js` feeds them to ajv through the `validateSchema` port, and `tests/schemas.test.js` covers them. Change a file format and they change with it.
+- **Keep the schemas and the Elm codecs in step through `tests/Fixtures.elm`.** It holds one file of each kind; `FixturesTest` asserts each is byte-for-byte what the Elm encoder writes, and `tests/schemas.test.js` reads those same strings out of the Elm source and validates them against `schemas/`. A new field fails the first until the fixture is updated, and the updated fixture fails the second until the schema is too. A field that appears in no fixture is covered by neither — that gap is how `rules` stayed typed as a bare array of objects, letting a malformed rule validate, commit, and then vanish on load.
 
 ### 2. The Codec Agent
 **Responsibility:** Generate Elm decoders and encoders for API boundaries.
@@ -285,7 +304,7 @@ When an agent is summoned, it should adopt one of the following personas dependi
 - Ensure `elm-review` passes without warnings.
 - Break down massive `update` functions into smaller, composable helpers to keep the cognitive load low. `src/Update.elm` is the standing target.
 - The `Effect` migration is done; `update` is testable. What remains is volume:
-  `src/Update.elm` is still ~2000 lines and most of its 116 branches have no
+  `src/Update.elm` is still ~2500 lines and most of its branches have no
   test. Adding them is incremental and parallelisable — partition by area
   (tokens / components / screens and contracts / git workflows / routing and
   auth) and follow the shape in `tests/UpdateTest.elm`.
@@ -298,6 +317,8 @@ When an agent is summoned, it should adopt one of the following personas dependi
 - Transform the internal Elm Model (Token Graph, Component Graph) into valid strings for other platforms.
 - Ensure the export pipeline remains purely functional.
 - What exists today is tokens-only: `generateCssVariables` and `generateTailwindConfig` in `src/Export.elm`, surfaced as `exports/variables.css` and `exports/tailwind.config.js`. Component/screen targets (React and friends) are aspirational — don't document them as shipped.
+- Both are narrower than their names suggest, and the README says so: the CSS generator resolves aliases before writing, so the output contains no `var()` and no theme indirection, and the Tailwind generator emits `theme.extend.colors` only. Widening either is real work, not a tweak.
+- **Escape everything you interpolate.** Both generators build strings by concatenation from token names and values, which come out of a repository someone else can write. `Export.escapeCssValue` and `Export.escapeJsString` exist for this; a new target needs its own.
 - Note: this is distinct from the app's own internal Tailwind build pipeline (`elm-tailwind-classes`, see Build Toolchain above) — the Export Agent targets what *other* projects consume, not how this app itself is built.
 
 ---
