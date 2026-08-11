@@ -141,11 +141,11 @@ suite =
                         |> Expect.equal (List.repeat 8 True)
             , test "responses from GitLab are never mutations, or nothing could load" <|
                 \_ ->
-                    [ GotTokensFile (Ok "{}")
+                    [ GotTokensFile (Ok { content = "{}", lastCommitId = Nothing })
                     , GotThemesTree "main" (Ok [])
                     , GotComponentsTree "main" (Ok [])
                     , GotScreensTree "main" (Ok [])
-                    , GotContractFile "contracts.json" (Ok "{}")
+                    , GotContractFile "components/Button.contract.json" (Ok { content = "{}", lastCommitId = Nothing })
                     , GotBranches (Ok [])
                     ]
                         |> List.map Guard.isMutating
@@ -175,7 +175,17 @@ suite =
 signedOut : Types.Model
 signedOut =
     Types.initial (url "#/")
-        { token = Just "secret", pkceChallenge = "challenge", pkceVerifier = "verifier" }
+        { token = Just "secret"
+        , refreshToken = Nothing
+        , pkceChallenge = "challenge"
+        , pkceVerifier = "verifier"
+        , authConfig =
+            { clientId = "test-client"
+            , redirectUri = "https://example.test/app"
+            , scope = "read_api write_repository"
+            , state = "test-state"
+            }
+        }
 
 
 {-| A repository open, and nothing yet known about its branches — which is what

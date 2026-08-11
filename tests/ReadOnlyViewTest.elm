@@ -181,7 +181,17 @@ blank =
         , query = Nothing
         , fragment = Just "/acme/design/tokens"
         }
-        { token = Just "secret", pkceChallenge = "challenge", pkceVerifier = "verifier" }
+        { token = Just "secret"
+        , refreshToken = Nothing
+        , pkceChallenge = "challenge"
+        , pkceVerifier = "verifier"
+        , authConfig =
+            { clientId = "test-client"
+            , redirectUri = "https://example.test/app"
+            , scope = "read_api write_repository"
+            , state = "test-state"
+            }
+        }
 
 
 withComponents : Types.Model -> Types.Model

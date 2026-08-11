@@ -19,7 +19,7 @@ import Ports
 import Route
 import Tailwind as Tw exposing (classes)
 import Tailwind.Breakpoints exposing (hover)
-import Tailwind.Theme exposing (s0, s0_dot_5, s14, s2, s200, s3, s4, s50, s6, s700, s8, s900, slate, white)
+import Tailwind.Theme exposing (s0, s0_dot_5, s1, s14, s2, s200, s3, s4, s50, s6, s700, s8, s900, slate, white)
 import Types exposing (..)
 import Ui
 import Update exposing (update)
@@ -70,9 +70,10 @@ main =
 init : Flags -> Url -> Nav.Key -> ( AppModel, Cmd Msg )
 init flags url key =
     let
-        -- Check if the URL has an authorization code
+        -- The authorization code from the callback, but only if the `state`
+        -- that came back with it is the one this session sent.
         urlCode =
-            Auth.parseCode url
+            Auth.parseCallback flags.authConfig url
 
         initialModel =
             Types.initial url flags
@@ -80,7 +81,7 @@ init flags url key =
         effects =
             case urlCode of
                 Just code ->
-                    [ Auth.exchangeToken code flags.pkceVerifier GotTokenResult |> Effect.SendRequest ]
+                    [ Auth.exchangeToken flags.authConfig code flags.pkceVerifier GotTokenResult |> Effect.SendRequest ]
 
                 Nothing ->
                     case flags.token of
@@ -159,6 +160,7 @@ view model =
             [ viewAppBar model
             , div [ Ui.page ]
                 [ viewError model
+                , viewLoadErrors model
                 , viewReadOnlyBanner model
                 , case model.startupStatus of
                     Booting ->
@@ -312,7 +314,7 @@ viewAccount : Model -> Html Msg
 viewAccount model =
     case model.token of
         Nothing ->
-            a [ Ui.btnBrand, href (Auth.loginUrl model.pkceChallenge) ] [ text "Connect to GitLab" ]
+            a [ Ui.btnBrand, href (Auth.loginUrl model.authConfig model.pkceChallenge) ] [ text "Connect to GitLab" ]
 
         Just _ ->
             case model.user of
@@ -340,6 +342,61 @@ viewError model =
 
         Nothing ->
             text ""
+
+
+{-| Files in the repository that the app read but could not use.
+
+These used to be discarded silently, which made a malformed component
+indistinguishable from a component that isn't there — and left the app willing
+to `create` a file that already existed. It is deliberately a banner rather than
+something on the affected tab: the file that failed to load is by definition not
+in the list you would go looking for it in.
+
+-}
+viewLoadErrors : Model -> Html Msg
+viewLoadErrors model =
+    if List.isEmpty model.loadErrors then
+        text ""
+
+    else
+        Ui.notice Ui.Negative
+            [ div [ classes [ Tw.flex, Tw.items_center, Tw.justify_between, Tw.gap s2, Tw.mb s2 ] ]
+                [ Html.strong []
+                    [ text
+                        (case model.loadErrors of
+                            [ _ ] ->
+                                "One file in this branch couldn't be read"
+
+                            errors ->
+                                String.fromInt (List.length errors) ++ " files in this branch couldn't be read"
+                        )
+                    ]
+                , button [ Ui.btnNeutral, onClick DismissLoadErrors ] [ text "Dismiss" ]
+                ]
+            , Html.ul []
+                (List.map
+                    (\e ->
+                        Html.li [ classes [ Tw.mb s1 ] ]
+                            [ Html.code [] [ text e.path ]
+                            , text (" — " ++ firstLine e.reason)
+                            ]
+                    )
+                    (List.sortBy .path model.loadErrors)
+                )
+            ]
+
+
+{-| A `Json.Decode` error runs to many lines and its first one says what went
+wrong; the rest is the value it was looking at. The banner has room for the
+first.
+-}
+firstLine : String -> String
+firstLine reason =
+    reason
+        |> String.lines
+        |> List.filter (not << String.isEmpty << String.trim)
+        |> List.head
+        |> Maybe.withDefault reason
 
 
 {-| Signed out, there is nothing to show but the sign-in button in the bar.

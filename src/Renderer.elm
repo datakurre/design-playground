@@ -1,6 +1,7 @@
 module Renderer exposing (renderScreenNode, renderWithConditions)
 
 import Components exposing (Component, Layout(..), StyleContext)
+import CssProperties
 import Dict exposing (Dict)
 import Html exposing (Html, div, span, text)
 import Html.Attributes exposing (style)
@@ -53,6 +54,22 @@ resolveToken path tokens =
             Tokens.StringValue (Tokens.resolveAlias tokens path)
 
 
+{-| Turns a node's styles into inline style attributes, dropping anything the
+preview shouldn't be allowed to do.
+
+Elm escapes text content and `elm/virtual-dom` blocks `javascript:` in `href`
+and `src`, but neither of those reaches a style _value_ — and every value here
+comes out of a repository, which in this app is routinely someone else's. Left
+unfiltered, a token value of `url(https://…)` on `background-image` makes the
+preview fetch from an arbitrary host the moment it renders, and
+`position: fixed` with a large `z-index` puts repository-controlled content over
+the app's own chrome.
+
+The property name is checked too. It costs nothing — `CssProperties` was
+already in the build for the editor's datalist — and an unknown property is a
+typo worth not rendering silently.
+
+-}
 renderStyles : List FlatToken -> Dict String String -> List (Html.Attribute msg)
 renderStyles tokens stylesDict =
     Dict.toList stylesDict
@@ -60,12 +77,46 @@ renderStyles tokens stylesDict =
             (\( prop, tokenPath ) ->
                 case resolveToken tokenPath tokens of
                     Tokens.StringValue s ->
-                        [ style (camelToKebab prop) s ]
+                        safeStyle prop s
 
                     Tokens.CompositeValue dict ->
                         Dict.toList dict
-                            |> List.map (\( subProp, subVal ) -> style (camelToKebab subProp) subVal)
+                            |> List.concatMap (\( subProp, subVal ) -> safeStyle subProp subVal)
             )
+
+
+safeStyle : String -> String -> List (Html.Attribute msg)
+safeStyle prop value =
+    let
+        property =
+            camelToKebab prop
+    in
+    if CssProperties.isKnown property && isSafeStyleValue value then
+        [ style property value ]
+
+    else
+        []
+
+
+{-| A style value the preview may apply.
+
+`url(` is the network reach; `expression(` is legacy IE script execution;
+`@import` pulls in a whole stylesheet; and a `;` means the value is trying to be
+more than one declaration. `position: fixed` is not blocked here — it is a
+legitimate thing for a component to want — the value filter is about reach and
+smuggling, not layout.
+
+-}
+isSafeStyleValue : String -> Bool
+isSafeStyleValue value =
+    let
+        lowered =
+            String.toLower value
+    in
+    not (String.contains "url(" lowered)
+        && not (String.contains "expression(" lowered)
+        && not (String.contains "@import" lowered)
+        && not (String.contains ";" lowered)
 
 
 renderScreenNode : Dict String Component -> Dict String Screen -> List String -> List FlatToken -> ScreenNode -> Html msg

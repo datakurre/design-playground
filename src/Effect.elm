@@ -62,7 +62,7 @@ type Effect msg
     | PushUrl String
     | ReplaceUrl String
     | LoadUrl String
-    | CacheToken String
+    | CacheSession { accessToken : String, refreshToken : Maybe String, expiresIn : Maybe Int }
     | ClearToken
     | ValidateSchema { schema : String, data : Encode.Value, context : Encode.Value }
     | SendRequest (Request msg)
@@ -99,8 +99,8 @@ perform key effect =
         LoadUrl href ->
             Nav.load href
 
-        CacheToken token ->
-            Ports.cacheToken token
+        CacheSession session ->
+            Ports.cacheSession session
 
         ClearToken ->
             Ports.clearToken ()

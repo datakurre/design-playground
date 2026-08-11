@@ -100,7 +100,7 @@ suite =
                         { branch = "feature-x"
                         , commitMessage = "Save tokens"
                         , actions =
-                            [ { action = "update", filePath = "tokens/tokens.json", content = Just "{}" } ]
+                            [ { action = "update", filePath = "tokens/tokens.json", content = Just "{}", lastCommitId = Nothing } ]
                         }
                         (Decode.map3 (\b m p -> ( b, m, p ))
                             (Decode.field "branch" Decode.string)
@@ -113,7 +113,7 @@ suite =
                     commit
                         { branch = "main"
                         , commitMessage = "Add"
-                        , actions = [ { action = "create", filePath = "a.json", content = Just "{}" } ]
+                        , actions = [ { action = "create", filePath = "a.json", content = Just "{}", lastCommitId = Nothing } ]
                         }
                         (Decode.at [ "actions", "0", "action" ] Decode.string)
                         |> Expect.equal (Ok "create")
@@ -122,7 +122,7 @@ suite =
                     commit
                         { branch = "main"
                         , commitMessage = "Add"
-                        , actions = [ { action = "create", filePath = "a.json", content = Just "hello" } ]
+                        , actions = [ { action = "create", filePath = "a.json", content = Just "hello", lastCommitId = Nothing } ]
                         }
                         (Decode.at [ "actions", "0", "content" ] Decode.string)
                         |> Expect.equal (Ok "hello")
@@ -131,7 +131,7 @@ suite =
                     commit
                         { branch = "main"
                         , commitMessage = "Delete"
-                        , actions = [ { action = "delete", filePath = "a.json", content = Nothing } ]
+                        , actions = [ { action = "delete", filePath = "a.json", content = Nothing, lastCommitId = Nothing } ]
                         }
                         (Decode.at [ "actions", "0" ] (Decode.maybe (Decode.field "content" Decode.string)))
                         |> Expect.equal (Ok Nothing)
@@ -141,8 +141,8 @@ suite =
                         { branch = "main"
                         , commitMessage = "Export"
                         , actions =
-                            [ { action = "update", filePath = "exports/variables.css", content = Just "" }
-                            , { action = "create", filePath = "exports/tailwind.config.js", content = Just "" }
+                            [ { action = "update", filePath = "exports/variables.css", content = Just "", lastCommitId = Nothing }
+                            , { action = "create", filePath = "exports/tailwind.config.js", content = Just "", lastCommitId = Nothing }
                             ]
                         }
                         (Decode.field "actions" (Decode.list (Decode.field "file_path" Decode.string)))

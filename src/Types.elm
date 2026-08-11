@@ -24,8 +24,13 @@ type StartupStatus
 
 type alias Flags =
     { token : Maybe String
+    , refreshToken : Maybe String
     , pkceChallenge : String
     , pkceVerifier : String
+
+    -- Where this deployment's OAuth application lives. See `Auth.Config` for
+    -- why these are configuration rather than constants compiled into the app.
+    , authConfig : Auth.Config
     }
 
 
@@ -119,11 +124,40 @@ type alias Model =
     , exportTargets : List String
     , pkceChallenge : String
     , pkceVerifier : String
+    , authConfig : Auth.Config
+
+    -- Kept so an expired access token can be renewed rather than discovered.
+    -- `Nothing` means GitLab didn't issue one, in which case expiry is a
+    -- sign-in, not a refresh.
+    , refreshToken : Maybe String
+
+    -- Every file this branch was read from, and the commit it was read at.
+    -- Sent back as `last_commit_id` on save, which is what lets GitLab refuse
+    -- a write over someone else's newer one instead of silently taking it.
+    , fileVersions : Dict String String
+
+    -- Files that could not be read, or could not be decoded once read. Both
+    -- used to be discarded, which made a corrupt component indistinguishable
+    -- from one that isn't there — and the app would happily `create` over it.
+    , loadErrors : List LoadError
     , contracts : Maybe (List Contracts.Contract)
     , existingContracts : List String
     , newContractRuleType : String
     , newContractRuleFields : Dict String String
     , pendingCommit : Maybe PendingCommit
+    }
+
+
+{-| A file the app tried to read and couldn't use.
+
+`reason` distinguishes "GitLab wouldn't give it to us" from "GitLab gave it to
+us and it isn't the shape we expect", because the second one is a file in the
+repository that someone has to go and fix, and the first one usually isn't.
+
+-}
+type alias LoadError =
+    { path : String
+    , reason : String
     }
 
 
@@ -208,6 +242,10 @@ initial url flags =
     , exportTargets = [ "css", "tailwind" ]
     , pkceChallenge = flags.pkceChallenge
     , pkceVerifier = flags.pkceVerifier
+    , authConfig = flags.authConfig
+    , refreshToken = flags.refreshToken
+    , fileVersions = Dict.empty
+    , loadErrors = []
     , contracts = Nothing
     , existingContracts = []
     , newContractRuleType = "allowedTokenGroups"
@@ -243,7 +281,9 @@ type Msg
     = LinkClicked Browser.UrlRequest
     | UrlChanged Url
     | GotProfile (Result Http.Error Auth.User)
-    | GotTokenResult (Result Http.Error String)
+    | GotTokenResult (Result Http.Error Auth.Session)
+    | GotRefreshResult (Result Http.Error Auth.Session)
+    | DismissLoadErrors
     | Logout
     | FetchProjects
     | GotProjects (Result Http.Error (List Project))
@@ -256,13 +296,13 @@ type Msg
     | GotTree String Int (Result Http.Error (List TreeItem))
     | GotCommitResult CommitContext (Result Http.Error ())
     | GotSchemaValidationResult { valid : Bool, errors : List String, context : Json.Decode.Value }
-    | GotTokensFile (Result Http.Error String)
+    | GotTokensFile (Result Http.Error GitLab.Files.FileContent)
       -- The three tree listings carry the git ref they were listed from, so the
       -- per-file fetches they fan out into read the same branch. They used to
       -- reach for `project.defaultBranch`, which meant switching branches
       -- showed you the default branch's contents under the new branch's name.
     | GotThemesTree String (Result Http.Error (List TreeItem))
-    | GotThemeFile String (Result Http.Error String)
+    | GotThemeFile String (Result Http.Error GitLab.Files.FileContent)
     | SelectTheme (Maybe String)
     | UpdateNewThemeName String
     | UpdateNewThemeTemplate String
@@ -287,7 +327,7 @@ type Msg
     | ClearTokenFilters
     | SwitchTab Tab
     | GotComponentsTree String (Result Http.Error (List TreeItem))
-    | GotComponentFile String (Result Http.Error String)
+    | GotComponentFile String (Result Http.Error GitLab.Files.FileContent)
     | SelectComponent (Maybe String)
     | UpdateNewComponentName String
     | UpdateNewComponentTemplate String
@@ -320,7 +360,7 @@ type Msg
     | UpdateNewLayoutPropertyName String
     | UpdateNewLayoutPropertyValue String
     | GotScreensTree String (Result Http.Error (List TreeItem))
-    | GotScreenFile String (Result Http.Error String)
+    | GotScreenFile String (Result Http.Error GitLab.Files.FileContent)
     | SelectScreen (Maybe String)
     | UpdateNewScreenName String
     | UpdateNewScreenTemplate String
@@ -344,7 +384,7 @@ type Msg
     | GotMergeRequests (Result Http.Error (List MergeRequest))
     | ToggleExportTarget String
     | RunExportPipeline
-    | GotContractFile String (Result Http.Error String)
+    | GotContractFile String (Result Http.Error GitLab.Files.FileContent)
     | UpdateNewContractRuleType String
     | UpdateNewContractRuleField String String
     | AddContractRule

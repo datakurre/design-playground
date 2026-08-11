@@ -1,4 +1,23 @@
-module CssProperties exposing (allProperties)
+module CssProperties exposing (allProperties, isKnown)
+
+import Set exposing (Set)
+
+
+{-| Whether a string names a CSS property at all.
+
+`Renderer` asks this of every style key in a repository before handing it to
+`Html.Attributes.style`, so it has to be a set lookup rather than a scan of the
+1,300-element list below — it runs once per property per node per render.
+
+-}
+isKnown : String -> Bool
+isKnown property =
+    Set.member (String.toLower property) knownProperties
+
+
+knownProperties : Set String
+knownProperties =
+    Set.fromList (List.map String.toLower allProperties)
 
 
 allProperties : List String

@@ -17,6 +17,7 @@ import Http
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Naming
+import RepoPaths
 import Route
 import Screens exposing (ScreenNode(..))
 import Templates
@@ -227,8 +228,10 @@ clearProjectState model =
         fresh =
             Types.initial model.url
                 { token = model.token
+                , refreshToken = model.refreshToken
                 , pkceChallenge = model.pkceChallenge
                 , pkceVerifier = model.pkceVerifier
+                , authConfig = model.authConfig
                 }
     in
     { fresh
@@ -287,6 +290,12 @@ forgetBranchState branchName model =
         , existingThemes = []
         , existingScreens = []
         , tokensFileExists = False
+
+        -- Versions and read errors both belong to the ref they were collected
+        -- at. Carrying either across a branch change would send one branch's
+        -- `last_commit_id` with the other branch's save.
+        , fileVersions = Dict.empty
+        , loadErrors = []
         , contracts = Nothing
         , existingContracts = []
         , newContractRuleType = "allowedTokenGroups"
@@ -464,6 +473,128 @@ openProject path branch model =
                         )
 
 
+{-| The model with the session gone.
+
+Not `clearProjectState`: that keeps the session and drops the repository, which
+is the opposite of what has happened here.
+
+-}
+signedOut : String -> Model -> Model
+signedOut reason model =
+    { model
+        | token = Nothing
+        , refreshToken = Nothing
+        , user = Nothing
+        , error = Just reason
+        , startupStatus = Ready
+    }
+
+
+{-| What to do about a request that failed because of who we are rather than
+what we asked for.
+
+A 401 used to be recognised in exactly one place — `GET /user` — so an expired
+token discovered by a commit reported "Couldn't save to GitLab" and the user
+re-clicked Save against a credential that would never work again. Every caller
+that can meet a 401 now comes through here.
+
+A refresh token turns expiry into something the app can fix by itself. Without
+one, expiry is a sign-in.
+
+-}
+handleAuthFailure : Http.Error -> String -> Model -> ( Model, Effect Msg )
+handleAuthFailure error fallback model =
+    case error of
+        Http.BadStatus 401 ->
+            case model.refreshToken of
+                Just refresh ->
+                    ( { model | error = Nothing }
+                    , Auth.refreshToken model.authConfig refresh GotRefreshResult |> Effect.SendRequest
+                    )
+
+                Nothing ->
+                    ( signedOut "Your GitLab session has expired. Sign in again." model
+                    , Effect.ClearToken
+                    )
+
+        _ ->
+            ( { model | error = Just fallback, startupStatus = Ready }, Effect.none )
+
+
+{-| One file change in a commit, at the version this branch was read at.
+
+Every write goes through here so that no call site can quietly omit the
+version: `Dict.get` on a path never read is `Nothing`, which is the right answer
+for a create and the honest answer for anything else.
+
+-}
+fileAction : Model -> { action : String, filePath : String, content : Maybe String } -> GitLab.Commits.Action
+fileAction model fields =
+    GitLab.Commits.action
+        { action = fields.action
+        , filePath = fields.filePath
+        , content = fields.content
+        , lastCommitId = Dict.get fields.filePath model.fileVersions
+        }
+
+
+{-| Remembers which commit a file was read at, so a later save can say what it
+was based on.
+-}
+noteFileVersion : String -> Maybe String -> Model -> Model
+noteFileVersion path lastCommitId model =
+    case lastCommitId of
+        Just commitId ->
+            { model | fileVersions = Dict.insert path commitId model.fileVersions }
+
+        Nothing ->
+            model
+
+
+{-| Records a file the app couldn't use, replacing any earlier report for the
+same path so a reload doesn't stack duplicates.
+-}
+noteLoadError : String -> String -> Model -> Model
+noteLoadError path reason model =
+    { model
+        | loadErrors =
+            { path = path, reason = reason }
+                :: List.filter (\e -> e.path /= path) model.loadErrors
+    }
+
+
+{-| Why a file couldn't be read, in the terms the person who has to fix it
+needs. A decode failure names a file in the repository that is the wrong shape;
+everything else is between the browser and GitLab.
+-}
+httpErrorReason : Http.Error -> String
+httpErrorReason error =
+    case error of
+        Http.BadStatus 404 ->
+            "Not found."
+
+        Http.BadStatus 401 ->
+            "Not authorised — the session may have expired."
+
+        Http.BadStatus 403 ->
+            "Access denied."
+
+        Http.BadStatus code ->
+            "GitLab returned " ++ String.fromInt code ++ "."
+
+        Http.Timeout ->
+            "The request timed out."
+
+        Http.NetworkError ->
+            "Couldn't reach GitLab."
+
+        Http.BadUrl url ->
+            "Bad URL: " ++ url
+
+        Http.BadBody body ->
+            body
+
+
 {-| A deep link can name a project that doesn't exist, isn't yours, or that your
 token has expired out of — three different things to do about it, so say which.
 -}
@@ -500,7 +631,7 @@ fetchAtRef : String -> GitLab.Projects.Project -> String -> Effect Msg
 fetchAtRef token project ref =
     Effect.batch
         [ GitLab.Files.listTree token project.id ref 1 (GotTree ref 1) |> Effect.SendRequest
-        , GitLab.Files.getFileRaw token project.id ref "tokens/tokens.json" GotTokensFile |> Effect.SendRequest
+        , GitLab.Files.getFileRaw token project.id ref RepoPaths.tokensFile GotTokensFile |> Effect.SendRequest
         , GitLab.Files.listTreeAtPath token project.id ref "themes" (GotThemesTree ref) |> Effect.SendRequest
         , GitLab.Files.listTreeAtPath token project.id ref "components" (GotComponentsTree ref) |> Effect.SendRequest
         , GitLab.Files.listTreeAtPath token project.id ref "layouts" (GotScreensTree ref) |> Effect.SendRequest
@@ -649,24 +780,54 @@ updateAllowed msg model =
 
         GotTokenResult result ->
             case result of
-                Ok token ->
+                Ok session ->
                     let
                         currentUrl =
                             model.url
 
+                        -- The code and the state have been used. Leaving them
+                        -- in the address bar means a refresh replays a callback
+                        -- that can no longer succeed.
                         newUrl =
                             { currentUrl | query = Nothing }
                     in
-                    ( { model | token = Just token, error = Nothing }
+                    ( { model
+                        | token = Just session.accessToken
+                        , refreshToken = session.refreshToken
+                        , error = Nothing
+                      }
                     , Effect.batch
-                        [ Effect.CacheToken token
-                        , Auth.fetchProfile token GotProfile |> Effect.SendRequest
+                        [ Effect.CacheSession session
+                        , Auth.fetchProfile session.accessToken GotProfile |> Effect.SendRequest
                         , Effect.ReplaceUrl (Url.toString newUrl)
                         ]
                     )
 
                 Err _ ->
                     ( { model | error = Just "Failed to exchange authorization code for token.", startupStatus = Ready }, Effect.none )
+
+        GotRefreshResult result ->
+            case result of
+                Ok session ->
+                    ( { model
+                        | token = Just session.accessToken
+
+                        -- GitLab rotates refresh tokens, so the one that came
+                        -- back replaces the one that was sent rather than
+                        -- joining it.
+                        , refreshToken = session.refreshToken
+                        , error = Nothing
+                      }
+                    , Effect.batch
+                        [ Effect.CacheSession session
+                        , Auth.fetchProfile session.accessToken GotProfile |> Effect.SendRequest
+                        ]
+                    )
+
+                Err _ ->
+                    ( signedOut "Your GitLab session expired and couldn't be renewed. Sign in again." model
+                    , Effect.ClearToken
+                    )
 
         GotProfile result ->
             case result of
@@ -680,16 +841,17 @@ updateAllowed msg model =
                             Effect.none
                     )
 
-                Err _ ->
-                    -- On error (e.g., token expired), clear the token
-                    ( { model | token = Nothing, user = Nothing, error = Just "Failed to fetch profile. Token may have expired.", startupStatus = Ready }
-                    , Effect.ClearToken
-                    )
+                Err error ->
+                    handleAuthFailure error "Failed to fetch your GitLab profile." model
+
+        DismissLoadErrors ->
+            ( { model | loadErrors = [] }, Effect.none )
 
         Logout ->
             ( clearProjectState
                 { model
                     | token = Nothing
+                    , refreshToken = Nothing
                     , user = Nothing
                     , error = Nothing
                     , projects = Nothing
@@ -851,10 +1013,11 @@ updateAllowed msg model =
                                         { branch = pending.branch
                                         , commitMessage = pending.commitMessage
                                         , actions =
-                                            [ { action = pending.actionType
-                                              , filePath = pending.filePath
-                                              , content = Just pending.jsonString
-                                              }
+                                            [ fileAction model
+                                                { action = pending.actionType
+                                                , filePath = pending.filePath
+                                                , content = Just pending.jsonString
+                                                }
                                             ]
                                         }
                                 in
@@ -919,18 +1082,51 @@ updateAllowed msg model =
                     in
                     ( { newModel | commitStatus = Just ( Done, "Saved" ) }, Effect.none )
 
-                Err _ ->
-                    ( { model | commitStatus = Just ( Failed, "Couldn't save to GitLab" ) }, Effect.none )
+                Err error ->
+                    case GitLab.Commits.classifyError error of
+                        -- Deliberately not auto-merged and not retried. The
+                        -- app has no idea what the other change was, and the
+                        -- only honest thing it can do is stop and say the file
+                        -- moved.
+                        GitLab.Commits.StaleFile _ ->
+                            ( { model
+                                | commitStatus =
+                                    Just
+                                        ( Failed
+                                        , "This file changed in GitLab since you opened the branch. Reload the branch to see the current version — saving now would overwrite that change."
+                                        )
+                              }
+                            , Effect.none
+                            )
+
+                        GitLab.Commits.Unauthorized ->
+                            handleAuthFailure (Http.BadStatus 401) "Couldn't save to GitLab" model
+
+                        GitLab.Commits.Forbidden ->
+                            ( { model | commitStatus = Just ( Failed, "GitLab refused the write to this branch. It may be protected." ) }
+                            , Effect.none
+                            )
+
+                        GitLab.Commits.OtherError message ->
+                            ( { model | commitStatus = Just ( Failed, "Couldn't save to GitLab: " ++ message ) }, Effect.none )
 
         GotTokensFile result ->
             case result of
-                Ok content ->
-                    case Decode.decodeString Tokens.decoder content of
+                Ok file ->
+                    case Decode.decodeString Tokens.decoder file.content of
                         Ok tokensList ->
-                            ( { model | tokens = Just tokensList, originalTokens = Just tokensList, tokensFileExists = True, error = Nothing }, Effect.none )
+                            ( noteFileVersion RepoPaths.tokensFile
+                                file.lastCommitId
+                                { model | tokens = Just tokensList, originalTokens = Just tokensList, tokensFileExists = True, error = Nothing }
+                            , Effect.none
+                            )
 
-                        Err _ ->
-                            ( { model | error = Just "Couldn't read tokens/tokens.json — the file may be malformed." }, Effect.none )
+                        Err decodeError ->
+                            ( noteLoadError RepoPaths.tokensFile
+                                (Decode.errorToString decodeError)
+                                { model | error = Just "Couldn't read tokens/tokens.json — the file may be malformed." }
+                            , Effect.none
+                            )
 
                 -- No tokens file yet is the normal state of a fresh repository,
                 -- not an error. The Tokens page shows an empty state for it.
@@ -945,13 +1141,13 @@ updateAllowed msg model =
                             List.filter (\item -> String.endsWith ".json" item.name) tree
 
                         themeNames =
-                            List.map (\item -> String.replace ".json" "" item.name) jsonFiles
+                            List.map (\item -> RepoPaths.nameFromThemeFile item.name) jsonFiles
 
                         cmds =
                             case ( model.token, model.selectedProject ) of
                                 ( Just token, Just project ) ->
                                     List.map
-                                        (\file -> GitLab.Files.getFileRaw token project.id ref file.path (GotThemeFile file.name) |> Effect.SendRequest)
+                                        (\file -> GitLab.Files.getFileRaw token project.id ref file.path (GotThemeFile file.path) |> Effect.SendRequest)
                                         jsonFiles
 
                                 _ ->
@@ -962,14 +1158,14 @@ updateAllowed msg model =
                 Err _ ->
                     ( { model | existingThemes = [] }, Effect.none )
 
-        GotThemeFile filename result ->
+        GotThemeFile path result ->
             case result of
-                Ok content ->
-                    case Decode.decodeString Tokens.decoder content of
+                Ok file ->
+                    case Decode.decodeString Tokens.decoder file.content of
                         Ok tokensList ->
                             let
                                 themeName =
-                                    String.replace ".json" "" filename
+                                    RepoPaths.nameFromThemeFile path
 
                                 newTheme =
                                     Themes.fromTokens themeName tokensList
@@ -977,13 +1173,13 @@ updateAllowed msg model =
                                 newThemes =
                                     newTheme :: List.filter (\t -> t.name /= themeName) model.themes
                             in
-                            ( { model | themes = newThemes }, Effect.none )
+                            ( noteFileVersion path file.lastCommitId { model | themes = newThemes }, Effect.none )
 
-                        Err _ ->
-                            ( model, Effect.none )
+                        Err decodeError ->
+                            ( noteLoadError path (Decode.errorToString decodeError) model, Effect.none )
 
-                Err _ ->
-                    ( model, Effect.none )
+                Err httpError ->
+                    ( noteLoadError path (httpErrorReason httpError) model, Effect.none )
 
         SelectTheme themeName ->
             -- Each of these two filters is only meaningful in one of the two
@@ -1124,7 +1320,7 @@ updateAllowed msg model =
 
                                                 else
                                                     "create"
-                                            , filePath = "tokens/tokens.json"
+                                            , filePath = RepoPaths.tokensFile
                                             , commitMessage = "Update base design tokens"
                                             , jsonString = jsonString
                                             }
@@ -1159,7 +1355,7 @@ updateAllowed msg model =
 
                                                 else
                                                     "create"
-                                            , filePath = "themes/" ++ activeName ++ ".json"
+                                            , filePath = RepoPaths.themeFile activeName
                                             , commitMessage = "Update " ++ activeName ++ " theme"
                                             , jsonString = jsonString
                                             }
@@ -1182,25 +1378,25 @@ updateAllowed msg model =
                 Ok tree ->
                     let
                         jsonFiles =
-                            List.filter (\item -> String.endsWith ".json" item.name && not (String.endsWith ".contract.json" item.name)) tree
+                            List.filter (\item -> String.endsWith ".json" item.name && not (RepoPaths.isContractFile item.name)) tree
 
                         componentNames =
-                            List.map (\item -> String.replace ".json" "" item.name) jsonFiles
+                            List.map (\item -> RepoPaths.nameFromComponentFile item.name) jsonFiles
 
                         contractFiles =
-                            List.filter (\item -> String.endsWith ".contract.json" item.name) tree
+                            List.filter (\item -> RepoPaths.isContractFile item.name) tree
 
                         contractComponentNames =
-                            List.map (\item -> String.replace ".contract.json" "" item.name) contractFiles
+                            List.map (\item -> RepoPaths.nameFromContractFile item.name) contractFiles
 
                         cmds =
                             case ( model.token, model.selectedProject ) of
                                 ( Just token, Just project ) ->
                                     List.map
-                                        (\file -> GitLab.Files.getFileRaw token project.id ref file.path (GotComponentFile file.name) |> Effect.SendRequest)
+                                        (\file -> GitLab.Files.getFileRaw token project.id ref file.path (GotComponentFile file.path) |> Effect.SendRequest)
                                         jsonFiles
                                         ++ List.map
-                                            (\file -> GitLab.Files.getFileRaw token project.id ref file.path (GotContractFile file.name) |> Effect.SendRequest)
+                                            (\file -> GitLab.Files.getFileRaw token project.id ref file.path (GotContractFile file.path) |> Effect.SendRequest)
                                             contractFiles
 
                                 _ ->
@@ -1217,10 +1413,10 @@ updateAllowed msg model =
                 Err _ ->
                     ( { model | components = Just [], contracts = Just [] }, Effect.none )
 
-        GotComponentFile filename result ->
+        GotComponentFile path result ->
             case result of
-                Ok content ->
-                    case Decode.decodeString Components.decoder content of
+                Ok file ->
+                    case Decode.decodeString Components.decoder file.content of
                         Ok component ->
                             let
                                 currentComponents =
@@ -1229,13 +1425,20 @@ updateAllowed msg model =
                                 newComponents =
                                     component :: List.filter (\c -> c.name /= component.name) currentComponents
                             in
-                            ( { model | components = Just newComponents, originalComponents = Just newComponents }, Effect.none )
+                            ( noteFileVersion path
+                                file.lastCommitId
+                                { model | components = Just newComponents, originalComponents = Just newComponents }
+                            , Effect.none
+                            )
 
-                        Err _ ->
-                            ( model, Effect.none )
+                        -- Swallowing this made a malformed component look
+                        -- exactly like one that isn't there — and the app would
+                        -- then offer to `create` a file that already exists.
+                        Err decodeError ->
+                            ( noteLoadError path (Decode.errorToString decodeError) model, Effect.none )
 
-                Err _ ->
-                    ( model, Effect.none )
+                Err httpError ->
+                    ( noteLoadError path (httpErrorReason httpError) model, Effect.none )
 
         SelectComponent name ->
             navigateToTab (Route.ComponentsTab name) model
@@ -1367,7 +1570,7 @@ updateAllowed msg model =
                                     { commitContext = CommitComponent comp.name
                                     , branch = branch
                                     , actionType = actionType
-                                    , filePath = "components/" ++ comp.name ++ ".json"
+                                    , filePath = RepoPaths.componentFile comp.name
                                     , commitMessage = "Save component " ++ comp.name
                                     , jsonString = jsonString
                                     }
@@ -1499,13 +1702,13 @@ updateAllowed msg model =
                             List.filter (\item -> String.endsWith ".json" item.name) tree
 
                         screenNames =
-                            List.map (\item -> String.replace ".json" "" item.name) jsonFiles
+                            List.map (\item -> RepoPaths.nameFromScreenFile item.name) jsonFiles
 
                         cmds =
                             case ( model.token, model.selectedProject ) of
                                 ( Just token, Just project ) ->
                                     List.map
-                                        (\file -> GitLab.Files.getFileRaw token project.id ref file.path (GotScreenFile file.name) |> Effect.SendRequest)
+                                        (\file -> GitLab.Files.getFileRaw token project.id ref file.path (GotScreenFile file.path) |> Effect.SendRequest)
                                         jsonFiles
 
                                 _ ->
@@ -1516,10 +1719,10 @@ updateAllowed msg model =
                 Err _ ->
                     ( { model | screens = Just [], existingScreens = [] }, Effect.none )
 
-        GotScreenFile filename result ->
+        GotScreenFile path result ->
             case result of
-                Ok content ->
-                    case Decode.decodeString Screens.decoder content of
+                Ok file ->
+                    case Decode.decodeString Screens.decoder file.content of
                         Ok screen ->
                             let
                                 currentScreens =
@@ -1528,13 +1731,13 @@ updateAllowed msg model =
                                 newScreens =
                                     screen :: List.filter (\s -> s.name /= screen.name) currentScreens
                             in
-                            ( { model | screens = Just newScreens }, Effect.none )
+                            ( noteFileVersion path file.lastCommitId { model | screens = Just newScreens }, Effect.none )
 
-                        Err _ ->
-                            ( model, Effect.none )
+                        Err decodeError ->
+                            ( noteLoadError path (Decode.errorToString decodeError) model, Effect.none )
 
-                Err _ ->
-                    ( model, Effect.none )
+                Err httpError ->
+                    ( noteLoadError path (httpErrorReason httpError) model, Effect.none )
 
         SelectScreen name ->
             navigateToTab (Route.ScreensTab name) model
@@ -1593,7 +1796,7 @@ updateAllowed msg model =
 
                                         else
                                             "create"
-                                    , filePath = "layouts/" ++ screen.name ++ ".json"
+                                    , filePath = RepoPaths.screenFile screen.name
                                     , commitMessage = "Save screen " ++ screen.name
                                     , jsonString = jsonString
                                     }
@@ -1720,10 +1923,11 @@ updateAllowed msg model =
                             { branch = branch
                             , commitMessage = "Delete theme " ++ name
                             , actions =
-                                [ { action = "delete"
-                                  , filePath = "themes/" ++ name ++ ".json"
-                                  , content = Nothing
-                                  }
+                                [ fileAction model
+                                    { action = "delete"
+                                    , filePath = RepoPaths.themeFile name
+                                    , content = Nothing
+                                    }
                                 ]
                             }
                     in
@@ -1740,10 +1944,11 @@ updateAllowed msg model =
                     let
                         contractActions =
                             if List.member name model.existingContracts then
-                                [ { action = "delete"
-                                  , filePath = "components/" ++ name ++ ".contract.json"
-                                  , content = Nothing
-                                  }
+                                [ fileAction model
+                                    { action = "delete"
+                                    , filePath = RepoPaths.contractFile name
+                                    , content = Nothing
+                                    }
                                 ]
 
                             else
@@ -1753,10 +1958,11 @@ updateAllowed msg model =
                             { branch = branch
                             , commitMessage = "Delete component " ++ name
                             , actions =
-                                { action = "delete"
-                                , filePath = "components/" ++ name ++ ".json"
-                                , content = Nothing
-                                }
+                                fileAction model
+                                    { action = "delete"
+                                    , filePath = RepoPaths.componentFile name
+                                    , content = Nothing
+                                    }
                                     :: contractActions
                             }
 
@@ -1786,10 +1992,11 @@ updateAllowed msg model =
                             { branch = branch
                             , commitMessage = "Delete screen " ++ name
                             , actions =
-                                [ { action = "delete"
-                                  , filePath = "layouts/" ++ name ++ ".json"
-                                  , content = Nothing
-                                  }
+                                [ fileAction model
+                                    { action = "delete"
+                                    , filePath = RepoPaths.screenFile name
+                                    , content = Nothing
+                                    }
                                 ]
                             }
 
@@ -1803,10 +2010,10 @@ updateAllowed msg model =
                 _ ->
                     ( model, Effect.none )
 
-        GotContractFile filename result ->
+        GotContractFile path result ->
             case result of
-                Ok content ->
-                    case Decode.decodeString Contracts.decoder content of
+                Ok file ->
+                    case Decode.decodeString Contracts.decoder file.content of
                         Ok contract ->
                             let
                                 currentContracts =
@@ -1815,13 +2022,16 @@ updateAllowed msg model =
                                 newContracts =
                                     contract :: List.filter (\c -> c.component /= contract.component) currentContracts
                             in
-                            ( { model | contracts = Just newContracts }, Effect.none )
+                            ( noteFileVersion path file.lastCommitId { model | contracts = Just newContracts }, Effect.none )
 
-                        Err _ ->
-                            ( model, Effect.none )
+                        -- The one the JSON Schema can't catch: `rules` is typed
+                        -- as a bare array of objects, so a malformed rule
+                        -- validates, commits, and then fails to decode here.
+                        Err decodeError ->
+                            ( noteLoadError path (Decode.errorToString decodeError) model, Effect.none )
 
-                Err _ ->
-                    ( model, Effect.none )
+                Err httpError ->
+                    ( noteLoadError path (httpErrorReason httpError) model, Effect.none )
 
         UpdateNewContractRuleType type_ ->
             ( { model | newContractRuleType = type_ }, Effect.none )
@@ -1985,7 +2195,7 @@ updateAllowed msg model =
                                     { commitContext = CommitContract activeName
                                     , branch = branch
                                     , actionType = actionType
-                                    , filePath = "components/" ++ activeName ++ ".contract.json"
+                                    , filePath = RepoPaths.contractFile activeName
                                     , commitMessage = "Save contract for " ++ activeName
                                     , jsonString = jsonString
                                     }
@@ -2010,10 +2220,11 @@ updateAllowed msg model =
                             { branch = branch
                             , commitMessage = "Delete contract for " ++ name
                             , actions =
-                                [ { action = "delete"
-                                  , filePath = "components/" ++ name ++ ".contract.json"
-                                  , content = Nothing
-                                  }
+                                [ fileAction model
+                                    { action = "delete"
+                                    , filePath = RepoPaths.contractFile name
+                                    , content = Nothing
+                                    }
                                 ]
                             }
 
@@ -2201,47 +2412,43 @@ updateAllowed msg model =
                     case model.tokens of
                         Just tokensList ->
                             let
-                                actions =
+                                -- Whether the file is already there decides
+                                -- create-versus-update, and getting it wrong is
+                                -- a rejected commit either way. The tree
+                                -- listing is recursive now, so a nested path
+                                -- like `exports/variables.css` actually appears
+                                -- in it; before, nothing ever matched and every
+                                -- export after the first one failed.
+                                exists path =
+                                    model.repositoryTree
+                                        |> Maybe.withDefault []
+                                        |> List.any (\item -> item.path == path)
+
+                                exportAction path content =
+                                    fileAction model
+                                        { action =
+                                            if exists path then
+                                                "update"
+
+                                            else
+                                                "create"
+                                        , filePath = path
+                                        , content = Just content
+                                        }
+
+                                finalActions =
                                     List.filterMap
                                         (\target ->
                                             if target == "css" then
-                                                Just
-                                                    { action = "update"
-                                                    , filePath = "exports/variables.css"
-                                                    , content = Just (Export.generateCssVariables tokensList)
-                                                    }
+                                                Just (exportAction RepoPaths.exportCss (Export.generateCssVariables tokensList))
 
                                             else if target == "tailwind" then
-                                                Just
-                                                    { action = "update"
-                                                    , filePath = "exports/tailwind.config.js"
-                                                    , content = Just (Export.generateTailwindConfig tokensList)
-                                                    }
+                                                Just (exportAction RepoPaths.exportTailwind (Export.generateTailwindConfig tokensList))
 
                                             else
                                                 Nothing
                                         )
                                         model.exportTargets
-
-                                finalActions =
-                                    List.map
-                                        (\act ->
-                                            let
-                                                exists =
-                                                    model.repositoryTree
-                                                        |> Maybe.withDefault []
-                                                        |> List.any (\item -> item.path == act.filePath)
-                                            in
-                                            { act
-                                                | action =
-                                                    if exists then
-                                                        "update"
-
-                                                    else
-                                                        "create"
-                                            }
-                                        )
-                                        actions
 
                                 payload =
                                     { branch = branch

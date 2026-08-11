@@ -1,13 +1,18 @@
-port module Ports exposing (cacheToken, clearToken, schemaValidationResult, validateSchema)
+port module Ports exposing (cacheSession, clearToken, schemaValidationResult, validateSchema)
 
 import Json.Decode
 import Json.Encode
 
 
-{-| This module defines the JavaScript interop ports for managing the OAuth token
-in the browser's localStorage.
+{-| This module defines the JavaScript interop ports for managing the OAuth
+session in the browser's localStorage.
+
+The refresh token travels with the access token because storing one without the
+other makes renewal impossible: the app would hold a credential it knows is
+about to expire and no way to replace it.
+
 -}
-port cacheToken : String -> Cmd msg
+port cacheSession : { accessToken : String, refreshToken : Maybe String, expiresIn : Maybe Int } -> Cmd msg
 
 
 port clearToken : () -> Cmd msg

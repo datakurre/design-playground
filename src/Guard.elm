@@ -235,6 +235,12 @@ isMutating msg =
         GotTokenResult _ ->
             False
 
+        GotRefreshResult _ ->
+            False
+
+        DismissLoadErrors ->
+            False
+
         Logout ->
             False
 

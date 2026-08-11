@@ -16,6 +16,7 @@ than better.
 -}
 
 import Browser
+import Dict
 import Effect exposing (Effect)
 import Expect
 import GitLab.Branches
@@ -610,7 +611,173 @@ suite =
                         |> List.filter (\level -> level == Just Failed)
                         |> Expect.equal []
             ]
+        , describe "saves say which version they are based on"
+            [ test "an update carries the last_commit_id the file was read at" <|
+                \_ ->
+                    -- Without this GitLab takes the write unconditionally, so
+                    -- two tabs, two people, or one edit made in GitLab's own UI
+                    -- after the app loaded all silently clobber each other.
+                    onBranch
+                        |> withComponent "Button"
+                        |> (\m -> { m | existingComponents = [ "Button" ] })
+                        |> readAt "components/Button.json" "deadbeef"
+                        |> save
+                        |> commitField (Decode.at [ "actions", "0", "last_commit_id" ] Decode.string)
+                        |> Expect.equal (Ok "deadbeef")
+            , test "a create carries none, because there is no version to be based on" <|
+                \_ ->
+                    -- GitLab rejects last_commit_id on a create, so a stale
+                    -- entry left in the model must not leak into one.
+                    onBranch
+                        |> withComponent "Button"
+                        |> (\m -> { m | existingComponents = [] })
+                        |> readAt "components/Button.json" "deadbeef"
+                        |> save
+                        |> commitField (Decode.at [ "actions", "0" ] (Decode.maybe (Decode.field "last_commit_id" Decode.string)))
+                        |> Expect.equal (Ok Nothing)
+            , test "a file never read sends no version rather than a wrong one" <|
+                \_ ->
+                    onBranch
+                        |> withComponent "Button"
+                        |> (\m -> { m | existingComponents = [ "Button" ] })
+                        |> save
+                        |> commitField (Decode.at [ "actions", "0" ] (Decode.maybe (Decode.field "last_commit_id" Decode.string)))
+                        |> Expect.equal (Ok Nothing)
+            , test "reading a component records the version it came at" <|
+                \_ ->
+                    let
+                        ( model, _ ) =
+                            Update.update
+                                (GotComponentFile "components/Button.json"
+                                    (Ok { content = componentJson, lastCommitId = Just "c0ffee" })
+                                )
+                                onBranch
+                    in
+                    Dict.get "components/Button.json" model.fileVersions
+                        |> Expect.equal (Just "c0ffee")
+            ]
+        , describe "files that can't be read are reported rather than dropped"
+            [ test "a component that doesn't decode becomes a visible error" <|
+                \_ ->
+                    -- It used to be swallowed, which made a malformed component
+                    -- indistinguishable from one that isn't there — and left
+                    -- the app willing to `create` over it.
+                    let
+                        ( model, _ ) =
+                            Update.update
+                                (GotComponentFile "components/Broken.json"
+                                    (Ok { content = "{ not json", lastCommitId = Nothing })
+                                )
+                                onBranch
+                    in
+                    List.map .path model.loadErrors
+                        |> Expect.equal [ "components/Broken.json" ]
+            , test "a component GitLab won't serve is reported too" <|
+                \_ ->
+                    let
+                        ( model, _ ) =
+                            Update.update
+                                (GotComponentFile "components/Gone.json" (Err (Http.BadStatus 404)))
+                                onBranch
+                    in
+                    List.map .path model.loadErrors
+                        |> Expect.equal [ "components/Gone.json" ]
+            , test "a component that loads cleanly reports nothing" <|
+                \_ ->
+                    let
+                        ( model, _ ) =
+                            Update.update
+                                (GotComponentFile "components/Button.json"
+                                    (Ok { content = componentJson, lastCommitId = Nothing })
+                                )
+                                onBranch
+                    in
+                    model.loadErrors |> Expect.equal []
+            , test "switching branch forgets both the errors and the versions" <|
+                \_ ->
+                    -- Carrying either across would send one branch's
+                    -- last_commit_id with the other branch's save.
+                    let
+                        loaded =
+                            onBranch
+                                |> readAt "components/Button.json" "deadbeef"
+                                |> (\m -> { m | loadErrors = [ { path = "components/Broken.json", reason = "bad" } ] })
+
+                        -- SwitchBranch only navigates; the branch state is
+                        -- forgotten when the URL change lands.
+                        ( model, _ ) =
+                            Update.update (UrlChanged (url "#/acme/design/tokens?branch=release%2F1.0")) loaded
+                    in
+                    ( Dict.isEmpty model.fileVersions, model.loadErrors )
+                        |> Expect.equal ( True, [] )
+            ]
+        , describe "a commit GitLab refuses says why"
+            [ test "a stale write is reported as a conflict, not as a generic failure" <|
+                \_ ->
+                    -- The response body used to be discarded by
+                    -- Http.expectWhatever, so a protected branch, an expired
+                    -- token and a file that moved all came out identically.
+                    let
+                        ( model, _ ) =
+                            Update.update
+                                (GotCommitResult Types.CommitOther
+                                    (Err (Http.BadBody """{"message":"You are attempting to update a file that has changed since you started editing it."}"""))
+                                )
+                                onBranch
+                    in
+                    model.commitStatus
+                        |> Maybe.map (Tuple.second >> String.contains "changed in GitLab")
+                        |> Expect.equal (Just True)
+            , test "a protected branch is named as one" <|
+                \_ ->
+                    let
+                        ( model, _ ) =
+                            Update.update
+                                (GotCommitResult Types.CommitOther (Err (Http.BadStatus 403)))
+                                onBranch
+                    in
+                    model.commitStatus
+                        |> Maybe.map (Tuple.second >> String.contains "protected")
+                        |> Expect.equal (Just True)
+            , test "a 401 with no refresh token signs the user out instead of blaming the save" <|
+                \_ ->
+                    let
+                        ( model, effect ) =
+                            Update.update
+                                (GotCommitResult Types.CommitOther (Err (Http.BadStatus 401)))
+                                { onBranch | refreshToken = Nothing }
+                    in
+                    ( model.token, Effect.toList effect )
+                        |> Expect.equal ( Nothing, [ Effect.ClearToken ] )
+            , test "a 401 with a refresh token renews it rather than signing out" <|
+                \_ ->
+                    let
+                        ( model, effect ) =
+                            Update.update
+                                (GotCommitResult Types.CommitOther (Err (Http.BadStatus 401)))
+                                { onBranch | refreshToken = Just "refresh-me" }
+                    in
+                    ( model.token /= Nothing
+                    , Effect.requests effect |> List.map .url
+                    )
+                        |> Expect.equal ( True, [ "https://gitlab.com/oauth/token" ] )
+            ]
         ]
+
+
+{-| The smallest component file that decodes.
+-}
+componentJson : String
+componentJson =
+    """{"name":"Button","variants":[],"slots":[],"states":[]}"""
+
+
+{-| A model that has read `path` at commit `commitId`, as loading the branch
+would have left it.
+-}
+readAt : String -> String -> Types.Model -> Types.Model
+readAt path commitId model =
+    { model | fileVersions = Dict.insert path commitId model.fileVersions }
 
 
 {-| The nine buttons in the app that write to the repository. Kept in one place
@@ -685,7 +852,17 @@ featureBranch =
 signedOutWithToken : Types.Model
 signedOutWithToken =
     Types.initial (url "#/")
-        { token = Just "secret", pkceChallenge = "challenge", pkceVerifier = "verifier" }
+        { token = Just "secret"
+        , refreshToken = Nothing
+        , pkceChallenge = "challenge"
+        , pkceVerifier = "verifier"
+        , authConfig =
+            { clientId = "test-client"
+            , redirectUri = "https://example.test/app"
+            , scope = "read_api write_repository"
+            , state = "test-state"
+            }
+        }
 
 
 withComponent : String -> Types.Model -> Types.Model
