@@ -1,4 +1,14 @@
-module Contracts exposing (Contract, Rule(..), Severity(..), Violation, decoder, encoder, validate)
+module Contracts exposing
+    ( Contract
+    , Rule(..)
+    , Severity(..)
+    , Violation
+    , decoder
+    , encoder
+    , ruleFromFields
+    , ruleTypes
+    , validate
+    )
 
 import Colors
 import Components
@@ -120,6 +130,96 @@ ruleEncoder rule =
                 , ( "background", Encode.string background )
                 , ( "minimumRatio", Encode.float minimumRatio )
                 ]
+
+
+{-| The rule types, in the order the "Add rule" picker offers them.
+
+The picker used to spell the four `type` strings out itself and `update` used to
+spell them out a third time, so adding a rule meant finding all three. The
+`add-contract-rule` skill lists the places a rule touches; this removes two of
+them.
+
+-}
+ruleTypes : List { value : String, label : String }
+ruleTypes =
+    [ { value = "allowedTokenGroups", label = "Allowed token groups" }
+    , { value = "noHardcodedValues", label = "No hardcoded values" }
+    , { value = "spacingOnScale", label = "Spacing on scale" }
+    , { value = "contrastThreshold", label = "Contrast threshold" }
+    ]
+
+
+{-| A rule built from what the "Add rule" form collected.
+
+`update` used to do this inline, in ninety lines of `Dict String String`
+parsing that was a second, hand-rolled statement of what `ruleDecoder` already
+knows — with the same four type strings and the same field names, spelled
+independently.
+
+`Err` carries what is missing rather than a bare `Nothing`. The old code
+returned to the same model on a `Nothing`, so a form with an empty required
+field did nothing at all and never said why.
+
+-}
+ruleFromFields : String -> Dict String String -> Result String Rule
+ruleFromFields ruleType fields =
+    let
+        list key =
+            Dict.get key fields
+                |> Maybe.withDefault ""
+                |> String.split ","
+                |> List.map String.trim
+                |> List.filter ((/=) "")
+
+        string key =
+            Dict.get key fields
+                |> Maybe.map String.trim
+                |> Maybe.andThen
+                    (\s ->
+                        if s == "" then
+                            Nothing
+
+                        else
+                            Just s
+                    )
+
+        required key =
+            string key |> Result.fromMaybe ("Fill in " ++ key ++ ".")
+
+        requiredList key =
+            case list key of
+                [] ->
+                    Err ("List at least one " ++ key ++ ".")
+
+                values ->
+                    Ok values
+    in
+    case ruleType of
+        "allowedTokenGroups" ->
+            requiredList "groups"
+                |> Result.map (List.map (String.split ".") >> AllowedTokenGroups)
+
+        "noHardcodedValues" ->
+            requiredList "properties"
+                |> Result.map NoHardcodedValues
+
+        "spacingOnScale" ->
+            Result.map2 (\props scale -> SpacingOnScale props (String.split "." scale))
+                (requiredList "properties")
+                (required "scale")
+
+        "contrastThreshold" ->
+            Result.map3
+                (\fg bg ratio -> ContrastThreshold { foreground = fg, background = bg, minimumRatio = ratio })
+                (required "foreground")
+                (required "background")
+                (string "minimumRatio"
+                    |> Maybe.andThen String.toFloat
+                    |> Result.fromMaybe "Give the minimum ratio as a number, like 4.5."
+                )
+
+        _ ->
+            Err ("Unknown rule type: " ++ ruleType)
 
 
 decoder : Decoder Contract

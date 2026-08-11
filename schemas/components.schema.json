@@ -9,8 +9,88 @@
     "variants": { "type": "array", "items": { "type": "string" } },
     "slots": { "type": "array", "items": { "type": "string" } },
     "states": { "type": "array", "items": { "type": "string" } },
-    "layout": { "type": "object" }
+    "layout": { "$ref": "#/$defs/layout" }
   },
   "required": ["name", "variants", "slots", "states"],
-  "additionalProperties": false
+  "additionalProperties": false,
+  "$comment": "`layout` was {\"type\": \"object\"}, so the entire recursive structure was described only in Components.layoutDecoder and layoutEncoder. Keep this in step with them.",
+  "$defs": {
+    "styles": {
+      "type": "object",
+      "description": "CSS property to value. Values may contain `{token.path}` references.",
+      "additionalProperties": { "type": "string" }
+    },
+    "styleLayer": {
+      "type": "object",
+      "description": "Styles that apply only for a variant, a state, or both. Absent variant or state means 'any'.",
+      "properties": {
+        "variant": { "type": "string" },
+        "state": { "type": "string" },
+        "styles": { "$ref": "#/$defs/styles" }
+      },
+      "required": ["styles"],
+      "additionalProperties": false
+    },
+    "layout": {
+      "type": "object",
+      "oneOf": [
+        { "$ref": "#/$defs/stack" },
+        { "$ref": "#/$defs/grid" },
+        { "$ref": "#/$defs/element" },
+        { "$ref": "#/$defs/when" }
+      ]
+    },
+    "children": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/layout" }
+    },
+    "stack": {
+      "type": "object",
+      "properties": {
+        "type": { "const": "stack" },
+        "direction": { "type": "string" },
+        "styles": { "$ref": "#/$defs/styles" },
+        "overrides": { "type": "array", "items": { "$ref": "#/$defs/styleLayer" } },
+        "children": { "$ref": "#/$defs/children" }
+      },
+      "required": ["type", "direction", "styles", "children"],
+      "additionalProperties": false
+    },
+    "grid": {
+      "type": "object",
+      "properties": {
+        "type": { "const": "grid" },
+        "columns": { "type": "integer" },
+        "styles": { "$ref": "#/$defs/styles" },
+        "overrides": { "type": "array", "items": { "$ref": "#/$defs/styleLayer" } },
+        "children": { "$ref": "#/$defs/children" }
+      },
+      "required": ["type", "columns", "styles", "children"],
+      "additionalProperties": false
+    },
+    "element": {
+      "type": "object",
+      "properties": {
+        "type": { "const": "element" },
+        "isSlot": { "type": "boolean" },
+        "styles": { "$ref": "#/$defs/styles" },
+        "overrides": { "type": "array", "items": { "$ref": "#/$defs/styleLayer" } },
+        "content": { "type": "string" }
+      },
+      "required": ["type", "isSlot", "styles", "content"],
+      "additionalProperties": false
+    },
+    "when": {
+      "type": "object",
+      "description": "A node rendered only in a matching variant/state. Carries no styles of its own.",
+      "properties": {
+        "type": { "const": "when" },
+        "children": { "$ref": "#/$defs/children" },
+        "variant": { "type": "string" },
+        "state": { "type": "string" }
+      },
+      "required": ["type", "children"],
+      "additionalProperties": false
+    }
+  }
 }

@@ -102,6 +102,64 @@ suite =
 
                     Ok _ ->
                         Expect.fail "Should have failed to decode unknown rule type"
+        , describe "building a rule from the form"
+            [ test "every offered rule type is one the parser accepts" <|
+                \_ ->
+                    -- The picker and the parser used to spell the four type
+                    -- strings out independently, so one could offer what the
+                    -- other refused.
+                    Contracts.ruleTypes
+                        |> List.map .value
+                        |> List.filter (\t -> Contracts.ruleFromFields t Dict.empty == Err ("Unknown rule type: " ++ t))
+                        |> Expect.equal []
+            , test "a comma-separated list becomes token paths" <|
+                \_ ->
+                    Contracts.ruleFromFields "allowedTokenGroups"
+                        (Dict.singleton "groups" "color.brand, spacing ,")
+                        |> Expect.equal (Ok (AllowedTokenGroups [ [ "color", "brand" ], [ "spacing" ] ]))
+            , test "a missing required field says which, rather than doing nothing" <|
+                \_ ->
+                    -- It used to return the model unchanged: the form did
+                    -- nothing and never said why.
+                    Contracts.ruleFromFields "spacingOnScale"
+                        (Dict.singleton "properties" "padding")
+                        |> Expect.equal (Err "Fill in scale.")
+            , test "an empty list is a problem, not an empty rule" <|
+                \_ ->
+                    Contracts.ruleFromFields "noHardcodedValues" (Dict.singleton "properties" " , ")
+                        |> Expect.equal (Err "List at least one properties.")
+            , test "a ratio that isn't a number is reported as one" <|
+                \_ ->
+                    Contracts.ruleFromFields "contrastThreshold"
+                        (Dict.fromList
+                            [ ( "foreground", "color" )
+                            , ( "background", "background-color" )
+                            , ( "minimumRatio", "quite high" )
+                            ]
+                        )
+                        |> Expect.equal (Err "Give the minimum ratio as a number, like 4.5.")
+            , test "a complete contrast rule builds" <|
+                \_ ->
+                    Contracts.ruleFromFields "contrastThreshold"
+                        (Dict.fromList
+                            [ ( "foreground", "color" )
+                            , ( "background", "background-color" )
+                            , ( "minimumRatio", "4.5" )
+                            ]
+                        )
+                        |> Expect.equal
+                            (Ok (ContrastThreshold { foreground = "color", background = "background-color", minimumRatio = 4.5 }))
+            , test "a rule built from the form is one the codec round-trips" <|
+                \_ ->
+                    -- The form is a third statement of the rule vocabulary if
+                    -- it can produce something the encoder can't write.
+                    case Contracts.ruleFromFields "spacingOnScale" (Dict.fromList [ ( "properties", "padding,margin" ), ( "scale", "spacing" ) ]) of
+                        Ok rule ->
+                            expectRoundTrip rule
+
+                        Err problem ->
+                            Expect.fail problem
+            ]
         , describe "validate"
             [ test "AllowedTokenGroups: passes when reference is inside an allowed group" <|
                 \_ ->

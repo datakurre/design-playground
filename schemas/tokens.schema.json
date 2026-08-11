@@ -2,11 +2,14 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://design-playground.internal/tokens.schema.json",
   "title": "Design Tokens",
+  "$comment": "The name pattern was ^[a-zA-Z0-9_-]+$, which is stricter than DTCG and stricter than the app: Naming.check accepts any non-blank, non-duplicate name, so a token called `brand color` could be typed, saved, and rejected here. DTCG reserves `$`-prefixed keys and forbids `.`, `{` and `}` in a name — `.` because it separates path segments in a reference, braces because they delimit one.",
   "type": "object",
+  "properties": {
+    "$type": { "type": "string" },
+    "$description": { "type": "string" }
+  },
   "patternProperties": {
-    "^[a-zA-Z0-9_-]+$": {
-      "$ref": "#/$defs/tokenOrGroup"
-    }
+    "^[^.${}]+$": { "$ref": "#/$defs/tokenOrGroup" }
   },
   "additionalProperties": false,
   "$defs": {
@@ -18,9 +21,7 @@
         "$description": { "type": "string" }
       },
       "patternProperties": {
-        "^[a-zA-Z0-9_-]+$": {
-          "$ref": "#/$defs/tokenOrGroup"
-        }
+        "^[^.${}]+$": { "$ref": "#/$defs/tokenOrGroup" }
       },
       "additionalProperties": false
     }

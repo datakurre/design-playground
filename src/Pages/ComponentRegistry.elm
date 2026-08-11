@@ -922,11 +922,12 @@ viewUsageContract model comp displayTokens =
                 , onInput UpdateNewContractRuleType
                 , Html.Attributes.attribute "aria-label" "Rule type"
                 ]
-                [ Html.option [ value "allowedTokenGroups" ] [ text "Allowed token groups" ]
-                , Html.option [ value "noHardcodedValues" ] [ text "No hardcoded values" ]
-                , Html.option [ value "spacingOnScale" ] [ text "Spacing on scale" ]
-                , Html.option [ value "contrastThreshold" ] [ text "Contrast threshold" ]
-                ]
+                -- From `Contracts`, so the picker and the parser can't offer
+                -- and accept different sets.
+                (List.map
+                    (\ruleType -> Html.option [ value ruleType.value ] [ text ruleType.label ])
+                    Contracts.ruleTypes
+                )
             , case model.newContractRuleType of
                 "allowedTokenGroups" ->
                     div []

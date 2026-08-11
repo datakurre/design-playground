@@ -2060,73 +2060,8 @@ updateAllowed msg model =
         AddContractRule ->
             case model.selectedComponentName of
                 Just compName ->
-                    let
-                        getFloat k =
-                            Dict.get k model.newContractRuleFields |> Maybe.andThen String.toFloat
-
-                        getList k =
-                            Dict.get k model.newContractRuleFields |> Maybe.map (\s -> String.split "," s |> List.map String.trim |> List.filter ((/=) "")) |> Maybe.withDefault []
-
-                        getString k =
-                            Dict.get k model.newContractRuleFields
-                                |> Maybe.andThen
-                                    (\s ->
-                                        if String.trim s == "" then
-                                            Nothing
-
-                                        else
-                                            Just (String.trim s)
-                                    )
-
-                        maybeRule =
-                            case model.newContractRuleType of
-                                "allowedTokenGroups" ->
-                                    let
-                                        groups =
-                                            getList "groups" |> List.map (String.split ".")
-                                    in
-                                    if List.isEmpty groups then
-                                        Nothing
-
-                                    else
-                                        Just (Contracts.AllowedTokenGroups groups)
-
-                                "noHardcodedValues" ->
-                                    let
-                                        props =
-                                            getList "properties"
-                                    in
-                                    if List.isEmpty props then
-                                        Nothing
-
-                                    else
-                                        Just (Contracts.NoHardcodedValues props)
-
-                                "spacingOnScale" ->
-                                    case ( getList "properties", getString "scale" ) of
-                                        ( props, Just scaleStr ) ->
-                                            if List.isEmpty props then
-                                                Nothing
-
-                                            else
-                                                Just (Contracts.SpacingOnScale props (String.split "." scaleStr))
-
-                                        _ ->
-                                            Nothing
-
-                                "contrastThreshold" ->
-                                    case ( getString "foreground", getString "background", getFloat "minimumRatio" ) of
-                                        ( Just fg, Just bg, Just ratio ) ->
-                                            Just (Contracts.ContrastThreshold { foreground = fg, background = bg, minimumRatio = ratio })
-
-                                        _ ->
-                                            Nothing
-
-                                _ ->
-                                    Nothing
-                    in
-                    case maybeRule of
-                        Just rule ->
+                    case Contracts.ruleFromFields model.newContractRuleType model.newContractRuleFields of
+                        Ok rule ->
                             let
                                 currentContracts =
                                     model.contracts |> Maybe.withDefault []
@@ -2145,10 +2080,20 @@ updateAllowed msg model =
                                 newContracts =
                                     newContract :: List.filter (\c -> c.component /= compName) currentContracts
                             in
-                            ( { model | contracts = Just newContracts, newContractRuleFields = Dict.empty }, Effect.none )
+                            ( { model
+                                | contracts = Just newContracts
+                                , newContractRuleFields = Dict.empty
+                                , commitStatus = Nothing
+                              }
+                            , Effect.none
+                            )
 
-                        Nothing ->
-                            ( model, Effect.none )
+                        -- This used to return the model unchanged, so a form
+                        -- with a required field empty did nothing and said
+                        -- nothing — the failure mode `Naming` exists to stop
+                        -- everywhere else in the app.
+                        Err problem ->
+                            ( { model | commitStatus = Just ( Failed, problem ) }, Effect.none )
 
                 Nothing ->
                     ( model, Effect.none )

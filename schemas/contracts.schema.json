@@ -7,9 +7,79 @@
     "component": { "type": "string" },
     "rules": {
       "type": "array",
-      "items": { "type": "object" }
+      "items": { "$ref": "#/$defs/rule" }
     }
   },
   "required": ["component", "rules"],
-  "additionalProperties": false
+  "additionalProperties": false,
+  "$comment": "`rules` was {\"type\": \"object\"}, which validated nothing about a rule. The real shape lived only in Contracts.ruleDecoder, so a rule missing its `groups` passed validation, committed, and then failed to decode on load — where the failure was swallowed and the contract simply vanished. Keep this in step with Contracts.ruleDecoder and Contracts.ruleEncoder; tests/schemas.test.js validates fixtures written by the Elm encoders, so the two cannot drift silently any more.",
+  "$defs": {
+    "tokenPath": {
+      "type": "string",
+      "description": "A dotted token path, e.g. `color.brand.primary`.",
+      "minLength": 1
+    },
+    "propertyPattern": {
+      "type": "string",
+      "description": "A CSS property name, optionally with `*` wildcards.",
+      "minLength": 1
+    },
+    "rule": {
+      "type": "object",
+      "oneOf": [
+        { "$ref": "#/$defs/allowedTokenGroups" },
+        { "$ref": "#/$defs/noHardcodedValues" },
+        { "$ref": "#/$defs/spacingOnScale" },
+        { "$ref": "#/$defs/contrastThreshold" }
+      ]
+    },
+    "allowedTokenGroups": {
+      "type": "object",
+      "properties": {
+        "type": { "const": "allowedTokenGroups" },
+        "groups": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/tokenPath" }
+        }
+      },
+      "required": ["type", "groups"],
+      "additionalProperties": false
+    },
+    "noHardcodedValues": {
+      "type": "object",
+      "properties": {
+        "type": { "const": "noHardcodedValues" },
+        "properties": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/propertyPattern" }
+        }
+      },
+      "required": ["type", "properties"],
+      "additionalProperties": false
+    },
+    "spacingOnScale": {
+      "type": "object",
+      "properties": {
+        "type": { "const": "spacingOnScale" },
+        "properties": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/propertyPattern" }
+        },
+        "scale": { "$ref": "#/$defs/tokenPath" }
+      },
+      "required": ["type", "properties", "scale"],
+      "additionalProperties": false
+    },
+    "contrastThreshold": {
+      "type": "object",
+      "properties": {
+        "type": { "const": "contrastThreshold" },
+        "foreground": { "type": "string", "minLength": 1 },
+        "background": { "type": "string", "minLength": 1 },
+        "minimumRatio": { "type": "number", "exclusiveMinimum": 0 }
+      },
+      "required": ["type", "foreground", "background", "minimumRatio"],
+      "additionalProperties": false
+    }
+  }
 }
