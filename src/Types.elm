@@ -253,7 +253,7 @@ type Msg
     | SelectProject Project
     | UnselectProject
     | GotProject (Result Http.Error Project)
-    | GotTree (Result Http.Error (List TreeItem))
+    | GotTree String Int (Result Http.Error (List TreeItem))
     | GotCommitResult CommitContext (Result Http.Error ())
     | GotSchemaValidationResult { valid : Bool, errors : List String, context : Json.Decode.Value }
     | GotTokensFile (Result Http.Error String)

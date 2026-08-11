@@ -202,17 +202,32 @@ suite =
                         |> List.map .url
                         |> List.filter (\u -> not (String.contains "ref=feature-x" u))
                         |> Expect.equal []
-            , test "and refetches the contracts too, not five of the six files" <|
+            , test "and refetches everything the branch owns, not some of it" <|
                 \_ ->
-                    -- Switching used to leave contracts.json alone, so the
+                    -- Switching used to leave the contracts behind, so the
                     -- contracts panel kept showing the previous branch's rules.
+                    -- They now arrive through the components tree listing, which
+                    -- is one of these five.
                     let
                         ( _, effect ) =
                             Update.update (UrlChanged (url "#/acme/design/tokens?branch=feature-x")) signedIn
                     in
                     Effect.requests effect
                         |> List.length
-                        |> Expect.equal 6
+                        |> Expect.equal 5
+            , test "no request goes to a root contracts.json, because nothing writes one" <|
+                \_ ->
+                    -- It was a read-only second convention: every save writes
+                    -- components/<name>.contract.json, and both paths decoded a
+                    -- single Contract, so the root file could hold exactly one
+                    -- component's rules and no UI could produce it.
+                    let
+                        ( _, effect ) =
+                            Update.update (UrlChanged (url "#/acme/design/tokens?branch=feature-x")) signedIn
+                    in
+                    Effect.requests effect
+                        |> List.filter (\r -> String.contains "contracts.json" r.url)
+                        |> Expect.equal []
             , test "a branch name with a slash in it is escaped in the ref, not truncated" <|
                 \_ ->
                     let

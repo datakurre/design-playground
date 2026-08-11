@@ -79,6 +79,40 @@ decoder =
     Decode.map flattenAst astDecoder
 
 
+{-| Markers for a reference that could not be turned into a value.
+
+They are deliberately shaped like the `{…}` syntax they replace, so anything
+downstream that already treats a leftover brace as "not a real value" keeps
+working — but they say _why_, which the bare input never did. `isUnresolved`
+is the one place that knows the set.
+
+-}
+cyclicMarker : String -> String
+cyclicMarker value =
+    "{[Cyclic: " ++ value ++ "]}"
+
+
+compositeMarker : String -> String
+compositeMarker path =
+    "{[Composite: " ++ path ++ "]}"
+
+
+{-| Whether a resolved value still contains a reference that didn't resolve —
+a missing token, a composite used where a string was wanted, or an alias chain
+that ran past its depth budget.
+
+Callers need this because `resolveAlias` is total: it always returns a string,
+and without asking, a cycle looks exactly like a colour that happens to be
+spelled oddly.
+
+-}
+isUnresolved : String -> Bool
+isUnresolved value =
+    String.contains "{[Cyclic:" value
+        || String.contains "{[Composite:" value
+        || String.contains "{" value
+
+
 resolveAlias : List FlatToken -> String -> String
 resolveAlias tokens value =
     resolveAliasHelp tokens value 10
@@ -87,7 +121,11 @@ resolveAlias tokens value =
 resolveAliasHelp : List FlatToken -> String -> Int -> String
 resolveAliasHelp tokens value depth =
     if depth <= 0 then
-        value
+        -- Out of budget means an alias chain longer than any real token graph,
+        -- which in practice means a cycle. Returning `value` unchanged — what
+        -- this used to do — hands back a plausible-looking string that no
+        -- caller can tell apart from a resolved one.
+        cyclicMarker value
 
     else
         case String.indexes "{" value |> List.head of
@@ -115,7 +153,7 @@ resolveAliasHelp tokens value depth =
                                                     resolveAliasHelp tokens s (depth - 1)
 
                                                 CompositeValue _ ->
-                                                    "{[Composite: " ++ aliasPathStr ++ "]}"
+                                                    compositeMarker aliasPathStr
                                         )
                                     |> Maybe.withDefault ("{" ++ aliasPathStr ++ "}")
 

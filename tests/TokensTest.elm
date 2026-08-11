@@ -141,4 +141,28 @@ aliasTests =
                         [ ( [ "color", "primary" ], { value = StringValue "#ff0000", type_ = "color", description = Nothing } ) ]
                 in
                 Expect.equal "{color.secondary}" (Tokens.resolveAlias tokens "{color.secondary}")
+        , test "a cycle resolves to a marker, not to a plausible wrong value" <|
+            \_ ->
+                -- Running out of depth used to hand back the input unchanged,
+                -- which no caller could tell apart from a resolved value. The
+                -- renderer would draw it and the contract validator would judge
+                -- it.
+                let
+                    tokens =
+                        [ ( [ "a" ], { value = StringValue "{b}", type_ = "color", description = Nothing } )
+                        , ( [ "b" ], { value = StringValue "{a}", type_ = "color", description = Nothing } )
+                        ]
+                in
+                Tokens.resolveAlias tokens "{a}"
+                    |> Tokens.isUnresolved
+                    |> Expect.equal True
+        , test "a value that fully resolves is not flagged as unresolved" <|
+            \_ ->
+                let
+                    tokens =
+                        [ ( [ "color", "primary" ], { value = StringValue "#ff0000", type_ = "color", description = Nothing } ) ]
+                in
+                Tokens.resolveAlias tokens "1px solid {color.primary}"
+                    |> Tokens.isUnresolved
+                    |> Expect.equal False
         ]

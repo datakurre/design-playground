@@ -828,15 +828,27 @@ viewUsageContract model comp displayTokens =
         violations =
             Contracts.validate displayTokens activeContract comp
 
+        broken =
+            List.filter (\v -> v.severity == Contracts.Broken) violations
+
+        -- "Couldn't check" is neither a pass nor a failure, and collapsing it
+        -- into either one is how a rule that never ran reads as a rule that
+        -- succeeded.
+        unverifiable =
+            List.filter (\v -> v.severity == Contracts.Unverifiable) violations
+
         headingPill =
             if List.isEmpty activeContract.rules then
                 text ""
 
-            else if List.isEmpty violations then
-                Ui.pill Positive "OK"
+            else if not (List.isEmpty broken) then
+                Ui.pill Negative (String.fromInt (List.length broken))
+
+            else if not (List.isEmpty unverifiable) then
+                Ui.pill Neutral (String.fromInt (List.length unverifiable) ++ " unchecked")
 
             else
-                Ui.pill Negative (String.fromInt (List.length violations))
+                Ui.pill Positive "OK"
     in
     div []
         [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.mb s2 ] ]
@@ -848,7 +860,23 @@ viewUsageContract model comp displayTokens =
             (if not (List.isEmpty violations) then
                 List.map
                     (\v ->
-                        div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.text_color (red s700), Tw.text_sm, Tw.mb s1 ] ]
+                        div
+                            [ classes
+                                [ Tw.flex
+                                , Tw.items_center
+                                , Tw.gap s2
+                                , Tw.text_color
+                                    (case v.severity of
+                                        Contracts.Broken ->
+                                            red s700
+
+                                        Contracts.Unverifiable ->
+                                            slate s600
+                                    )
+                                , Tw.text_sm
+                                , Tw.mb s1
+                                ]
+                            ]
                             [ -- Which variant or state introduced it. Without
                               -- this, a rule broken only by one layer reads as
                               -- if the component broke it everywhere.

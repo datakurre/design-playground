@@ -262,7 +262,7 @@ isMutating msg =
         GotProject _ ->
             False
 
-        GotTree _ ->
+        GotTree _ _ _ ->
             False
 
         GotCommitResult _ _ ->

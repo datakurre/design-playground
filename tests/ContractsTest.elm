@@ -357,6 +357,49 @@ suite =
                             { component = "Test", rules = [ ContrastThreshold { foreground = "color", background = "background-color", minimumRatio = 4.5 } ] }
                     in
                     Expect.equal [] (Contracts.validate [] contract component)
+            , test "ContrastThreshold: reports a non-hex colour as unverifiable, not as passing" <|
+                \_ ->
+                    -- rgb(), hsl() and currentColor are what a real system is
+                    -- full of. Silence used to mean both "checked, fine" and
+                    -- "couldn't read either colour", which is the one pair of
+                    -- answers a checker must never conflate.
+                    let
+                        component =
+                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.fromList [ ( "color", "currentColor" ), ( "background-color", "#ffffff" ) ], overrides = [] } "content") }
+
+                        contract =
+                            { component = "Test", rules = [ ContrastThreshold { foreground = "color", background = "background-color", minimumRatio = 4.5 } ] }
+                    in
+                    Contracts.validate [] contract component
+                        |> List.map .severity
+                        |> Expect.equal [ Contracts.Unverifiable ]
+            , test "ContrastThreshold: a real failure is still Broken" <|
+                \_ ->
+                    let
+                        component =
+                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.fromList [ ( "color", "#888888" ), ( "background-color", "#777777" ) ], overrides = [] } "content") }
+
+                        contract =
+                            { component = "Test", rules = [ ContrastThreshold { foreground = "color", background = "background-color", minimumRatio = 4.5 } ] }
+                    in
+                    Contracts.validate [] contract component
+                        |> List.map .severity
+                        |> Expect.equal [ Contracts.Broken ]
+            , test "SpacingOnScale: a reference that doesn't resolve is unverifiable, not off-scale" <|
+                \_ ->
+                    -- "not part of the required scale" is a claim about a value.
+                    -- With no token by that name there is no value to make it
+                    -- about.
+                    let
+                        component =
+                            { name = "Test", description = Nothing, variants = [], slots = [], states = [], layout = Just (Element { isSlot = False, styles = Dict.singleton "padding" "{does.not.exist}", overrides = [] } "content") }
+
+                        contract =
+                            { component = "Test", rules = [ SpacingOnScale [ "padding" ] [ "spacing" ] ] }
+                    in
+                    Contracts.validate [] contract component
+                        |> List.map .severity
+                        |> Expect.equal [ Contracts.Unverifiable ]
             , test "Combines multiple rules" <|
                 \_ ->
                     let

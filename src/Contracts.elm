@@ -1,4 +1,4 @@
-module Contracts exposing (Contract, Rule(..), Violation, decoder, encoder, validate)
+module Contracts exposing (Contract, Rule(..), Severity(..), Violation, decoder, encoder, validate)
 
 import Colors
 import Components
@@ -6,6 +6,20 @@ import Dict exposing (Dict)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
 import Tokens exposing (TokenPath)
+
+
+{-| Whether the rule was broken, or whether it couldn't be checked at all.
+
+`Unverifiable` exists because silence used to mean both. `ContrastThreshold`
+can only read hex, so a colour resolving to `rgb(…)`, `hsl(…)` or
+`currentColor` produced no violation — indistinguishable from a pairing that
+passes. A rule that cannot see its input should say so rather than report
+success.
+
+-}
+type Severity
+    = Broken
+    | Unverifiable
 
 
 {-| Where a rule was broken. `context` is `Nothing` for a component's base
@@ -18,6 +32,7 @@ type alias Violation =
     , property : Maybe String
     , message : String
     , context : Maybe Components.StyleContext
+    , severity : Severity
     }
 
 
@@ -214,6 +229,13 @@ applyRule tokens path context nodeStyles rule =
     in
     case rule of
         AllowedTokenGroups groups ->
+            -- The one rule that deliberately does _not_ resolve aliases, where
+            -- the other three do. It governs what a component is allowed to
+            -- reference, so it reads the path as written: if `color.brand.primary`
+            -- is permitted, a component naming it stays legal no matter what
+            -- that token is later re-pointed at. Following the chain here would
+            -- turn "which vocabulary may this component use" into "what value
+            -- does it end up with", which is what the other rules are for.
             styles
                 |> Dict.toList
                 |> List.concatMap
@@ -230,6 +252,7 @@ applyRule tokens path context nodeStyles rule =
                                             , property = Just property
                                             , message = "Token path '" ++ String.join "." aliasPath ++ "' is not in allowed groups."
                                             , context = context
+                                            , severity = Broken
                                             }
                                 )
                     )
@@ -252,6 +275,7 @@ applyRule tokens path context nodeStyles rule =
                                     , property = Just property
                                     , message = "Hardcoded value: " ++ literal
                                     , context = context
+                                    , severity = Broken
                                     }
 
                             ( False, _ ) ->
@@ -282,12 +306,24 @@ applyRule tokens path context nodeStyles rule =
                                 resolved =
                                     Tokens.resolveAlias tokens value
                             in
-                            if not (List.member resolved scaleValues) then
+                            if Tokens.isUnresolved resolved then
+                                -- A reference that didn't resolve isn't off the
+                                -- scale; it's a value we never got to see.
+                                Just
+                                    { path = path
+                                    , property = Just property
+                                    , message = "Couldn't check: '" ++ value ++ "' does not resolve to a value."
+                                    , context = context
+                                    , severity = Unverifiable
+                                    }
+
+                            else if not (List.member resolved scaleValues) then
                                 Just
                                     { path = path
                                     , property = Just property
                                     , message = "Resolved value '" ++ resolved ++ "' is not part of the required scale."
                                     , context = context
+                                    , severity = Broken
                                     }
 
                             else
@@ -309,6 +345,15 @@ applyRule tokens path context nodeStyles rule =
 
                         bgRes =
                             Tokens.resolveAlias tokens bg
+
+                        unverifiable why =
+                            [ { path = path
+                              , property = Nothing
+                              , message = "Couldn't check contrast: " ++ why
+                              , context = context
+                              , severity = Unverifiable
+                              }
+                            ]
                     in
                     case ( Colors.parseHex fgRes, Colors.parseHex bgRes ) of
                         ( Just fgColor, Just bgColor ) ->
@@ -325,15 +370,24 @@ applyRule tokens path context nodeStyles rule =
                                   , property = Nothing
                                   , message = "Contrast ratio " ++ String.fromFloat ratioRounded ++ " is below minimum " ++ String.fromFloat minimumRatio
                                   , context = context
+                                  , severity = Broken
                                   }
                                 ]
 
                             else
                                 []
 
-                        _ ->
-                            []
+                        ( Nothing, Just _ ) ->
+                            unverifiable (foreground ++ " resolves to '" ++ fgRes ++ "', which isn't a hex colour.")
 
+                        ( Just _, Nothing ) ->
+                            unverifiable (background ++ " resolves to '" ++ bgRes ++ "', which isn't a hex colour.")
+
+                        ( Nothing, Nothing ) ->
+                            unverifiable ("neither " ++ foreground ++ " ('" ++ fgRes ++ "') nor " ++ background ++ " ('" ++ bgRes ++ "') is a hex colour.")
+
+                -- Only one of the pair being styled is a component that hasn't
+                -- made the decision yet, not a rule that failed to run.
                 _ ->
                     []
 

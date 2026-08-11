@@ -41,7 +41,7 @@ suite =
                         |> Expect.equal [ ( "Authorization", "Bearer secret" ) ]
             , test "listing a tree carries it too" <|
                 \_ ->
-                    (GitLab.Files.listTree "secret" 7 "main" (always Ignored)).headers
+                    (GitLab.Files.listTree "secret" 7 "main" 1 (always Ignored)).headers
                         |> Expect.equal [ ( "Authorization", "Bearer secret" ) ]
             ]
         , describe "urls"
@@ -57,8 +57,8 @@ suite =
                 \_ ->
                     -- Not project.defaultBranch: switching branches used to show
                     -- the default branch's contents under the new branch's name.
-                    (GitLab.Files.listTree "t" 7 "feature-x" (always Ignored)).url
-                        |> Expect.equal "https://gitlab.com/api/v4/projects/7/repository/tree?ref=feature-x"
+                    (GitLab.Files.listTree "t" 7 "feature-x" 1 (always Ignored)).url
+                        |> Expect.equal "https://gitlab.com/api/v4/projects/7/repository/tree?recursive=true&ref=feature-x&per_page=100&page=1"
             , test "listing a subdirectory encodes the path but keeps the ref readable" <|
                 \_ ->
                     (GitLab.Files.listTreeAtPath "t" 7 "main" "components" (always Ignored)).url
@@ -82,8 +82,8 @@ suite =
                     -- createBranch has always encoded the ref; the read side
                     -- interpolated it raw, so every "feature/x" branch the app
                     -- itself suggests creating was unreadable afterwards.
-                    (GitLab.Files.listTree "t" 7 "feature/x" (always Ignored)).url
-                        |> Expect.equal "https://gitlab.com/api/v4/projects/7/repository/tree?ref=feature%2Fx"
+                    (GitLab.Files.listTree "t" 7 "feature/x" 1 (always Ignored)).url
+                        |> Expect.equal "https://gitlab.com/api/v4/projects/7/repository/tree?recursive=true&ref=feature%2Fx&per_page=100&page=1"
             , test "reading a subdirectory encodes an ampersand in the ref" <|
                 \_ ->
                     (GitLab.Files.listTreeAtPath "t" 7 "a&b" "components" (always Ignored)).url
@@ -174,7 +174,7 @@ suite =
         , describe "bodies that are not JSON"
             [ test "a GET sends no body" <|
                 \_ ->
-                    (GitLab.Files.listTree "t" 7 "main" (always Ignored)).body
+                    (GitLab.Files.listTree "t" 7 "main" 1 (always Ignored)).body
                         |> GitLab.Request.bodyValue
                         |> Expect.equal Nothing
             ]

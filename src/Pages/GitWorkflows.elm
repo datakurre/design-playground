@@ -232,13 +232,26 @@ viewContractCheck model =
                         compContracts
                 )
                 components
+
+        broken =
+            List.filter (\( _, v ) -> v.severity == Contracts.Broken) allViolations
+
+        -- A rule that couldn't run is reported, but it is not a reason to
+        -- withhold "Passing" from the rules that did run and did pass.
+        unverifiable =
+            List.filter (\( _, v ) -> v.severity == Contracts.Unverifiable) allViolations
     in
     div [ classes [ Tw.mb s6, Tw.pt s4 ], Ui.divider ]
         [ div [ classes [ Tw.flex, Tw.items_center, Tw.gap s2, Tw.mb s2 ] ]
             [ h4 [ Ui.sectionTitle ] [ text "Contract check" ]
             , Ui.contextHelp Help.contractCheck
-            , if not (List.isEmpty allViolations) then
-                Ui.pill Ui.Negative (String.fromInt (List.length allViolations))
+            , if not (List.isEmpty broken) then
+                Ui.pill Ui.Negative (String.fromInt (List.length broken))
+
+              else
+                text ""
+            , if not (List.isEmpty unverifiable) then
+                Ui.pill Ui.Neutral (String.fromInt (List.length unverifiable) ++ " unchecked")
 
               else
                 text ""
@@ -249,10 +262,17 @@ viewContractCheck model =
                 , div [ Ui.mutedSmall, classes [ Tw.mt s2 ] ] [ text "This project has no usage contracts yet." ]
                 ]
 
-          else if List.isEmpty allViolations then
+          else if List.isEmpty broken && List.isEmpty unverifiable then
             div []
                 [ Ui.pill Ui.Positive "Passing"
                 , div [ Ui.mutedSmall, classes [ Tw.mt s2 ] ] [ text "All components satisfy their usage contracts." ]
+                ]
+
+          else if List.isEmpty broken then
+            div []
+                [ Ui.pill Ui.Positive "Passing"
+                , div [ Ui.mutedSmall, classes [ Tw.mt s2 ] ]
+                    [ text "No violations, but some rules couldn't be checked against the values they were given." ]
                 ]
 
           else
@@ -270,6 +290,6 @@ viewContractCheck model =
                             ]
                             [ text (compName ++ ": " ++ violation.message) ]
                     )
-                    allViolations
+                    (broken ++ unverifiable)
                 )
         ]

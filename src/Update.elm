@@ -483,19 +483,27 @@ projectErrorMessage error =
 {-| Everything the app reads out of a repository, at one ref.
 
 Opening a repository and switching branch want exactly this list, and they used
-to spell it out separately — with the switch missing `contracts.json`, so the
-contracts you saw after a switch were still the previous branch's.
+to spell it out separately — with the switch missing contracts, so the contracts
+you saw after a switch were still the previous branch's.
+
+There used to be a seventh request here, for a `contracts.json` at the
+repository root. It was a second convention that could only ever be read: every
+write goes to `components/<name>.contract.json`, and both paths decoded a single
+`Contract`, so the root file could hold exactly one component's rules and no UI
+could produce it. It also raced — it and the components tree listing landed in
+whatever order the network chose, and the tree handler reset `contracts`, so a
+root file loaded first was intermittently wiped. One convention, and the race
+has nowhere to happen.
 
 -}
 fetchAtRef : String -> GitLab.Projects.Project -> String -> Effect Msg
 fetchAtRef token project ref =
     Effect.batch
-        [ GitLab.Files.listTree token project.id ref GotTree |> Effect.SendRequest
+        [ GitLab.Files.listTree token project.id ref 1 (GotTree ref 1) |> Effect.SendRequest
         , GitLab.Files.getFileRaw token project.id ref "tokens/tokens.json" GotTokensFile |> Effect.SendRequest
         , GitLab.Files.listTreeAtPath token project.id ref "themes" (GotThemesTree ref) |> Effect.SendRequest
         , GitLab.Files.listTreeAtPath token project.id ref "components" (GotComponentsTree ref) |> Effect.SendRequest
         , GitLab.Files.listTreeAtPath token project.id ref "layouts" (GotScreensTree ref) |> Effect.SendRequest
-        , GitLab.Files.getFileRaw token project.id ref "contracts.json" (GotContractFile "contracts.json") |> Effect.SendRequest
         ]
 
 
@@ -793,10 +801,36 @@ updateAllowed msg model =
                 ( Err error, _ ) ->
                     ( { model | error = Just (projectErrorMessage error), commitStatus = Nothing, startupStatus = Ready }, Effect.none )
 
-        GotTree result ->
+        GotTree ref page result ->
             case result of
                 Ok tree ->
-                    ( { model | repositoryTree = Just tree }, Effect.none )
+                    let
+                        -- Page 1 replaces, later pages append. Anything else
+                        -- and a re-open of the same branch doubles the tree.
+                        accumulated =
+                            if page == 1 then
+                                tree
+
+                            else
+                                (model.repositoryTree |> Maybe.withDefault []) ++ tree
+
+                        -- A full page is the only evidence there might be
+                        -- another one; GitLab's total-count headers aren't
+                        -- readable from here.
+                        more =
+                            if List.length tree < GitLab.Files.treePageSize then
+                                Effect.none
+
+                            else
+                                case ( model.token, model.selectedProject ) of
+                                    ( Just token, Just project ) ->
+                                        GitLab.Files.listTree token project.id ref (page + 1) (GotTree ref (page + 1))
+                                            |> Effect.SendRequest
+
+                                    _ ->
+                                        Effect.none
+                    in
+                    ( { model | repositoryTree = Just accumulated }, more )
 
                 Err _ ->
                     ( { model | error = Just "Failed to fetch repository tree." }, Effect.none )
@@ -1172,6 +1206,12 @@ updateAllowed msg model =
                                 _ ->
                                     []
                     in
+                    -- `contracts` is emptied rather than merged into because
+                    -- this is the listing that says which contracts the branch
+                    -- has at all; a contract for a component deleted on another
+                    -- branch must not survive into this one. `forgetBranchState`
+                    -- clears it too, so nothing loaded for this ref can be in
+                    -- here yet.
                     ( { model | components = Just [], existingComponents = componentNames, contracts = Just [], existingContracts = contractComponentNames }, Effect.batch cmds )
 
                 Err _ ->
