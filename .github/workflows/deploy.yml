@@ -50,6 +50,8 @@ jobs:
 
       # The base path is set via `base` in vite.config.js, so no <base href> patching.
       - name: Build application
+        env:
+          VITE_GITLAB_CLIENT_ID: ${{ secrets.VITE_GITLAB_CLIENT_ID }}
         run: devenv shell make dist-ci
 
       - name: Upload artifact
